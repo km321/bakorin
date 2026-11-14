@@ -3,6 +3,7 @@ import { rm } from "node:fs/promises";
 import type { SchemaAST } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
 import { createS3FileStore, parseS3Url, pruneS3Backups, type FileStore } from "../files/store.ts";
+import { resolveRuntimePath } from "../paths.ts";
 import { exportPortable, pruneBackups } from "./archive.ts";
 import { backupSqlite } from "./sqlite.ts";
 
@@ -15,8 +16,14 @@ function s3StoreFromAst(ast: SchemaAST, bucket: string): FileStore {
     bucket,
     accessKey: ast.runtime.files.accessKey ?? process.env.S3_ACCESS_KEY ?? process.env.AWS_ACCESS_KEY_ID ?? "",
     secretKey: ast.runtime.files.secretKey ?? process.env.S3_SECRET_KEY ?? process.env.AWS_SECRET_ACCESS_KEY ?? "",
-    endpoint: ast.runtime.files.endpoint ?? process.env.S3_ENDPOINT,
-    region: ast.runtime.files.region ?? process.env.S3_REGION ?? "auto",
+    endpoint:
+      ast.runtime.files.endpoint ??
+      process.env.S3_ENDPOINT ??
+      process.env.AWS_ENDPOINT_URL ??
+      process.env.AWS_ENDPOINT,
+    region:
+      ast.runtime.files.region ?? process.env.S3_REGION ?? process.env.AWS_DEFAULT_REGION ?? process.env.AWS_REGION ?? "auto",
+    virtualHostedStyle: ast.runtime.files.virtualHostedStyle,
   });
 }
 
@@ -30,15 +37,16 @@ export async function runBackup(options: {
   const destRoot = options.destination ?? options.ast.runtime.backups.destination;
   const remote = destRoot.startsWith("s3://");
   const stampName = stamp();
-  const dest = remote ? join(options.projectDir, ".tmp-backup", stampName) : join(destRoot, stampName);
+  const localRoot = remote ? destRoot : resolveRuntimePath(options.projectDir, destRoot);
+  const dest = remote ? join(options.projectDir, ".tmp-backup", stampName) : join(localRoot, stampName);
   if (options.ast.runtime.dialect === "sqlite") {
-    const dbPath = join(options.projectDir, options.ast.runtime.sqlitePath);
+    const dbPath = resolveRuntimePath(options.projectDir, options.ast.runtime.sqlitePath);
     await backupSqlite({
       dbPath,
       projectDir: options.projectDir,
       dest,
       ast: options.ast,
-      uploadsPath: join(options.projectDir, options.ast.runtime.files.path),
+      uploadsPath: resolveRuntimePath(options.projectDir, options.ast.runtime.files.path),
     });
     await exportPortable({
       dest: join(dest, "portable"),
@@ -65,7 +73,7 @@ export async function runBackup(options: {
     await rm(join(options.projectDir, ".tmp-backup"), { recursive: true, force: true });
     return `s3://${bucket}/${keyPrefix}`;
   }
-  await pruneBackups(destRoot, options.ast.runtime.backups.retain);
+  await pruneBackups(localRoot, options.ast.runtime.backups.retain);
   return dest;
 }
 

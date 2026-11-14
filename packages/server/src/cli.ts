@@ -7,6 +7,7 @@ import { runBackup } from "./backup/schedule.ts";
 import { exportPortable, importPortable, readManifest } from "./backup/archive.ts";
 import { restoreSqliteSnapshot } from "./backup/sqlite.ts";
 import { migrateToSchema } from "./db/migrator.ts";
+import { resolveRuntimePath } from "./paths.ts";
 
 import templateYaml from "./templates/app.yaml" with { type: "text" };
 import templateHooks from "./templates/hooks.ts" with { type: "text" };
@@ -39,11 +40,23 @@ async function cmdInit(): Promise<void> {
   await Bun.write(
     join(dir, ".env.example"),
     `JWT_SECRET=change-me-to-a-long-random-string
+PORT=4371
+BAKORIN_DATA_DIR=
 DATABASE_URL=postgres://user:pass@localhost:5432/bakorin
+AWS_ENDPOINT_URL=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=auto
+BUCKET=
+S3_ENDPOINT=
+S3_BUCKET=
 S3_ACCESS_KEY=
 S3_SECRET_KEY=
-S3_BUCKET=
-S3_ENDPOINT=
+S3_FORCE_PATH_STYLE=true
+S3_VIRTUAL_HOSTED_STYLE=false
+BAKORIN_ADMIN_EMAIL=
+BAKORIN_ADMIN_PASSWORD=
+BAKORIN_ADMIN_NAME=
 `,
   );
   await Bun.write(
@@ -149,8 +162,8 @@ async function cmdRestore(): Promise<void> {
     await runtime.close();
     await restoreSqliteSnapshot({
       src: source,
-      dbPath: join(dir, runtime.ast.runtime.sqlitePath),
-      uploadsPath: join(dir, runtime.ast.runtime.files.path),
+      dbPath: resolveRuntimePath(dir, runtime.ast.runtime.sqlitePath),
+      uploadsPath: resolveRuntimePath(dir, runtime.ast.runtime.files.path),
     });
     console.log("sqlite snapshot restored");
     return;

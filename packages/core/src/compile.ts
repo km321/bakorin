@@ -166,6 +166,63 @@ function pluralize(name: string): string {
   return `${name}s`;
 }
 
+function firstEnv(env: Record<string, string | undefined>, names: string[]): string | undefined {
+  for (const name of names) {
+    const value = env[name];
+    if (value !== undefined && value !== "") {
+      return value;
+    }
+  }
+  return undefined;
+}
+
+function joinPosix(base: string, child: string): string {
+  if (child.startsWith("/") || /^[A-Za-z]:[\\/]/.test(child)) {
+    return child;
+  }
+  return `${base.replace(/[/\\]+$/, "")}/${child.replace(/^[/\\]+/, "")}`;
+}
+
+function parsePort(runtimePort: number | undefined, env: Record<string, string | undefined>): number {
+  const raw = firstEnv(env, ["PORT"]) ?? (runtimePort !== undefined ? String(runtimePort) : undefined);
+  const port = raw ? Number(raw) : 4371;
+  return Number.isFinite(port) && port > 0 ? port : 4371;
+}
+
+function parseVirtualHostedStyle(
+  files: { virtualHostedStyle?: boolean; pathStyle?: boolean } | undefined,
+  env: Record<string, string | undefined>,
+): boolean {
+  const addressing = (firstEnv(env, ["S3_ADDRESSING_STYLE"]) ?? "").toLowerCase();
+  if (addressing === "path") {
+    return false;
+  }
+  if (addressing === "virtual" || addressing === "virtual-hosted" || addressing === "virtualhosted") {
+    return true;
+  }
+  const pathStyle = (firstEnv(env, ["S3_FORCE_PATH_STYLE", "S3_PATH_STYLE"]) ?? "").toLowerCase();
+  if (pathStyle === "true" || pathStyle === "1" || pathStyle === "yes") {
+    return false;
+  }
+  if (pathStyle === "false" || pathStyle === "0" || pathStyle === "no") {
+    return true;
+  }
+  const virtual = (firstEnv(env, ["S3_VIRTUAL_HOSTED_STYLE"]) ?? "").toLowerCase();
+  if (virtual === "true" || virtual === "1" || virtual === "yes") {
+    return true;
+  }
+  if (virtual === "false" || virtual === "0" || virtual === "no") {
+    return false;
+  }
+  if (files?.pathStyle === true) {
+    return false;
+  }
+  if (files?.virtualHostedStyle === true) {
+    return true;
+  }
+  return false;
+}
+
 function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, string | undefined>): RuntimeAST {
   const runtime = yaml.runtime ?? {};
   const dialect = runtime.dialect ?? (runtime.postgres?.url ? "postgres" : "sqlite");
@@ -176,29 +233,57 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
   if (dialect === "postgres" && !runtime.postgres?.url) {
     throw new SchemaError("runtime.postgres.url is required when dialect is postgres");
   }
+  const dataDir = firstEnv(env, ["BAKORIN_DATA_DIR"]);
+  const bucket = runtime.files?.bucket ?? firstEnv(env, ["S3_BUCKET", "BUCKET"]);
+  const endpoint = runtime.files?.endpoint ?? firstEnv(env, ["S3_ENDPOINT", "AWS_ENDPOINT_URL", "AWS_ENDPOINT"]);
+  const accessKey = runtime.files?.accessKey ?? firstEnv(env, ["S3_ACCESS_KEY", "AWS_ACCESS_KEY_ID"]);
+  const secretKey = runtime.files?.secretKey ?? firstEnv(env, ["S3_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"]);
+  const region = runtime.files?.region ?? firstEnv(env, ["S3_REGION", "AWS_DEFAULT_REGION", "AWS_REGION"]) ?? "auto";
+  const filesDriverEnv = firstEnv(env, ["FILES_DRIVER", "BAKORIN_FILES_DRIVER"]);
+  const driver =
+    filesDriverEnv === "local" || filesDriverEnv === "s3"
+      ? filesDriverEnv
+      : bucket
+        ? "s3"
+        : (runtime.files?.driver ?? "local");
+  const yamlSqlite = runtime.sqlite?.path ?? "./data/app.db";
+  const sqliteFile = yamlSqlite.split(/[/\\]/).pop() ?? "app.db";
+  const sqlitePath = dataDir ? joinPosix(dataDir, sqliteFile) : yamlSqlite;
+  const yamlFilesPath = runtime.files?.path ?? "./data/uploads";
+  const filesPath = driver === "local" && dataDir ? joinPosix(dataDir, "uploads") : yamlFilesPath;
+  const yamlDest = runtime.backups?.destination;
+  const backupPrefix = firstEnv(env, ["BAKORIN_BACKUP_PREFIX"]) ?? "backups";
+  const destination =
+    firstEnv(env, ["BAKORIN_BACKUP_DESTINATION"]) ??
+    (yamlDest?.startsWith("s3://") ? yamlDest : undefined) ??
+    (bucket ? `s3://${bucket}/${backupPrefix}` : undefined) ??
+    (dataDir ? joinPosix(dataDir, "backups") : undefined) ??
+    yamlDest ??
+    "./data/backups";
   return {
     dialect,
     host: runtime.host ?? "0.0.0.0",
-    port: runtime.port ?? 4371,
-    sqlitePath: runtime.sqlite?.path ?? "./data/app.db",
+    port: parsePort(runtime.port, env),
+    sqlitePath,
     postgresUrl: runtime.postgres?.url,
     jwtSecret,
     accessTtlSeconds: runtime.jwt?.accessTtlSeconds ?? 900,
     refreshTtlSeconds: runtime.jwt?.refreshTtlSeconds ?? 60 * 60 * 24 * 30,
     files: {
-      driver: runtime.files?.driver ?? "local",
-      path: runtime.files?.path ?? "./data/uploads",
-      bucket: runtime.files?.bucket ?? env.S3_BUCKET,
-      endpoint: runtime.files?.endpoint ?? env.S3_ENDPOINT,
-      accessKey: runtime.files?.accessKey ?? env.S3_ACCESS_KEY ?? env.AWS_ACCESS_KEY_ID,
-      secretKey: runtime.files?.secretKey ?? env.S3_SECRET_KEY ?? env.AWS_SECRET_ACCESS_KEY,
-      region: runtime.files?.region ?? env.S3_REGION ?? "auto",
+      driver,
+      path: filesPath,
+      bucket,
+      endpoint,
+      accessKey,
+      secretKey,
+      region,
+      virtualHostedStyle: parseVirtualHostedStyle(runtime.files, env),
     },
     backups: {
       intervalHours: parseIntervalHours(runtime.backups?.interval),
       cron: runtime.backups?.cron,
       retain: runtime.backups?.retain ?? 14,
-      destination: runtime.backups?.destination ?? "./data/backups",
+      destination,
     },
     corsOrigins: runtime.cors?.origins ?? ["*"],
     hooksPath: runtime.hooks,

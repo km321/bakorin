@@ -111,10 +111,31 @@ const errorResponses = {
 export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
   const schemas: Record<string, unknown> = { Error: errorSchema };
   const paths: Record<string, unknown> = {
-    "/healthz": {
+    "/health": {
       get: {
         tags: ["meta"],
         summary: "Health check",
+        security: [],
+        responses: {
+          200: {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { ok: { type: "boolean" }, app: { type: "string" } },
+                  required: ["ok", "app"],
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/healthz": {
+      get: {
+        tags: ["meta"],
+        summary: "Health check (alias of /health)",
         security: [],
         responses: {
           200: {

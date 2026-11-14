@@ -1,3 +1,5 @@
+import { mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { Database } from "bun:sqlite";
 import {
   Kysely,
@@ -86,6 +88,7 @@ class BunSqliteDialect implements Dialect {
 }
 
 export function openSqlite(path: string): { db: BakorinDb; raw: Database } {
+  mkdirSync(dirname(path), { recursive: true });
   const raw = new Database(path, { create: true });
   raw.exec("pragma journal_mode = WAL");
   raw.exec("pragma foreign_keys = ON");

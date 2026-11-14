@@ -44,7 +44,7 @@ client/
   bakorin.gen.ts    generated types
 ```
 
-Production uses Postgres plus S3 or R2. The same `app.yaml` drives both.
+The same `app.yaml` drives SQLite or Postgres, local files or S3/R2. The production Docker image ships SQLite on a volume plus S3 for files and backups.
 
 ## Client workflow
 
@@ -172,26 +172,65 @@ The live OpenAPI 3 document is `GET /api/v1/openapi.json`. It is generated from 
 
 ## Deploy
 
+The production image bakes the `examples/studio-leads` project into `/project` and runs `bakorin start`. It listens on `PORT` (Railway injects this), stores SQLite on a volume at `BAKORIN_DATA_DIR` (default `/data` in the image), and sends uploads plus scheduled backups to an S3-compatible bucket when bucket credentials are set.
+
+Health: `GET /health` (also `GET /healthz`).
+
+`JWT_SECRET` is required when `NODE_ENV=production` or `BAKORIN_ENV=production`.
+
 ### Docker
 
 ```bash
 docker build -t bakorin .
 docker run --rm -p 4371:4371 \
+  -e PORT=4371 \
   -e NODE_ENV=production \
   -e JWT_SECRET=... \
-  -e DATABASE_URL=postgres://... \
-  -v $PWD/client:/project \
+  -e BAKORIN_DATA_DIR=/data \
+  -e BAKORIN_ADMIN_EMAIL=ada@studio.test \
+  -e BAKORIN_ADMIN_PASSWORD=password123 \
+  -v bakorin-data:/data \
   bakorin
 ```
 
-The image expects `/project/app.yaml`.
+Mount a volume at `/data` (or whatever you set as `BAKORIN_DATA_DIR`). To run a different `app.yaml`, bind-mount that project over `/project`.
 
-### Railway
+### Railway (`railway up`)
 
-1. New project, add a Postgres plugin.
-2. Deploy this repo (or the image). Set `JWT_SECRET` and `DATABASE_URL`.
-3. Copy the client folder into the service, or set the start command to `bakorin start --dir /project`.
-4. Put backups on a volume or `s3://`. Railway volume snapshots are a second copy, not a substitute for `bakorin backup`.
+1. Create a service from this Dockerfile (`railway up` from a machine that has the source tarball or git checkout).
+2. Add a volume and mount it at `/data`. Set `BAKORIN_DATA_DIR=/data`.
+3. Create a Railway S3-compatible bucket and attach it (or copy its credentials into the service).
+4. Set the variables below. Railway sets `PORT`.
+5. Health check path: `/health`.
+6. Optional first-boot admin: set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD`. Bakorin creates that admin only when the users table is empty; later restarts skip it.
+
+Railway volume snapshots are a second copy, not a substitute for `bakorin backup` / scheduled S3 backups.
+
+### Environment variables
+
+| Variable | Required | Notes |
+|---|---|---|
+| `JWT_SECRET` | yes in production | Signing key for access tokens |
+| `PORT` | Railway sets it | Listen port. Overrides `runtime.port` |
+| `NODE_ENV` / `BAKORIN_ENV` | image sets `production` | Production mode |
+| `BAKORIN_DATA_DIR` | recommended | SQLite file `$BAKORIN_DATA_DIR/app.db`; local uploads and backups live here if S3 is not configured |
+| `AWS_ENDPOINT_URL` or `S3_ENDPOINT` | for S3 | Railway bucket endpoint. `AWS_ENDPOINT` is also accepted |
+| `AWS_ACCESS_KEY_ID` or `S3_ACCESS_KEY` | for S3 | |
+| `AWS_SECRET_ACCESS_KEY` or `S3_SECRET_KEY` | for S3 | |
+| `AWS_DEFAULT_REGION` or `S3_REGION` or `AWS_REGION` | for S3 | Defaults to `auto` |
+| `BUCKET` or `S3_BUCKET` | for S3 | Presence of a bucket switches files to the S3 driver and scheduled backups to `s3://$BUCKET/$BAKORIN_BACKUP_PREFIX` |
+| `S3_FORCE_PATH_STYLE` or `S3_PATH_STYLE` | optional | `true` (Railway buckets) uses path-style URLs. `false` uses virtual-hosted style |
+| `S3_VIRTUAL_HOSTED_STYLE` | optional | `true` / `false`. Alternative to the path-style flags |
+| `S3_ADDRESSING_STYLE` | optional | `path` or `virtual` |
+| `FILES_DRIVER` or `BAKORIN_FILES_DRIVER` | optional | Force `local` or `s3` |
+| `BAKORIN_BACKUP_PREFIX` | optional | Object prefix inside the bucket. Default `backups` |
+| `BAKORIN_BACKUP_DESTINATION` | optional | Override backup destination (`./dir` or `s3://bucket/prefix`) |
+| `BAKORIN_ADMIN_EMAIL` | optional | First-boot admin identity |
+| `BAKORIN_ADMIN_PASSWORD` | optional | First-boot admin password (min 8 chars). Ignored if any user already exists |
+| `BAKORIN_ADMIN_NAME` | optional | Defaults to `Admin` |
+| `DATABASE_URL` | Postgres only | Used when `runtime.dialect` is `postgres` |
+
+Path-style is the default (Bun `virtualHostedStyle: false`). That matches Railway buckets. Set `S3_VIRTUAL_HOSTED_STYLE=true` or `S3_ADDRESSING_STYLE=virtual` for virtual-hosted endpoints. You can also set `runtime.files.pathStyle` or `runtime.files.virtualHostedStyle` in `app.yaml`.
 
 ### Fly.io
 
@@ -200,11 +239,12 @@ The image expects `/project/app.yaml`.
 app = "client-bakorin"
 [env]
   NODE_ENV = "production"
+  BAKORIN_DATA_DIR = "/data"
 [http_service]
   internal_port = 4371
 ```
 
-Attach Fly Postgres, set secrets, mount a volume at `/project/data` if you stay on SQLite.
+Mount a volume at `/data` for SQLite, or attach Postgres and set `DATABASE_URL`.
 
 ## SDK
 

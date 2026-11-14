@@ -111,6 +111,8 @@ export const appYamlSchema = z
             accessKey: z.string().optional(),
             secretKey: z.string().optional(),
             region: z.string().optional(),
+            virtualHostedStyle: z.boolean().optional(),
+            pathStyle: z.boolean().optional(),
           })
           .strict()
           .optional(),

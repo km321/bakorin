@@ -106,6 +106,7 @@ export function createS3FileStore(options: {
   secretKey: string;
   endpoint?: string;
   region?: string;
+  virtualHostedStyle?: boolean;
 }): FileStore {
   const client = new S3Client({
     bucket: options.bucket,
@@ -113,6 +114,7 @@ export function createS3FileStore(options: {
     secretAccessKey: options.secretKey,
     endpoint: options.endpoint,
     region: options.region ?? "auto",
+    virtualHostedStyle: options.virtualHostedStyle ?? false,
   });
 
   async function listAll(prefix = ""): Promise<string[]> {

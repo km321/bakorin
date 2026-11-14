@@ -73,6 +73,7 @@ export interface FilesRuntimeAST {
   accessKey?: string;
   secretKey?: string;
   region?: string;
+  virtualHostedStyle: boolean;
 }
 
 export interface BackupRuntimeAST {

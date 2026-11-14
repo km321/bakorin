@@ -7,6 +7,7 @@ import { createChangeBus } from "./bus.ts";
 import { openPostgres, openSqlite, type BakorinDb } from "./db/dialects.ts";
 import { migrateToSchema } from "./db/migrator.ts";
 import { createAuthRoutes, verifyAccessToken } from "./auth/routes.ts";
+import { seedAdminIfRequested } from "./auth/seed.ts";
 import { createCrudRouter } from "./crud/router.ts";
 import { createFileRoutes } from "./files/routes.ts";
 import { createLocalFileStore, createS3FileStore, type FileStore } from "./files/store.ts";
@@ -17,6 +18,7 @@ import { subscribeAfterHooks } from "./hooks/after.ts";
 import { subscribeWebhooks } from "./webhooks/dispatcher.ts";
 import type { AppContext } from "./context.ts";
 import { startBackupScheduler } from "./backup/schedule.ts";
+import { resolveRuntimePath } from "./paths.ts";
 
 export interface RuntimeHandles {
   app: Hono;
@@ -35,9 +37,10 @@ function createFiles(ast: SchemaAST, projectDir: string): FileStore {
       secretKey: ast.runtime.files.secretKey ?? "",
       endpoint: ast.runtime.files.endpoint,
       region: ast.runtime.files.region,
+      virtualHostedStyle: ast.runtime.files.virtualHostedStyle,
     });
   }
-  return createLocalFileStore(join(projectDir, ast.runtime.files.path));
+  return createLocalFileStore(resolveRuntimePath(projectDir, ast.runtime.files.path));
 }
 
 function openDb(ast: SchemaAST, projectDir: string): { db: BakorinDb; close: () => Promise<void> } {
@@ -50,7 +53,7 @@ function openDb(ast: SchemaAST, projectDir: string): { db: BakorinDb; close: () 
       },
     };
   }
-  const { db } = openSqlite(join(projectDir, ast.runtime.sqlitePath));
+  const { db } = openSqlite(resolveRuntimePath(projectDir, ast.runtime.sqlitePath));
   return {
     db,
     close: async () => {
@@ -64,11 +67,17 @@ function openDb(ast: SchemaAST, projectDir: string): { db: BakorinDb; close: () 
   };
 }
 
-export async function createRuntime(options: { projectDir: string; yamlSource: string }): Promise<RuntimeHandles> {
+export async function createRuntime(options: {
+  projectDir: string;
+  yamlSource: string;
+  env?: Record<string, string | undefined>;
+}): Promise<RuntimeHandles> {
   const projectDir = resolve(options.projectDir);
-  let ast = compileAppYaml(options.yamlSource);
+  const env = options.env ?? process.env;
+  let ast = compileAppYaml(options.yamlSource, { env });
   let opened = openDb(ast, projectDir);
   await migrateToSchema(opened.db, ast);
+  await seedAdminIfRequested(ast, opened.db, env);
   const bus = createChangeBus();
   let hooks = await loadHooks(projectDir, ast.runtime.hooksPath);
   let files = createFiles(ast, projectDir);
@@ -100,6 +109,7 @@ export async function createRuntime(options: { projectDir: string; yamlSource: s
     }
     await next();
   });
+  app.get("/health", (c) => c.json({ ok: true, app: context.ast.appName }));
   app.get("/healthz", (c) => c.json({ ok: true, app: context.ast.appName }));
   app.route("/api/v1/auth", createAuthRoutes());
   app.route("/api/v1/files", createFileRoutes());
@@ -118,7 +128,7 @@ export async function createRuntime(options: { projectDir: string; yamlSource: s
     },
     context,
     async reload(source: string) {
-      const next = compileAppYaml(source);
+      const next = compileAppYaml(source, { env });
       await migrateToSchema(context.db, next);
       context.ast = next;
       context.hooks = await loadHooks(projectDir, next.runtime.hooksPath);
