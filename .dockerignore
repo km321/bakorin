@@ -1,0 +1,7 @@
+node_modules
+data
+.git
+bakorin
+*.db
+.env
+packages/admin-ui/dist

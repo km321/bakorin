@@ -1,0 +1,22 @@
+{
+  "name": "@bakorin/server",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "bakorin": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@bakorin/core": "workspace:*",
+    "hono": "^4.7.4",
+    "jose": "^6.0.10",
+    "kysely": "^0.28.2",
+    "pg": "^8.14.1"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.11.11"
+  }
+}

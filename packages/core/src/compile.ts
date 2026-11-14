@@ -1,0 +1,350 @@
+import { parse as parseYaml } from "yaml";
+import { SchemaError } from "./errors.ts";
+import { assertIdent } from "./ident.ts";
+import { interpolateEnv } from "./interpolate.ts";
+import { parsePolicies } from "./policies.ts";
+import { topologicalOrder } from "./topo.ts";
+import { appYamlSchema, type AppYaml, type RawField } from "./yaml-schema.ts";
+import {
+  SCHEMA_AST_VERSION,
+  type ActionName,
+  type AuthAST,
+  type EntityAST,
+  type FieldAST,
+  type FieldTypeName,
+  type PolicyAST,
+  type RuntimeAST,
+  type SchemaAST,
+} from "./ast.ts";
+
+const SYSTEM_FIELDS = new Set(["id", "createdAt", "updatedAt"]);
+
+function asFieldObject(value: AppYaml["entities"][string]["fields"][string]): RawField {
+  if (typeof value === "string") {
+    return { type: value };
+  }
+  return value;
+}
+
+function parseIntervalHours(value: string | undefined): number | null {
+  if (!value) {
+    return null;
+  }
+  const match = /^(\d+)(h|d)?$/.exec(value.trim());
+  if (!match?.[1]) {
+    throw new SchemaError(`invalid backup interval ${JSON.stringify(value)}; use e.g. 24h or 7d`);
+  }
+  const amount = Number(match[1]);
+  const unit = match[2] ?? "h";
+  return unit === "d" ? amount * 24 : amount;
+}
+
+function compileField(entityName: string, name: string, raw: RawField): FieldAST {
+  assertIdent(name, "field");
+  if (SYSTEM_FIELDS.has(name)) {
+    throw new SchemaError(`${entityName}.${name} is a reserved system field`);
+  }
+  const type = raw.type as FieldTypeName;
+  if (type === "enum" && (!raw.values || raw.values.length === 0)) {
+    throw new SchemaError(`${entityName}.${name} is an enum and needs a values list`);
+  }
+  if (type === "relation" && !raw.to) {
+    throw new SchemaError(`${entityName}.${name} is a relation and needs to: <entity>`);
+  }
+  if (raw.to && type !== "relation") {
+    throw new SchemaError(`${entityName}.${name} has to: but is not a relation`);
+  }
+  if (raw.values && type !== "enum") {
+    throw new SchemaError(`${entityName}.${name} has values: but is not an enum`);
+  }
+  for (const value of raw.values ?? []) {
+    assertIdent(value, "enum");
+  }
+  return {
+    name,
+    type,
+    required: raw.required === true || raw.default !== undefined ? raw.required !== false : false,
+    unique: raw.unique === true,
+    indexed: raw.index === true || raw.unique === true || type === "relation",
+    defaultValue: raw.default,
+    enumValues: raw.values,
+    relation: raw.to
+      ? {
+          to: raw.to,
+          onDelete: raw.onDelete ?? "restrict",
+        }
+      : undefined,
+    renameFrom: raw.renameFrom,
+    secret: raw.secret === true || type === "password",
+    description: raw.description,
+  };
+}
+
+function systemFields(): FieldAST[] {
+  return [
+    {
+      name: "id",
+      type: "text",
+      required: true,
+      unique: true,
+      indexed: true,
+      defaultValue: undefined,
+      secret: false,
+    },
+    {
+      name: "createdAt",
+      type: "datetime",
+      required: true,
+      unique: false,
+      indexed: true,
+      defaultValue: undefined,
+      secret: false,
+    },
+    {
+      name: "updatedAt",
+      type: "datetime",
+      required: true,
+      unique: false,
+      indexed: true,
+      defaultValue: undefined,
+      secret: false,
+    },
+  ];
+}
+
+function defaultPolicies(auth: boolean): Record<ActionName, PolicyAST[]> {
+  if (auth) {
+    return {
+      read: [{ kind: "authenticated" }],
+      create: [{ kind: "public" }],
+      update: [{ kind: "owner", field: "id" }],
+      delete: [{ kind: "admin" }],
+    };
+  }
+  return {
+    read: [{ kind: "authenticated" }],
+    create: [{ kind: "authenticated" }],
+    update: [{ kind: "authenticated" }],
+    delete: [{ kind: "authenticated" }],
+  };
+}
+
+function titleCase(name: string): string {
+  return name
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function pluralize(name: string): string {
+  if (name.endsWith("s")) {
+    return name;
+  }
+  if (name.endsWith("y") && name.length > 1 && !/[aeiou]y$/i.test(name)) {
+    return `${name.slice(0, -1)}ies`;
+  }
+  return `${name}s`;
+}
+
+function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, string | undefined>): RuntimeAST {
+  const runtime = yaml.runtime ?? {};
+  const dialect = runtime.dialect ?? (runtime.postgres?.url ? "postgres" : "sqlite");
+  const jwtSecret = runtime.jwt?.secret ?? env.JWT_SECRET ?? (production ? "" : "dev-only-change-me");
+  if (production && (!jwtSecret || jwtSecret === "dev-only-change-me")) {
+    throw new SchemaError("JWT_SECRET is required in production");
+  }
+  if (dialect === "postgres" && !runtime.postgres?.url) {
+    throw new SchemaError("runtime.postgres.url is required when dialect is postgres");
+  }
+  return {
+    dialect,
+    host: runtime.host ?? "0.0.0.0",
+    port: runtime.port ?? 4371,
+    sqlitePath: runtime.sqlite?.path ?? "./data/app.db",
+    postgresUrl: runtime.postgres?.url,
+    jwtSecret,
+    accessTtlSeconds: runtime.jwt?.accessTtlSeconds ?? 900,
+    refreshTtlSeconds: runtime.jwt?.refreshTtlSeconds ?? 60 * 60 * 24 * 30,
+    files: {
+      driver: runtime.files?.driver ?? "local",
+      path: runtime.files?.path ?? "./data/uploads",
+      bucket: runtime.files?.bucket,
+      endpoint: runtime.files?.endpoint,
+      accessKey: runtime.files?.accessKey,
+      secretKey: runtime.files?.secretKey,
+      region: runtime.files?.region ?? "auto",
+    },
+    backups: {
+      intervalHours: parseIntervalHours(runtime.backups?.interval),
+      cron: runtime.backups?.cron,
+      retain: runtime.backups?.retain ?? 14,
+      destination: runtime.backups?.destination ?? "./data/backups",
+    },
+    corsOrigins: runtime.cors?.origins ?? ["*"],
+    hooksPath: runtime.hooks,
+  };
+}
+
+function findAuthEntity(yaml: AppYaml, entities: EntityAST[]): AuthAST {
+  const marked = entities.filter((entity) => entity.auth);
+  const configured = yaml.auth?.entity;
+  let entity: EntityAST | undefined;
+  if (configured) {
+    entity = entities.find((item) => item.name === configured);
+    if (!entity) {
+      throw new SchemaError(`auth.entity ${configured} does not exist`);
+    }
+  } else if (marked.length === 1) {
+    entity = marked[0];
+  } else if (marked.length > 1) {
+    throw new SchemaError("multiple entities have auth: true; set auth.entity explicitly");
+  } else {
+    entity = entities.find((item) => item.name === "users");
+  }
+  if (!entity) {
+    throw new SchemaError("an auth entity is required; mark one entity with auth: true");
+  }
+  entity.auth = true;
+  const identityField = yaml.auth?.identity ?? "email";
+  const passwordField = yaml.auth?.password ?? "password";
+  const roleField = yaml.auth?.role ?? "role";
+  if (!entity.fieldMap[identityField]) {
+    throw new SchemaError(`auth identity field ${entity.name}.${identityField} is missing`);
+  }
+  if (!entity.fieldMap[passwordField] || entity.fieldMap[passwordField]?.type !== "password") {
+    throw new SchemaError(`auth password field ${entity.name}.${passwordField} must have type password`);
+  }
+  if (!entity.fieldMap[roleField] || entity.fieldMap[roleField]?.type !== "enum") {
+    throw new SchemaError(`auth role field ${entity.name}.${roleField} must be an enum`);
+  }
+  const adminRole = yaml.auth?.adminRole ?? "admin";
+  if (!entity.fieldMap[roleField]?.enumValues?.includes(adminRole)) {
+    throw new SchemaError(`auth adminRole ${adminRole} is not in ${entity.name}.${roleField} values`);
+  }
+  entity.fieldMap[identityField]!.unique = true;
+  entity.fieldMap[identityField]!.required = true;
+  entity.fieldMap[passwordField]!.required = true;
+  entity.fieldMap[passwordField]!.secret = true;
+  return {
+    entity: entity.name,
+    identityField,
+    passwordField,
+    roleField,
+    adminRole,
+  };
+}
+
+export interface CompileOptions {
+  env?: Record<string, string | undefined>;
+  production?: boolean;
+}
+
+export function compileAppYaml(source: string, options: CompileOptions = {}): SchemaAST {
+  const env = options.env ?? process.env;
+  const interpolated = interpolateEnv(source, env);
+  let parsed: unknown;
+  try {
+    parsed = parseYaml(interpolated);
+  } catch (error) {
+    throw new SchemaError(`app.yaml is not valid YAML: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  const yaml = appYamlSchema.parse(parsed);
+  const production =
+    options.production ?? (env.NODE_ENV === "production" || env.BAKORIN_ENV === "production");
+  const runtime = compileRuntime(yaml, production, env);
+
+  const entities: EntityAST[] = Object.entries(yaml.entities).map(([name, raw]) => {
+    assertIdent(name, "entity");
+    const compiledFields = Object.entries(raw.fields).map(([fieldName, fieldRaw]) =>
+      compileField(name, fieldName, asFieldObject(fieldRaw)),
+    );
+    const fields = [...systemFields(), ...compiledFields];
+    const fieldMap = Object.fromEntries(fields.map((field) => [field.name, field]));
+    const fallback = defaultPolicies(raw.auth === true || name === yaml.auth?.entity);
+    const policies: Record<ActionName, PolicyAST[]> = {
+      read: parsePolicies(raw.policies?.read, fallback.read),
+      create: parsePolicies(raw.policies?.create, fallback.create),
+      update: parsePolicies(raw.policies?.update, fallback.update),
+      delete: parsePolicies(raw.policies?.delete, fallback.delete),
+    };
+    for (const action of ["read", "create", "update", "delete"] as const) {
+      for (const policy of policies[action]) {
+        if (policy.kind === "owner" && !fieldMap[policy.field]) {
+          throw new SchemaError(`${name} policy ${action}: owner(${policy.field}) references a missing field`);
+        }
+      }
+    }
+    return {
+      name,
+      label: raw.label ?? titleCase(name.replace(/s$/, "") || name),
+      plural: raw.plural ?? titleCase(pluralize(name)),
+      auth: raw.auth === true,
+      fields,
+      fieldMap,
+      policies,
+      deprecated: false,
+    };
+  });
+
+  const entityMap = Object.fromEntries(entities.map((entity) => [entity.name, entity]));
+  for (const entity of entities) {
+    for (const field of entity.fields) {
+      if (field.relation && !entityMap[field.relation.to]) {
+        throw new SchemaError(`${entity.name}.${field.name} relates to unknown entity ${field.relation.to}`);
+      }
+    }
+  }
+
+  const auth = findAuthEntity(yaml, entities);
+  const order = topologicalOrder(entities);
+
+  const webhooks = (yaml.webhooks ?? []).map((hook, index) => {
+    if (hook.entity !== "*" && !entityMap[hook.entity]) {
+      throw new SchemaError(`webhook entity ${hook.entity} does not exist`);
+    }
+    return {
+      id: `wh_${index + 1}`,
+      entity: hook.entity,
+      events: hook.events,
+      url: hook.url,
+      secret: hook.secret,
+    };
+  });
+
+  return {
+    version: SCHEMA_AST_VERSION,
+    appName: yaml.app.name,
+    appVersion: yaml.app.version ?? "0.1.0",
+    runtime,
+    entities,
+    entityMap,
+    order,
+    auth,
+    webhooks,
+  };
+}
+
+export function serializeAst(ast: SchemaAST): string {
+  return JSON.stringify({
+    version: ast.version,
+    appName: ast.appName,
+    appVersion: ast.appVersion,
+    runtime: ast.runtime,
+    entities: ast.entities,
+    order: ast.order,
+    auth: ast.auth,
+    webhooks: ast.webhooks,
+  });
+}
+
+export function deserializeAst(raw: string): SchemaAST {
+  const parsed = JSON.parse(raw) as SchemaAST;
+  if (parsed.version !== SCHEMA_AST_VERSION) {
+    throw new SchemaError(`unsupported schema AST version ${String(parsed.version)}`);
+  }
+  parsed.entityMap = Object.fromEntries(parsed.entities.map((entity) => [entity.name, entity]));
+  for (const entity of parsed.entities) {
+    entity.fieldMap = Object.fromEntries(entity.fields.map((field) => [field.name, field]));
+  }
+  return parsed;
+}

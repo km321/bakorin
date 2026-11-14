@@ -1,0 +1,27 @@
+{
+  "name": "bakorin",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bunx tsc --noEmit -p tsconfig.json",
+    "build:ui": "bun run --filter @bakorin/admin-ui build && bun scripts/embed-ui.ts",
+    "build:bin": "bun run build:ui && bun build --compile --minify --outfile bakorin packages/server/src/cli.ts",
+    "dev": "bun packages/server/src/cli.ts dev",
+    "start": "bun packages/server/src/cli.ts start",
+    "bakorin": "bun packages/server/src/cli.ts"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "license": "MIT",
+  "author": "Melton Studios",
+  "devDependencies": {
+    "bun-types": "^1.2.5",
+    "typescript": "^5.8.2"
+  }
+}

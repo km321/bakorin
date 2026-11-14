@@ -1,0 +1,11 @@
+{
+  "name": "@bakorin/sdk",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./next": "./src/next.ts",
+    "./astro": "./src/astro.ts"
+  }
+}

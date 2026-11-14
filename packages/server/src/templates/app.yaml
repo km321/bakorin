@@ -1,0 +1,113 @@
+app:
+  name: studio-leads
+  version: "0.1.0"
+
+runtime:
+  dialect: sqlite
+  host: 0.0.0.0
+  port: 4371
+  sqlite:
+    path: ./data/app.db
+  files:
+    driver: local
+    path: ./data/uploads
+  jwt:
+    secret: ${JWT_SECRET:-dev-only-change-me}
+    accessTtlSeconds: 900
+    refreshTtlSeconds: 2592000
+  backups:
+    interval: 24h
+    retain: 14
+    destination: ./data/backups
+  hooks: ./hooks.ts
+  cors:
+    origins: ["*"]
+
+auth:
+  entity: users
+  identity: email
+  password: password
+  role: role
+  adminRole: admin
+
+entities:
+  users:
+    auth: true
+    label: User
+    plural: Users
+    fields:
+      email:
+        type: email
+        unique: true
+        required: true
+      password:
+        type: password
+        required: true
+      name:
+        type: text
+        required: true
+      role:
+        type: enum
+        values: [user, admin]
+        default: user
+    policies:
+      read: authenticated
+      create: public
+      update: owner(id)
+      delete: admin
+
+  leads:
+    label: Lead
+    plural: Leads
+    fields:
+      company:
+        type: text
+        required: true
+      contactName:
+        type: text
+        required: true
+      email:
+        type: email
+        required: true
+      status:
+        type: enum
+        values: [new, qualified, won, lost]
+        default: new
+      notes:
+        type: text
+      ownerId:
+        type: relation
+        to: users
+        required: true
+      brief:
+        type: file
+    policies:
+      read: [owner(ownerId), admin]
+      create: authenticated
+      update: owner(ownerId)
+      delete: owner(ownerId)
+
+  tasks:
+    label: Task
+    plural: Tasks
+    fields:
+      title:
+        type: text
+        required: true
+      done:
+        type: boolean
+        default: false
+      dueOn:
+        type: date
+      leadId:
+        type: relation
+        to: leads
+      ownerId:
+        type: relation
+        to: users
+        required: true
+    policies:
+      read: [owner(ownerId), admin]
+      create: authenticated
+      update: owner(ownerId)
+      delete: owner(ownerId)
