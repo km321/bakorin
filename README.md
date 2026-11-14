@@ -168,7 +168,9 @@ To move SQLite to Postgres: `bakorin export ./portable` on the old host, set `ru
 
 Scheduled backups: set `runtime.backups.interval` (for example `24h`) and `retain`. Destination may be a local folder or `s3://bucket/prefix` (R2 works with `files.endpoint`). S3/R2 destinations list objects under that prefix and delete older stamps so `retain` is honored.
 
-The live OpenAPI 3 document is `GET /api/v1/openapi.json`. It is generated from the current `app.yaml`.
+The live OpenAPI 3 document is `GET /api/v1/openapi.json`. Interactive docs (Swagger UI, bundled, no CDN) are at `GET /docs` and `GET /api/v1/docs`. Try-it-out uses the admin session token from `localStorage` (`bakorin_access`) when present, or a pasted bearer token. Admins can also open docs from the admin nav.
+
+Admins can take a live backup from the admin **Backups** page (`POST /api/v1/backups`). That writes the same consistent SQLite snapshot plus portable export as `bakorin backup`. Restore stays CLI-only.
 
 ## Deploy
 
@@ -200,9 +202,10 @@ Mount a volume at `/data` (or whatever you set as `BAKORIN_DATA_DIR`). To run a 
 1. Create a service from this Dockerfile (`railway up` from a machine that has the source tarball or git checkout).
 2. Add a volume and mount it at `/data`. Set `BAKORIN_DATA_DIR=/data`.
 3. Create a Railway S3-compatible bucket and attach it (or copy its credentials into the service).
-4. Set the variables below. Railway sets `PORT`.
-5. Health check path: `/health`.
-6. Optional first-boot admin: set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD`. Bakorin creates that admin only when the users table is empty; later restarts skip it.
+4. Set `S3_ADDRESSING_STYLE=path`. Railway buckets deny virtual-hosted requests; Bun's S3Client returns Access Denied unless path-style is used.
+5. Set the variables below. Railway sets `PORT`. Railway mounts the volume at `/data`; the image does not declare a Docker `VOLUME`.
+6. Health check path: `/health`.
+7. Optional first-boot admin: set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD`. Bakorin creates that admin only when the users table is empty; later restarts skip it.
 
 Railway volume snapshots are a second copy, not a substitute for `bakorin backup` / scheduled S3 backups.
 
@@ -221,7 +224,7 @@ Railway volume snapshots are a second copy, not a substitute for `bakorin backup
 | `BUCKET` or `S3_BUCKET` | for S3 | Presence of a bucket switches files to the S3 driver and scheduled backups to `s3://$BUCKET/$BAKORIN_BACKUP_PREFIX` |
 | `S3_FORCE_PATH_STYLE` or `S3_PATH_STYLE` | optional | `true` (Railway buckets) uses path-style URLs. `false` uses virtual-hosted style |
 | `S3_VIRTUAL_HOSTED_STYLE` | optional | `true` / `false`. Alternative to the path-style flags |
-| `S3_ADDRESSING_STYLE` | optional | `path` or `virtual` |
+| `S3_ADDRESSING_STYLE` | required for Railway | Must be `path` for Railway buckets. Bun's S3Client returns Access Denied with virtual-hosted style there. `virtual` is for hosts that expect virtual-hosted URLs. |
 | `FILES_DRIVER` or `BAKORIN_FILES_DRIVER` | optional | Force `local` or `s3` |
 | `BAKORIN_BACKUP_PREFIX` | optional | Object prefix inside the bucket. Default `backups` |
 | `BAKORIN_BACKUP_DESTINATION` | optional | Override backup destination (`./dir` or `s3://bucket/prefix`) |
@@ -230,7 +233,7 @@ Railway volume snapshots are a second copy, not a substitute for `bakorin backup
 | `BAKORIN_ADMIN_NAME` | optional | Defaults to `Admin` |
 | `DATABASE_URL` | Postgres only | Used when `runtime.dialect` is `postgres` |
 
-Path-style is the default (Bun `virtualHostedStyle: false`). That matches Railway buckets. Set `S3_VIRTUAL_HOSTED_STYLE=true` or `S3_ADDRESSING_STYLE=virtual` for virtual-hosted endpoints. You can also set `runtime.files.pathStyle` or `runtime.files.virtualHostedStyle` in `app.yaml`.
+Path-style is the default (Bun `virtualHostedStyle: false`). **For Railway buckets set `S3_ADDRESSING_STYLE=path`.** Virtual-hosted style gets Access Denied from Bun's S3Client against those endpoints. You can also set `S3_FORCE_PATH_STYLE=true`, `S3_VIRTUAL_HOSTED_STYLE=false`, or `runtime.files.pathStyle` / `runtime.files.virtualHostedStyle` in `app.yaml`.
 
 ### Fly.io
 

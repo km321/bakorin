@@ -1,33 +1,48 @@
 import type { EntityAST, FieldAST, SchemaAST } from "@bakorin/core";
 
 function jsonSchemaForField(field: FieldAST, write: boolean): Record<string, unknown> {
+  let schema: Record<string, unknown>;
   switch (field.type) {
     case "boolean":
-      return { type: "boolean" };
+      schema = { type: "boolean" };
+      break;
     case "integer":
-      return { type: "integer" };
+      schema = { type: "integer" };
+      break;
     case "number":
-      return { type: "number" };
+      schema = { type: "number" };
+      break;
     case "enum":
-      return { type: "string", enum: field.enumValues };
+      schema = { type: "string", enum: field.enumValues };
+      break;
     case "email":
-      return { type: "string", format: "email" };
+      schema = { type: "string", format: "email" };
+      break;
     case "password":
-      return { type: "string", format: "password", minLength: write ? 8 : undefined };
+      schema = write ? { type: "string", format: "password", minLength: 8 } : { type: "string", format: "password" };
+      break;
     case "date":
-      return { type: "string", format: "date" };
+      schema = { type: "string", format: "date" };
+      break;
     case "datetime":
-      return { type: "string", format: "date-time" };
+      schema = { type: "string", format: "date-time" };
+      break;
     case "file":
     case "relation":
-      return { type: "string", format: "uuid" };
+      schema = { type: "string", format: "uuid" };
+      break;
     case "text":
-      return { type: "string" };
+      schema = { type: "string" };
+      break;
     default: {
       const exhaustive: never = field.type;
       return exhaustive;
     }
   }
+  if (field.description) {
+    schema.description = field.description;
+  }
+  return schema;
 }
 
 function entityReadSchema(entity: EntityAST): Record<string, unknown> {
@@ -47,7 +62,11 @@ function entityReadSchema(entity: EntityAST): Record<string, unknown> {
     additionalProperties: true,
     description: "Present when expand= lists relation fields",
   };
-  return { type: "object", properties, required };
+  const schema: Record<string, unknown> = { type: "object", properties, required };
+  if (entity.description) {
+    schema.description = entity.description;
+  }
+  return schema;
 }
 
 function entityWriteSchema(entity: EntityAST, ast: SchemaAST): Record<string, unknown> {
@@ -62,11 +81,61 @@ function entityWriteSchema(entity: EntityAST, ast: SchemaAST): Record<string, un
       required.push(field.name);
     }
   }
-  return { type: "object", properties, required };
+  const schema: Record<string, unknown> = { type: "object", properties, required };
+  if (entity.description) {
+    schema.description = `Writable fields for ${entity.label}`;
+  }
+  return schema;
 }
 
 function pascal(name: string): string {
   return name.replace(/(^[a-z])|([-_][a-z])/g, (chunk) => chunk.replace(/[-_]/, "").toUpperCase());
+}
+
+function listParameters(entity: EntityAST): unknown[] {
+  const relations = entity.fields.filter((field) => field.relation).map((field) => field.name);
+  const sortable = entity.fields.filter((field) => !field.secret).map((field) => field.name);
+  const params: unknown[] = [
+    {
+      name: "limit",
+      in: "query",
+      description: "Page size, 1-100.",
+      schema: { type: "integer", minimum: 1, maximum: 100, default: 50 },
+    },
+    {
+      name: "offset",
+      in: "query",
+      description: "Number of rows to skip for pagination.",
+      schema: { type: "integer", minimum: 0, default: 0 },
+    },
+    {
+      name: "sort",
+      in: "query",
+      description: `Comma-separated fields. Prefix with - for descending. Fields: ${sortable.join(", ")}.`,
+      schema: { type: "string" },
+    },
+    {
+      name: "expand",
+      in: "query",
+      description: relations.length
+        ? `Comma-separated relation fields to embed under $expand: ${relations.join(", ")}.`
+        : "Comma-separated relation field names to embed under $expand.",
+      schema: { type: "string" },
+    },
+  ];
+  for (const field of entity.fields) {
+    if (field.secret) {
+      continue;
+    }
+    const detail = field.description ?? `${entity.label} ${field.name}`;
+    params.push({
+      name: `filter[${field.name}]`,
+      in: "query",
+      description: `${detail}. Equality match. Operators: filter[${field.name}][eq|neq|gt|gte|lt|lte|like|in|isnull].`,
+      schema: jsonSchemaForField(field, false),
+    });
+  }
+  return params;
 }
 
 const errorSchema = {
@@ -84,21 +153,6 @@ const errorSchema = {
   },
 };
 
-const listParams = [
-  { name: "limit", in: "query", schema: { type: "integer", minimum: 1, maximum: 100, default: 50 } },
-  { name: "offset", in: "query", schema: { type: "integer", minimum: 0, default: 0 } },
-  { name: "sort", in: "query", schema: { type: "string" }, description: "Comma-separated fields. Prefix with - for descending." },
-  { name: "expand", in: "query", schema: { type: "string" }, description: "Comma-separated relation field names to embed under $expand." },
-  {
-    name: "filter",
-    in: "query",
-    style: "deepObject",
-    explode: true,
-    schema: { type: "object", additionalProperties: true },
-    description: "filter[field] or filter[field][eq|neq|gt|gte|lt|lte|like|in|isnull]",
-  },
-];
-
 const errorResponses = {
   400: { description: "Invalid input", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
   401: { description: "Unauthenticated", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
@@ -106,6 +160,12 @@ const errorResponses = {
   404: { description: "Not found", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
   409: { description: "Conflict", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
   429: { description: "Rate limited", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
+};
+
+const healthSchema = {
+  type: "object",
+  properties: { ok: { type: "boolean" }, app: { type: "string" } },
+  required: ["ok", "app"],
 };
 
 export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
@@ -119,15 +179,7 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         responses: {
           200: {
             description: "OK",
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: { ok: { type: "boolean" }, app: { type: "string" } },
-                  required: ["ok", "app"],
-                },
-              },
-            },
+            content: { "application/json": { schema: healthSchema } },
           },
         },
       },
@@ -140,17 +192,25 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         responses: {
           200: {
             description: "OK",
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  properties: { ok: { type: "boolean" }, app: { type: "string" } },
-                  required: ["ok", "app"],
-                },
-              },
-            },
+            content: { "application/json": { schema: healthSchema } },
           },
         },
+      },
+    },
+    "/docs": {
+      get: {
+        tags: ["meta"],
+        summary: "Interactive API reference",
+        security: [],
+        responses: { 200: { description: "HTML API docs (Swagger UI)", content: { "text/html": { schema: { type: "string" } } } } },
+      },
+    },
+    "/api/v1/docs": {
+      get: {
+        tags: ["meta"],
+        summary: "Interactive API reference (alias of /docs)",
+        security: [],
+        responses: { 200: { description: "HTML API docs (Swagger UI)", content: { "text/html": { schema: { type: "string" } } } } },
       },
     },
     "/api/v1/openapi.json": {
@@ -168,6 +228,38 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         security: [{ bearerAuth: [] }],
         responses: {
           200: { description: "Schema metadata" },
+          401: errorResponses[401],
+          403: errorResponses[403],
+        },
+      },
+    },
+    "/api/v1/backups": {
+      get: {
+        tags: ["backups"],
+        summary: "List backups",
+        description: "Admin only. Lists timestamps, sizes, and restore commands for the configured destination.",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: "OK",
+            content: { "application/json": { schema: { $ref: "#/components/schemas/BackupList" } } },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+        },
+      },
+      post: {
+        tags: ["backups"],
+        summary: "Run a live backup",
+        description:
+          "Admin only. Consistent SQLite snapshot of the live database plus a portable export, written to the configured destination (local or S3). Restore remains CLI-only.",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          201: {
+            description: "Created",
+            content: { "application/json": { schema: { type: "object", properties: { data: { $ref: "#/components/schemas/Backup" } } } } },
+          },
+          401: errorResponses[401],
           403: errorResponses[403],
         },
       },
@@ -197,6 +289,7 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
       post: {
         tags: ["auth"],
         summary: "Log in",
+        description: "Returns access and refresh tokens for the identity field on the auth entity.",
         security: [],
         requestBody: {
           required: true,
@@ -235,6 +328,7 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         },
         responses: {
           200: { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/AuthSession" } } } },
+          400: errorResponses[400],
           401: errorResponses[401],
         },
       },
@@ -243,14 +337,50 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
       post: {
         tags: ["auth"],
         summary: "Revoke the current refresh token",
+        description: "Pass refreshToken to revoke one session, or all=true with a bearer token to revoke every session for the user.",
         requestBody: {
           content: {
             "application/json": {
-              schema: { type: "object", properties: { refreshToken: { type: "string" } } },
+              schema: {
+                type: "object",
+                properties: { refreshToken: { type: "string" }, all: { type: "boolean" } },
+              },
             },
           },
         },
-        responses: { 200: { description: "OK" } },
+        responses: {
+          200: {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: { type: "object", properties: { data: { type: "object", properties: { ok: { type: "boolean" } } } } },
+              },
+            },
+          },
+          401: errorResponses[401],
+        },
+      },
+    },
+    "/api/v1/auth/me": {
+      get: {
+        tags: ["auth"],
+        summary: "Current user",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { data: { $ref: `#/components/schemas/${pascal(ast.auth.entity)}` } },
+                },
+              },
+            },
+          },
+          401: errorResponses[401],
+          404: errorResponses[404],
+        },
       },
     },
     "/api/v1/files": {
@@ -306,6 +436,7 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
         responses: {
           200: { description: "File bytes", content: { "application/octet-stream": { schema: { type: "string", format: "binary" } } } },
+          401: errorResponses[401],
           403: errorResponses[403],
           404: errorResponses[404],
         },
@@ -327,6 +458,26 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         required: ["accessToken", "refreshToken", "expiresIn"],
       },
     },
+  };
+
+  schemas.Backup = {
+    type: "object",
+    properties: {
+      id: { type: "string", description: "Backup stamp" },
+      createdAt: { type: "string", format: "date-time" },
+      size: { type: "integer", description: "Size in bytes" },
+      location: { type: "string" },
+      restoreCommand: { type: "string", description: "CLI restore command. Restore is not available from the admin UI." },
+    },
+    required: ["id", "createdAt", "size", "location", "restoreCommand"],
+  };
+
+  schemas.BackupList = {
+    type: "object",
+    properties: {
+      data: { type: "array", items: { $ref: "#/components/schemas/Backup" } },
+    },
+    required: ["data"],
   };
 
   for (const entity of ast.entities) {
@@ -355,8 +506,9 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
       get: {
         tags: [entity.name],
         summary: `List ${entity.plural}`,
+        description: entity.description,
         security: [{ bearerAuth: [] }],
-        parameters: listParams,
+        parameters: listParameters(entity),
         responses: {
           200: { description: "OK", content: { "application/json": { schema: { $ref: `#/components/schemas/${listName}` } } } },
           401: errorResponses[401],
@@ -366,6 +518,7 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
       post: {
         tags: [entity.name],
         summary: `Create ${entity.label}`,
+        description: entity.description,
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -387,19 +540,29 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
       get: {
         tags: [entity.name],
         summary: `Get ${entity.label}`,
+        description: entity.description,
         security: [{ bearerAuth: [] }],
-        parameters: [{ name: "expand", in: "query", schema: { type: "string" } }],
+        parameters: [
+          {
+            name: "expand",
+            in: "query",
+            schema: { type: "string" },
+            description: "Comma-separated relation fields to embed under $expand.",
+          },
+        ],
         responses: {
           200: {
             description: "OK",
             content: { "application/json": { schema: { type: "object", properties: { data: { $ref: `#/components/schemas/${readName}` } } } } },
           },
+          401: errorResponses[401],
           404: errorResponses[404],
         },
       },
       patch: {
         tags: [entity.name],
         summary: `Update ${entity.label}`,
+        description: entity.description,
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -411,43 +574,55 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
             content: { "application/json": { schema: { type: "object", properties: { data: { $ref: `#/components/schemas/${readName}` } } } } },
           },
           400: errorResponses[400],
+          401: errorResponses[401],
           404: errorResponses[404],
         },
       },
       delete: {
         tags: [entity.name],
         summary: `Delete ${entity.label}`,
+        description: entity.description,
         security: [{ bearerAuth: [] }],
         responses: {
           200: { description: "Deleted" },
+          401: errorResponses[401],
           404: errorResponses[404],
         },
       },
     };
   }
 
-  return {
+  return JSON.parse(
+    JSON.stringify({
     openapi: "3.0.3",
     info: {
       title: ast.appName,
       version: ast.appVersion,
-      description: `Generated from app.yaml for ${ast.appName}. Auth entity: ${ast.auth.entity}.`,
+      description:
+        ast.appDescription ?? `Generated from app.yaml for ${ast.appName}. Auth entity: ${ast.auth.entity}.`,
     },
     servers: [{ url: "/" }],
     tags: [
-      { name: "auth" },
-      { name: "files" },
-      { name: "meta" },
-      ...ast.entities.map((entity) => ({ name: entity.name })),
+      { name: "auth", description: "Signup, login, token refresh, logout, and the current user." },
+      { name: "files", description: "Upload and download files." },
+      { name: "backups", description: "Admin-only live backups. Restore is CLI-only." },
+      { name: "meta", description: "Health, OpenAPI, admin metadata, and docs." },
+      ...ast.entities.map((entity) => ({ name: entity.name, description: entity.description ?? entity.plural })),
     ],
     paths,
     components: {
       securitySchemes: {
-        bearerAuth: { type: "http", scheme: "bearer", bearerFormat: "JWT" },
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "JWT",
+          description: "Access token from /api/v1/auth/login. The docs page also reads bakorin_access from localStorage.",
+        },
       },
       schemas,
     },
-  };
+    }),
+  ) as Record<string, unknown>;
 }
 
 export function metaPayload(ast: SchemaAST): Record<string, unknown> {

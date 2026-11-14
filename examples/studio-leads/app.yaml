@@ -1,6 +1,7 @@
 app:
   name: studio-leads
   version: "0.1.0"
+  description: Lead and task tracker for a small studio. Auth is email plus password.
 
 runtime:
   dialect: sqlite
@@ -36,21 +37,26 @@ entities:
     label: User
     plural: Users
     display: name
+    description: Studio members who own leads and tasks.
     fields:
       email:
         type: email
         unique: true
         required: true
+        description: Sign-in identity.
       password:
         type: password
         required: true
+        description: At least 8 characters. Stored as argon2id.
       name:
         type: text
         required: true
+        description: Display name in the admin UI.
       role:
         type: enum
         values: [user, admin]
         default: user
+        description: admin can read every record and run backups.
     policies:
       read: authenticated
       create: public
@@ -61,28 +67,36 @@ entities:
     label: Lead
     plural: Leads
     display: company
+    description: Inbound studio inquiries.
     fields:
       company:
         type: text
         required: true
+        description: Company or project name.
       contactName:
         type: text
         required: true
+        description: Person to talk to.
       email:
         type: email
         required: true
+        description: Contact email.
       status:
         type: enum
         values: [new, qualified, won, lost]
         default: new
+        description: Pipeline stage.
       notes:
         type: text
+        description: Internal notes.
       ownerId:
         type: relation
         to: users
         required: true
+        description: Owner of this lead.
       brief:
         type: file
+        description: Optional brief or attachment.
     policies:
       read: [owner(ownerId), admin]
       create: authenticated
@@ -93,22 +107,28 @@ entities:
     label: Task
     plural: Tasks
     display: title
+    description: Follow-ups attached to a lead.
     fields:
       title:
         type: text
         required: true
+        description: What needs doing.
       done:
         type: boolean
         default: false
+        description: Completed flag.
       dueOn:
         type: date
+        description: Optional due date.
       leadId:
         type: relation
         to: leads
+        description: Related lead, if any.
       ownerId:
         type: relation
         to: users
         required: true
+        description: Assignee.
     policies:
       read: [owner(ownerId), admin]
       create: authenticated

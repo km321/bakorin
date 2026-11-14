@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "preact/hooks";
 import { deleteRecord, getMeta, listRecords, logout, type MetaEntity, type MetaResponse } from "../lib/api.ts";
 import { Drawer } from "../components/Drawer.tsx";
 import { fieldLabel, relatedLabel } from "../lib/label.ts";
+import { Backups } from "./Backups.tsx";
 
 interface Props {
   onLogout: () => void;
@@ -37,6 +38,7 @@ export function AppShell({ onLogout }: Props) {
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<Record<string, unknown> | null | undefined>(undefined);
+  const [page, setPage] = useState<"records" | "backups">(location.hash === "#backups" ? "backups" : "records");
   const limit = 20;
 
   const entity: MetaEntity | undefined = useMemo(
@@ -81,10 +83,18 @@ export function AppShell({ onLogout }: Props) {
   }, []);
 
   useEffect(() => {
-    if (entityName) {
+    if (entityName && page === "records") {
       void refresh(entityName, 0, filter).catch((err: unknown) => setError(err instanceof Error ? err.message : "list failed"));
     }
-  }, [entityName]);
+  }, [entityName, page]);
+
+  useEffect(() => {
+    function onHash() {
+      setPage(location.hash === "#backups" ? "backups" : "records");
+    }
+    window.addEventListener("hashchange", onHash);
+    return () => window.removeEventListener("hashchange", onHash);
+  }, []);
 
   const columns = (entity?.fields ?? [])
     .filter((field) => !field.secret && field.name !== "id" && field.name !== "createdAt" && field.name !== "updatedAt")
@@ -102,15 +112,32 @@ export function AppShell({ onLogout }: Props) {
             <button
               key={item.name}
               data-nav={item.name}
-              class={item.name === entityName ? "active" : ""}
+              class={page === "records" && item.name === entityName ? "active" : ""}
               onClick={() => {
                 setOffset(0);
                 setEntityName(item.name);
+                setPage("records");
+                if (location.hash) {
+                  location.hash = "";
+                }
               }}
             >
               {item.plural}
             </button>
           ))}
+          <button
+            data-nav="backups"
+            class={page === "backups" ? "active" : ""}
+            onClick={() => {
+              setPage("backups");
+              location.hash = "backups";
+            }}
+          >
+            Backups
+          </button>
+          <a data-nav="docs" href="/docs" target="_blank" rel="noreferrer">
+            API docs
+          </a>
         </nav>
         <button
           class="btn secondary"
@@ -123,6 +150,10 @@ export function AppShell({ onLogout }: Props) {
         </button>
       </aside>
       <main class="main">
+        {page === "backups" ? (
+          <Backups />
+        ) : (
+          <>
         <div class="toolbar">
           <div>
             <h1>{entity?.plural ?? "Records"}</h1>
@@ -210,6 +241,8 @@ export function AppShell({ onLogout }: Props) {
             Next
           </button>
         </div>
+          </>
+        )}
       </main>
       {entity && editing !== undefined ? (
         <Drawer

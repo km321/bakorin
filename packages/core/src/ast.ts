@@ -50,6 +50,7 @@ export interface EntityAST {
   label: string;
   plural: string;
   display: string;
+  description?: string;
   auth: boolean;
   fields: FieldAST[];
   fieldMap: Record<string, FieldAST>;
@@ -110,6 +111,7 @@ export interface SchemaAST {
   version: typeof SCHEMA_AST_VERSION;
   appName: string;
   appVersion: string;
+  appDescription?: string;
   runtime: RuntimeAST;
   entities: EntityAST[];
   entityMap: Record<string, EntityAST>;

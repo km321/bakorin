@@ -46,6 +46,7 @@ const entityObject = z
     label: z.string().optional(),
     plural: z.string().optional(),
     display: ident.optional(),
+    description: z.string().optional(),
     auth: z.boolean().optional(),
     fields: z.record(ident, fieldValue),
     policies: z
@@ -75,6 +76,7 @@ export const appYamlSchema = z
       .object({
         name: z.string().min(1),
         version: z.string().optional(),
+        description: z.string().optional(),
       })
       .strict(),
     runtime: z

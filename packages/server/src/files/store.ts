@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve } from "node:path";
 import { S3Client } from "bun";
 
@@ -8,11 +8,17 @@ export interface StoredFile {
   contentType: string;
 }
 
+export interface StoredObject {
+  key: string;
+  size: number;
+}
+
 export interface FileStore {
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<StoredFile | null>;
   delete(key: string): Promise<void>;
   list(prefix?: string): Promise<string[]>;
+  listDetailed(prefix?: string): Promise<StoredObject[]>;
   copyAllTo(destDir: string): Promise<void>;
   importAllFrom(srcDir: string, keyPrefix?: string): Promise<void>;
 }
@@ -47,6 +53,13 @@ async function walkFiles(root: string): Promise<string[]> {
   return files;
 }
 
+function matchesPrefix(key: string, prefix: string): boolean {
+  if (!prefix) {
+    return true;
+  }
+  return key === prefix || key.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`) || key.startsWith(prefix);
+}
+
 export function createLocalFileStore(root: string): FileStore {
   const base = resolve(root);
   return {
@@ -71,13 +84,20 @@ export function createLocalFileStore(root: string): FileStore {
         // ignore missing
       }
     },
-    async list(prefix = "") {
+    async listDetailed(prefix = "") {
       const files = await walkFiles(base);
-      const keys = files.map((path) => relative(base, path).split("\\").join("/"));
-      if (!prefix) {
-        return keys;
+      const items: StoredObject[] = [];
+      for (const path of files) {
+        const key = relative(base, path).split("\\").join("/");
+        if (!matchesPrefix(key, prefix)) {
+          continue;
+        }
+        items.push({ key, size: (await stat(path)).size });
       }
-      return keys.filter((key) => key === prefix || key.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`) || key.startsWith(prefix));
+      return items;
+    },
+    async list(prefix = "") {
+      return (await this.listDetailed(prefix)).map((item) => item.key);
     },
     async copyAllTo(destDir) {
       await mkdir(destDir, { recursive: true });
@@ -117,8 +137,8 @@ export function createS3FileStore(options: {
     virtualHostedStyle: options.virtualHostedStyle ?? false,
   });
 
-  async function listAll(prefix = ""): Promise<string[]> {
-    const keys: string[] = [];
+  async function listDetailedAll(prefix = ""): Promise<StoredObject[]> {
+    const items: StoredObject[] = [];
     let startAfter: string | undefined;
     for (let page = 0; page < 100; page += 1) {
       const listed = await client.list({
@@ -129,7 +149,7 @@ export function createS3FileStore(options: {
       const contents = listed.contents ?? [];
       for (const item of contents) {
         if (item.key) {
-          keys.push(item.key);
+          items.push({ key: item.key, size: item.size ?? 0 });
         }
       }
       if (!listed.isTruncated || contents.length === 0) {
@@ -140,7 +160,7 @@ export function createS3FileStore(options: {
         break;
       }
     }
-    return keys;
+    return items;
   }
 
   return {
@@ -159,10 +179,14 @@ export function createS3FileStore(options: {
     async delete(key) {
       await client.delete(key);
     },
-    list: listAll,
+    async list(prefix = "") {
+      return (await listDetailedAll(prefix)).map((item) => item.key);
+    },
+    listDetailed: listDetailedAll,
     async copyAllTo(destDir) {
       await mkdir(destDir, { recursive: true });
-      for (const key of await listAll()) {
+      for (const object of await listDetailedAll()) {
+        const key = object.key;
         const file = client.file(key);
         const bytes = new Uint8Array(await file.arrayBuffer());
         const path = join(destDir, key);

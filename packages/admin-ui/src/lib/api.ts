@@ -123,6 +123,32 @@ export async function uploadFile(file: File): Promise<string> {
   return json.data.id as string;
 }
 
+export interface BackupRecord {
+  id: string;
+  createdAt: string;
+  size: number;
+  location: string;
+  restoreCommand: string;
+}
+
+export async function listBackups(): Promise<BackupRecord[]> {
+  const response = await request("/api/v1/backups");
+  const json = (await response.json()) as { data?: BackupRecord[]; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "failed to list backups");
+  }
+  return json.data;
+}
+
+export async function createBackup(): Promise<BackupRecord> {
+  const response = await request("/api/v1/backups", { method: "POST" });
+  const json = (await response.json()) as { data?: BackupRecord; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "backup failed");
+  }
+  return json.data;
+}
+
 export async function listRelated(entity: string): Promise<Array<Record<string, unknown>>> {
   const response = await request(`/api/v1/${entity}?limit=100`);
   const json = await response.json();

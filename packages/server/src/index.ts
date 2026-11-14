@@ -6,6 +6,8 @@ export type { BakorinHooks, EntityHooks, HookContext } from "./hooks/types.ts";
 export { decideAccess } from "./crud/policies-sql.ts";
 export { migrateToSchema } from "./db/migrator.ts";
 export { runBackup } from "./backup/schedule.ts";
+export { listBackups } from "./backup/list.ts";
+export type { BackupInfo } from "./backup/list.ts";
 export { exportPortable, importPortable } from "./backup/archive.ts";
 export { hashPassword, verifyPassword } from "./auth/password.ts";
 export { issueRefreshToken, rotateRefreshToken, revokeAllForUser } from "./auth/refresh.ts";

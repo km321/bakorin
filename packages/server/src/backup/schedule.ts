@@ -11,7 +11,7 @@ function stamp(): string {
   return new Date().toISOString().replaceAll(":", "-");
 }
 
-function s3StoreFromAst(ast: SchemaAST, bucket: string): FileStore {
+export function s3StoreFromAst(ast: SchemaAST, bucket: string): FileStore {
   return createS3FileStore({
     bucket,
     accessKey: ast.runtime.files.accessKey ?? process.env.S3_ACCESS_KEY ?? process.env.AWS_ACCESS_KEY_ID ?? "",

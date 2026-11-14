@@ -25,6 +25,7 @@
   "author": "Melton Studios",
   "devDependencies": {
     "bun-types": "^1.2.5",
+    "openapi-schema-validator": "^12.1.3",
     "typescript": "^5.8.2"
   }
 }

@@ -16,6 +16,5 @@ WORKDIR /project
 ENV NODE_ENV=production
 ENV BAKORIN_ENV=production
 ENV BAKORIN_DATA_DIR=/data
-VOLUME ["/data"]
 EXPOSE 4371
 CMD ["bakorin", "start"]
