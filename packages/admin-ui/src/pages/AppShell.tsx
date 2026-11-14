@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import { deleteRecord, getMeta, listRecords, logout, type MetaEntity, type MetaResponse } from "../lib/api.ts";
 import { Drawer } from "../components/Drawer.tsx";
-import { fieldLabel } from "../lib/label.ts";
+import { fieldLabel, relatedLabel } from "../lib/label.ts";
 
 interface Props {
   onLogout: () => void;
@@ -15,6 +15,17 @@ function cell(value: unknown): string {
     return value ? "yes" : "no";
   }
   return String(value);
+}
+
+function relationCell(row: Record<string, unknown>, fieldName: string, display?: string): string {
+  const expand = row.$expand;
+  if (expand && typeof expand === "object") {
+    const related = (expand as Record<string, unknown>)[fieldName];
+    if (related && typeof related === "object") {
+      return relatedLabel(related as Record<string, unknown>, display);
+    }
+  }
+  return "";
 }
 
 export function AppShell({ onLogout }: Props) {
@@ -38,11 +49,16 @@ export function AppShell({ onLogout }: Props) {
       return;
     }
     const filterField = meta?.entities.find((item) => item.name === nextEntity)?.fields.find((field) => field.type === "text" || field.type === "email");
+    const expandFields = (meta?.entities.find((item) => item.name === nextEntity)?.fields ?? [])
+      .filter((field) => field.relation)
+      .map((field) => field.name)
+      .join(",");
     const result = await listRecords(nextEntity, {
       limit,
       offset: nextOffset,
       filter: nextFilter,
       filterField: filterField?.name,
+      expand: expandFields || undefined,
     });
     setRows(result.data);
     setTotal(result.meta.total);
@@ -151,7 +167,7 @@ export function AppShell({ onLogout }: Props) {
                   <tr key={String(row.id)}>
                     {columns.map((field) => (
                       <td key={field.name} class={field.name === "id" ? "mono" : undefined}>
-                        {cell(row[field.name])}
+                        {field.relation ? relationCell(row, field.name, field.relation.display) : cell(row[field.name])}
                       </td>
                     ))}
                     <td>

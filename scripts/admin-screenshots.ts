@@ -90,7 +90,7 @@ await send("Runtime.evaluate", {
   expression: `
     const email = document.querySelector('input[name=email], input[type=email]');
     const password = document.querySelector('input[name=password], input[type=password]');
-    email.value = 'kyle@meltonstudios.com';
+    email.value = 'ada@studio.test';
     email.dispatchEvent(new Event('input', { bubbles: true }));
     password.value = 'password123';
     password.dispatchEvent(new Event('input', { bubbles: true }));

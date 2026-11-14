@@ -30,16 +30,19 @@ function columnSql(dialect: DialectName, field: FieldAST): string {
     parts.push("not null");
   }
   if (field.defaultValue !== undefined && field.type !== "relation") {
-    parts.push(`default ${literal(field.defaultValue)}`);
+    parts.push(`default ${literal(dialect, field.defaultValue)}`);
   }
   return parts.join(" ");
 }
 
-function literal(value: unknown): string {
+function literal(dialect: DialectName, value: unknown): string {
   if (typeof value === "number") {
     return String(value);
   }
   if (typeof value === "boolean") {
+    if (dialect === "postgres") {
+      return value ? "true" : "false";
+    }
     return value ? "1" : "0";
   }
   return `'${String(value).replaceAll("'", "''")}'`;
@@ -74,13 +77,13 @@ async function tableExists(db: BakorinDb, dialect: DialectName, name: string): P
     );
     return row.rows.length > 0;
   }
-  const row = await sql<{ exists: boolean }>`
+  const row = await sql<{ present: boolean }>`
     select exists (
       select 1 from information_schema.tables
       where table_schema = 'public' and table_name = ${name}
-    ) as exists
+    ) as present
   `.execute(db);
-  return Boolean(row.rows[0]?.exists);
+  return Boolean(row.rows[0]?.present);
 }
 
 async function columnExists(db: BakorinDb, dialect: DialectName, table: string, column: string): Promise<boolean> {
@@ -88,13 +91,13 @@ async function columnExists(db: BakorinDb, dialect: DialectName, table: string, 
     const result = await sql.raw(`pragma table_info(${quoteChecked(table)})`).execute(db);
     return (result.rows as Array<{ name: string }>).some((row) => row.name === column);
   }
-  const row = await sql<{ exists: boolean }>`
+  const row = await sql<{ present: boolean }>`
     select exists (
       select 1 from information_schema.columns
       where table_schema = 'public' and table_name = ${table} and column_name = ${column}
-    ) as exists
+    ) as present
   `.execute(db);
-  return Boolean(row.rows[0]?.exists);
+  return Boolean(row.rows[0]?.present);
 }
 
 async function addIndexes(db: BakorinDb, entity: EntityAST): Promise<void> {
@@ -134,7 +137,7 @@ async function applyAuto(db: BakorinDb, dialect: DialectName, plan: DiffPlan): P
         }
         const extra =
           change.field.required && change.field.defaultValue !== undefined
-            ? ` not null default ${literal(change.field.defaultValue)}`
+            ? ` not null default ${literal(dialect, change.field.defaultValue)}`
             : "";
         await sql
           .raw(

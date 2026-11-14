@@ -42,12 +42,11 @@ function createFiles(ast: SchemaAST, projectDir: string): FileStore {
 
 function openDb(ast: SchemaAST, projectDir: string): { db: BakorinDb; close: () => Promise<void> } {
   if (ast.runtime.dialect === "postgres") {
-    const { db, pool } = openPostgres(ast.runtime.postgresUrl ?? "");
+    const { db } = openPostgres(ast.runtime.postgresUrl ?? "");
     return {
       db,
       close: async () => {
         await db.destroy();
-        await pool.end();
       },
     };
   }

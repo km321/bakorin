@@ -60,6 +60,30 @@ export async function boot(yaml?: string, hooks?: string): Promise<RuntimeHandle
   return Object.assign(runtime, { dir });
 }
 
+export function postgresYaml(url: string): string {
+  return MINI_YAML.replace("dialect: sqlite", "dialect: postgres").replace(
+    `  sqlite:\n    path: ./data/app.db\n`,
+    `  postgres:\n    url: "${url}"\n`,
+  );
+}
+
+export async function bootPostgres(hooks?: string): Promise<RuntimeHandles & { dir: string; database: string }> {
+  const adminUrl = process.env.DATABASE_URL;
+  if (!adminUrl) {
+    throw new Error("DATABASE_URL is required for postgres tests");
+  }
+  const { createPostgresDatabase, dropPostgresDatabase } = await import("@bakorin/server");
+  const database = `b${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  const url = await createPostgresDatabase(adminUrl, database);
+  const runtime = await boot(postgresYaml(url), hooks);
+  const originalClose = runtime.close.bind(runtime);
+  runtime.close = async () => {
+    await originalClose();
+    await dropPostgresDatabase(adminUrl, database);
+  };
+  return Object.assign(runtime, { database });
+}
+
 export function client(runtime: RuntimeHandles & { dir?: string }, token?: string) {
   return {
     fetch(path: string, init: RequestInit = {}) {

@@ -49,6 +49,7 @@ export interface EntityAST {
   name: string;
   label: string;
   plural: string;
+  display: string;
   auth: boolean;
   fields: FieldAST[];
   fieldMap: Record<string, FieldAST>;

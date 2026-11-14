@@ -24,6 +24,7 @@ describe("crud", () => {
     const expanded = await api.fetch(`/api/v1/items/${listedJson.data[0].id}?expand=ownerId`);
     const expandedJson = await expanded.json();
     expect(expandedJson.data.$expand.ownerId.email).toBe("dev@example.com");
+    expect(expandedJson.data.$expand.ownerId.name).toBe("Dev");
     expect(expandedJson.data.$expand.ownerId.password).toBeUndefined();
 
     const patched = await api.fetch(`/api/v1/items/${listedJson.data[0].id}`, {

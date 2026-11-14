@@ -1,5 +1,6 @@
 import type { MetaEntity } from "../lib/api.ts";
 import { listRelated, uploadFile } from "../lib/api.ts";
+import { relatedLabel } from "../lib/label.ts";
 import { useEffect, useState } from "preact/hooks";
 
 interface Props {
@@ -97,7 +98,7 @@ export function FieldInput({ field, value, onChange }: Props) {
           <option value="">Select</option>
           {options.map((row) => (
             <option key={String(row.id)} value={String(row.id)}>
-              {String(row.name ?? row.email ?? row.title ?? row.company ?? row.id)}
+              {relatedLabel(row, field.relation?.display)}
             </option>
           ))}
         </select>

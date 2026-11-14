@@ -45,6 +45,7 @@ const entityObject = z
   .object({
     label: z.string().optional(),
     plural: z.string().optional(),
+    display: ident.optional(),
     auth: z.boolean().optional(),
     fields: z.record(ident, fieldValue),
     policies: z

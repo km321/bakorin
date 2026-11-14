@@ -85,7 +85,16 @@ auth:
   role: role
   adminRole: admin
 entities:
+  users:
+    display: name            # label shown for relations in the admin UI
+    auth: true
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      name: { type: text, required: true }
+      role: { type: enum, values: [user, admin], default: user }
   leads:
+    display: company
     fields:
       company: { type: text, required: true }
       ownerId: { type: relation, to: users, required: true }
@@ -102,6 +111,8 @@ webhooks:
 ```
 
 Field types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`.
+
+`display` on an entity picks the field used as a human label for that row. The admin table and relation selects use it instead of raw ids. If omitted, Bakorin tries `name`, `title`, `email`, then `company`, then `id`.
 
 Policies (OR together in a list): `public`, `authenticated`, `admin`, `owner(field)`, `role(name)`. Admins bypass row filters so the admin UI can see every row. Owner fields on create/update are taken from the session, never from the client.
 
@@ -155,7 +166,9 @@ SQLite backups are a consistent `VACUUM INTO` copy of `app.db`, plus `app.yaml`,
 
 To move SQLite to Postgres: `bakorin export ./portable` on the old host, set `runtime.dialect: postgres` and `DATABASE_URL`, start once so tables exist, then `bakorin import ./portable`.
 
-Scheduled backups: set `runtime.backups.interval` (for example `24h`) and `retain`. Destination may be a local folder or `s3://bucket/prefix` (R2 works with `files.endpoint`).
+Scheduled backups: set `runtime.backups.interval` (for example `24h`) and `retain`. Destination may be a local folder or `s3://bucket/prefix` (R2 works with `files.endpoint`). S3/R2 destinations list objects under that prefix and delete older stamps so `retain` is honored.
+
+The live OpenAPI 3 document is `GET /api/v1/openapi.json`. It is generated from the current `app.yaml`.
 
 ## Deploy
 
@@ -228,11 +241,32 @@ Next.js and Astro helpers live at `@bakorin/sdk/next` and `@bakorin/sdk/astro`. 
 
 `init`, `dev` (watches `app.yaml` and `hooks.ts` and swaps the schema without restarting the process), `start`, `typegen`, `backup`, `restore`, `export`, `import`.
 
+## Tests and CI
+
+SQLite is the default:
+
+```bash
+bun test                 # SQLite, plus an in-process S3 mock for listing and retention
+```
+
+Postgres is a second job. Start Postgres, then:
+
+```bash
+export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/bakorin
+bun test tests/postgres.test.ts
+```
+
+GitHub Actions (`.github/workflows/ci.yml`) runs those two jobs separately: `bun test` on SQLite, then `bun test tests/postgres.test.ts` against a `postgres:16` service. To point file storage at MinIO or R2 in a real environment, set `runtime.files.driver: s3` with `bucket`, `endpoint`, `accessKey`, and `secretKey`.
+
+Release binaries:
+
+```bash
+bun run release    # linux-x64, linux-arm64, darwin-arm64 in ./release
+```
+
 ## Status of this v0.1
 
-Works: schema compiler, 3-tier diff, SQLite migrator, CRUD with filters/sort/expand, policies, auth, local files, webhooks, admin UI, SDK, backup/restore/export/import, hooks, compiled binary, Docker.
-
-Stubbed or later: S3 file listing depends on the bucket API; Postgres tests run only when `DATABASE_URL` is set; scheduled S3 retention listing is best-effort; OpenAPI is a generated sketch.
+Works: schema compiler, 3-tier diff, SQLite and Postgres migrators, CRUD with filters/sort/expand, policies, auth, local and S3/R2 files (list, copy, delete), webhooks, admin UI with relation labels, SDK, backup/restore/export/import including S3 retention, hooks, generated OpenAPI, compiled binary, Docker.
 
 ## Roadmap
 

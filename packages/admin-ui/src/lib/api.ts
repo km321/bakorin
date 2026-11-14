@@ -5,13 +5,14 @@ export interface MetaEntity {
   name: string;
   label: string;
   plural: string;
+  display: string;
   fields: Array<{
     name: string;
     type: string;
     required: boolean;
     secret: boolean;
     enumValues?: string[];
-    relation?: { to: string };
+    relation?: { to: string; display?: string };
     defaultValue?: unknown;
   }>;
 }
@@ -71,7 +72,7 @@ export async function getMeta(): Promise<MetaResponse> {
 
 export async function listRecords(
   entity: string,
-  params: { limit: number; offset: number; filter?: string; filterField?: string },
+  params: { limit: number; offset: number; filter?: string; filterField?: string; expand?: string },
 ): Promise<{ data: Array<Record<string, unknown>>; meta: { total: number } }> {
   const search = new URLSearchParams({
     limit: String(params.limit),
@@ -80,6 +81,9 @@ export async function listRecords(
   });
   if (params.filter && params.filterField) {
     search.set(`filter[${params.filterField}][like]`, params.filter);
+  }
+  if (params.expand) {
+    search.set("expand", params.expand);
   }
   const response = await request(`/api/v1/${entity}?${search.toString()}`);
   const json = await response.json();

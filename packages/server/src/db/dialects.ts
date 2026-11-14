@@ -103,3 +103,31 @@ export function openPostgres(url: string): { db: BakorinDb; pool: Pool } {
   });
   return { db, pool };
 }
+
+function assertDbName(name: string): string {
+  if (!/^[a-z][a-z0-9_]+$/.test(name)) {
+    throw new Error(`refusing to create database ${JSON.stringify(name)}`);
+  }
+  return name;
+}
+
+export function postgresUrlWithDatabase(adminUrl: string, name: string): string {
+  const parsed = new URL(adminUrl);
+  parsed.pathname = `/${assertDbName(name)}`;
+  return parsed.toString();
+}
+
+export async function createPostgresDatabase(adminUrl: string, name: string): Promise<string> {
+  assertDbName(name);
+  const pool = new Pool({ connectionString: adminUrl });
+  await pool.query(`create database ${name}`);
+  await pool.end();
+  return postgresUrlWithDatabase(adminUrl, name);
+}
+
+export async function dropPostgresDatabase(adminUrl: string, name: string): Promise<void> {
+  assertDbName(name);
+  const pool = new Pool({ connectionString: adminUrl });
+  await pool.query(`drop database if exists ${name} with (force)`);
+  await pool.end();
+}

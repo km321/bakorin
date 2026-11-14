@@ -1,5 +1,5 @@
 import { cp, mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { S3Client } from "bun";
 
 export interface StoredFile {
@@ -12,8 +12,39 @@ export interface FileStore {
   put(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
   get(key: string): Promise<StoredFile | null>;
   delete(key: string): Promise<void>;
+  list(prefix?: string): Promise<string[]>;
   copyAllTo(destDir: string): Promise<void>;
-  importAllFrom(srcDir: string): Promise<void>;
+  importAllFrom(srcDir: string, keyPrefix?: string): Promise<void>;
+}
+
+export function parseS3Url(dest: string): { bucket: string; prefix: string } {
+  const url = new URL(dest);
+  if (url.protocol !== "s3:") {
+    throw new Error(`not an s3 url: ${dest}`);
+  }
+  return {
+    bucket: url.host,
+    prefix: url.pathname.replace(/^\/+|\/+$/g, ""),
+  };
+}
+
+async function walkFiles(root: string): Promise<string[]> {
+  let entries: Array<{ name: string; isDirectory(): boolean }> = [];
+  try {
+    entries = await readdir(root, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const files: string[] = [];
+  for (const entry of entries) {
+    const path = join(root, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...(await walkFiles(path)));
+    } else {
+      files.push(path);
+    }
+  }
+  return files;
 }
 
 export function createLocalFileStore(root: string): FileStore {
@@ -40,6 +71,14 @@ export function createLocalFileStore(root: string): FileStore {
         // ignore missing
       }
     },
+    async list(prefix = "") {
+      const files = await walkFiles(base);
+      const keys = files.map((path) => relative(base, path).split("\\").join("/"));
+      if (!prefix) {
+        return keys;
+      }
+      return keys.filter((key) => key === prefix || key.startsWith(prefix.endsWith("/") ? prefix : `${prefix}/`) || key.startsWith(prefix));
+    },
     async copyAllTo(destDir) {
       await mkdir(destDir, { recursive: true });
       try {
@@ -48,10 +87,12 @@ export function createLocalFileStore(root: string): FileStore {
         // empty store
       }
     },
-    async importAllFrom(srcDir) {
+    async importAllFrom(srcDir, keyPrefix = "") {
       await mkdir(base, { recursive: true });
+      const dest = keyPrefix ? join(base, keyPrefix) : base;
       try {
-        await cp(srcDir, base, { recursive: true });
+        await mkdir(dest, { recursive: true });
+        await cp(srcDir, dest, { recursive: true });
       } catch {
         // empty
       }
@@ -73,6 +114,33 @@ export function createS3FileStore(options: {
     endpoint: options.endpoint,
     region: options.region ?? "auto",
   });
+
+  async function listAll(prefix = ""): Promise<string[]> {
+    const keys: string[] = [];
+    let startAfter: string | undefined;
+    for (let page = 0; page < 100; page += 1) {
+      const listed = await client.list({
+        prefix: prefix || undefined,
+        maxKeys: 1000,
+        startAfter,
+      });
+      const contents = listed.contents ?? [];
+      for (const item of contents) {
+        if (item.key) {
+          keys.push(item.key);
+        }
+      }
+      if (!listed.isTruncated || contents.length === 0) {
+        break;
+      }
+      startAfter = contents.at(-1)?.key;
+      if (!startAfter) {
+        break;
+      }
+    }
+    return keys;
+  }
+
   return {
     async put(key, bytes, contentType) {
       await client.write(key, bytes, { type: contentType });
@@ -89,45 +157,50 @@ export function createS3FileStore(options: {
     async delete(key) {
       await client.delete(key);
     },
+    list: listAll,
     async copyAllTo(destDir) {
       await mkdir(destDir, { recursive: true });
-      const listed = await client.list();
-      const contents = (listed as { contents?: Array<{ key?: string }> }).contents ?? [];
-      for (const item of contents) {
-        if (!item.key) {
-          continue;
-        }
-        const file = client.file(item.key);
+      for (const key of await listAll()) {
+        const file = client.file(key);
         const bytes = new Uint8Array(await file.arrayBuffer());
-        const path = join(destDir, item.key);
+        const path = join(destDir, key);
         await mkdir(dirname(path), { recursive: true });
         await writeFile(path, bytes);
       }
     },
-    async importAllFrom(srcDir) {
-      async function walk(dir: string, prefix: string): Promise<void> {
-        let entries: string[] = [];
-        try {
-          entries = await readdir(dir);
-        } catch {
-          return;
-        }
-        for (const entry of entries) {
-          const path = join(dir, entry);
-          const file = Bun.file(path);
-          const stat = await file.stat().catch(() => null);
-          if (!stat) {
-            continue;
-          }
-          if (stat.isDirectory()) {
-            await walk(path, prefix ? `${prefix}/${entry}` : entry);
-          } else {
-            const key = prefix ? `${prefix}/${entry}` : entry;
-            await client.write(key, await readFile(path));
-          }
-        }
+    async importAllFrom(srcDir, keyPrefix = "") {
+      const prefix = keyPrefix.replace(/\/+$/, "");
+      const files = await walkFiles(srcDir);
+      for (const path of files) {
+        const rel = relative(srcDir, path).split("\\").join("/");
+        const key = prefix ? `${prefix}/${rel}` : rel;
+        await client.write(key, await readFile(path));
       }
-      await walk(srcDir, "");
     },
   };
+}
+
+export async function pruneS3Backups(store: FileStore, prefix: string, retain: number): Promise<void> {
+  const root = prefix.replace(/\/+$/, "");
+  const listPrefix = root ? `${root}/` : "";
+  const keys = await store.list(listPrefix);
+  const stamps = new Set<string>();
+  for (const key of keys) {
+    const rest = listPrefix && key.startsWith(listPrefix) ? key.slice(listPrefix.length) : key;
+    const stamp = rest.split("/")[0];
+    if (stamp && /^\d{4}-/.test(stamp)) {
+      stamps.add(stamp);
+    }
+  }
+  const sorted = [...stamps].sort();
+  const extra = sorted.length - retain;
+  if (extra <= 0) {
+    return;
+  }
+  for (const stamp of sorted.slice(0, extra)) {
+    const stampPrefix = `${listPrefix}${stamp}/`;
+    for (const key of await store.list(stampPrefix)) {
+      await store.delete(key);
+    }
+  }
 }

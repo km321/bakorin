@@ -1,13 +1,23 @@
 import { join } from "node:path";
+import { rm } from "node:fs/promises";
 import type { SchemaAST } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
-import type { FileStore } from "../files/store.ts";
+import { createS3FileStore, parseS3Url, pruneS3Backups, type FileStore } from "../files/store.ts";
 import { exportPortable, pruneBackups } from "./archive.ts";
 import { backupSqlite } from "./sqlite.ts";
-import { createS3FileStore } from "../files/store.ts";
 
 function stamp(): string {
   return new Date().toISOString().replaceAll(":", "-");
+}
+
+function s3StoreFromAst(ast: SchemaAST, bucket: string): FileStore {
+  return createS3FileStore({
+    bucket,
+    accessKey: ast.runtime.files.accessKey ?? process.env.S3_ACCESS_KEY ?? process.env.AWS_ACCESS_KEY_ID ?? "",
+    secretKey: ast.runtime.files.secretKey ?? process.env.S3_SECRET_KEY ?? process.env.AWS_SECRET_ACCESS_KEY ?? "",
+    endpoint: ast.runtime.files.endpoint ?? process.env.S3_ENDPOINT,
+    region: ast.runtime.files.region ?? process.env.S3_REGION ?? "auto",
+  });
 }
 
 export async function runBackup(options: {
@@ -18,7 +28,9 @@ export async function runBackup(options: {
   destination?: string;
 }): Promise<string> {
   const destRoot = options.destination ?? options.ast.runtime.backups.destination;
-  const dest = destRoot.startsWith("s3://") ? join(options.projectDir, ".tmp-backup", stamp()) : join(destRoot, stamp());
+  const remote = destRoot.startsWith("s3://");
+  const stampName = stamp();
+  const dest = remote ? join(options.projectDir, ".tmp-backup", stampName) : join(destRoot, stampName);
   if (options.ast.runtime.dialect === "sqlite") {
     const dbPath = join(options.projectDir, options.ast.runtime.sqlitePath);
     await backupSqlite({
@@ -44,20 +56,16 @@ export async function runBackup(options: {
       files: options.files,
     });
   }
-  if (destRoot.startsWith("s3://")) {
-    const url = new URL(destRoot);
-    const store = createS3FileStore({
-      bucket: url.host,
-      accessKey: options.ast.runtime.files.accessKey ?? process.env.S3_ACCESS_KEY ?? "",
-      secretKey: options.ast.runtime.files.secretKey ?? process.env.S3_SECRET_KEY ?? "",
-      endpoint: options.ast.runtime.files.endpoint,
-      region: options.ast.runtime.files.region,
-    });
-    await store.importAllFrom(dest);
+  if (remote) {
+    const { bucket, prefix } = parseS3Url(destRoot);
+    const store = s3StoreFromAst(options.ast, bucket);
+    const keyPrefix = prefix ? `${prefix}/${stampName}` : stampName;
+    await store.importAllFrom(dest, keyPrefix);
+    await pruneS3Backups(store, prefix, options.ast.runtime.backups.retain);
+    await rm(join(options.projectDir, ".tmp-backup"), { recursive: true, force: true });
+    return `s3://${bucket}/${keyPrefix}`;
   }
-  if (!destRoot.startsWith("s3://")) {
-    await pruneBackups(destRoot, options.ast.runtime.backups.retain);
-  }
+  await pruneBackups(destRoot, options.ast.runtime.backups.retain);
   return dest;
 }
 

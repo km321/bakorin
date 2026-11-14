@@ -129,6 +129,26 @@ function defaultPolicies(auth: boolean): Record<ActionName, PolicyAST[]> {
   };
 }
 
+function resolveDisplay(entityName: string, fields: FieldAST[], requested: string | undefined): string {
+  if (requested) {
+    const field = fields.find((item) => item.name === requested);
+    if (!field) {
+      throw new SchemaError(`${entityName} display field ${requested} does not exist`);
+    }
+    if (field.secret) {
+      throw new SchemaError(`${entityName} display field ${requested} cannot be secret`);
+    }
+    return requested;
+  }
+  for (const name of ["name", "title", "email", "company"]) {
+    const field = fields.find((item) => item.name === name && !item.secret);
+    if (field) {
+      return name;
+    }
+  }
+  return "id";
+}
+
 function titleCase(name: string): string {
   return name
     .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -168,11 +188,11 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
     files: {
       driver: runtime.files?.driver ?? "local",
       path: runtime.files?.path ?? "./data/uploads",
-      bucket: runtime.files?.bucket,
-      endpoint: runtime.files?.endpoint,
-      accessKey: runtime.files?.accessKey,
-      secretKey: runtime.files?.secretKey,
-      region: runtime.files?.region ?? "auto",
+      bucket: runtime.files?.bucket ?? env.S3_BUCKET,
+      endpoint: runtime.files?.endpoint ?? env.S3_ENDPOINT,
+      accessKey: runtime.files?.accessKey ?? env.S3_ACCESS_KEY ?? env.AWS_ACCESS_KEY_ID,
+      secretKey: runtime.files?.secretKey ?? env.S3_SECRET_KEY ?? env.AWS_SECRET_ACCESS_KEY,
+      region: runtime.files?.region ?? env.S3_REGION ?? "auto",
     },
     backups: {
       intervalHours: parseIntervalHours(runtime.backups?.interval),
@@ -278,6 +298,7 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
       name,
       label: raw.label ?? titleCase(name.replace(/s$/, "") || name),
       plural: raw.plural ?? titleCase(pluralize(name)),
+      display: resolveDisplay(name, fields, raw.display),
       auth: raw.auth === true,
       fields,
       fieldMap,
@@ -345,6 +366,9 @@ export function deserializeAst(raw: string): SchemaAST {
   parsed.entityMap = Object.fromEntries(parsed.entities.map((entity) => [entity.name, entity]));
   for (const entity of parsed.entities) {
     entity.fieldMap = Object.fromEntries(entity.fields.map((field) => [field.name, field]));
+    if (!entity.display) {
+      entity.display = "id";
+    }
   }
   return parsed;
 }

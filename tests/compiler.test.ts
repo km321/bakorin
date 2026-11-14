@@ -11,6 +11,21 @@ describe("compiler", () => {
     expect(ast.entityMap.items?.fieldMap.ownerId?.relation?.to).toBe("users");
     expect(ast.entityMap.users?.fieldMap.id).toBeTruthy();
     expect(ast.entityMap.users?.fieldMap.password?.secret).toBe(true);
+    expect(ast.entityMap.users?.display).toBe("name");
+    expect(ast.entityMap.items?.display).toBe("title");
+  });
+
+  test("honors entity display and rejects a missing field", () => {
+    const ast = compileAppYaml(
+      MINI_YAML.replace("  items:\n    fields:", "  items:\n    display: title\n    fields:"),
+      { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } },
+    );
+    expect(ast.entityMap.items?.display).toBe("title");
+    expect(() =>
+      compileAppYaml(MINI_YAML.replace("  items:\n    fields:", "  items:\n    display: missing\n    fields:"), {
+        env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" },
+      }),
+    ).toThrow(/display field missing/);
   });
 
   test("interpolates env with defaults", () => {
