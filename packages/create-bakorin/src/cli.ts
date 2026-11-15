@@ -235,6 +235,10 @@ async function prompt(question: string, fallback: string): Promise<string> {
   return answer.trim() || fallback;
 }
 
+function isLicenseFile(name: string): boolean {
+  return /^(licen[cs]e|copying)(\.(md|txt))?$/i.test(name);
+}
+
 async function copyDir(from: string, to: string): Promise<void> {
   await mkdir(to, { recursive: true });
   const entries = await readdir(from, { withFileTypes: true });
@@ -246,7 +250,8 @@ async function copyDir(from: string, to: string): Promise<void> {
         continue;
       }
       await copyDir(src, dest);
-    } else if (entry.name === "README.md") {
+    } else if (entry.name === "README.md" || isLicenseFile(entry.name)) {
+      // Generated projects are the user's own code: no starter README or license file.
       continue;
     } else {
       await cp(src, dest);
@@ -344,7 +349,9 @@ async function rewriteSdkDependency(webDir: string, sdk: SdkSource, checkoutSdk:
   if (!(await pathExists(pkgPath))) {
     return;
   }
-  const pkg = JSON.parse(await readFile(pkgPath, "utf8")) as { dependencies?: Record<string, string> };
+  const pkg = JSON.parse(await readFile(pkgPath, "utf8")) as { license?: string; dependencies?: Record<string, string> };
+  // The generated web app is the user's code, so it carries no license label.
+  delete pkg.license;
   const spec = sdk === "local" && checkoutSdk ? toFileRef(webDir, checkoutSdk) : NPM_SDK;
   pkg.dependencies = { ...pkg.dependencies, "@bakorin/sdk": spec };
   await writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);

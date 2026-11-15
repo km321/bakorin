@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -162,6 +162,39 @@ describe("create-bakorin", () => {
     expect(webReadme).toContain("cd web");
     expect(webReadme).not.toContain("examples/astro-starter");
   });
+
+  for (const frontend of ["astro", "next"] as const) {
+    test(`generated ${frontend} project has no license field and no LICENSE file`, async () => {
+      const dir = await mkdtemp(join(tmpdir(), `create-nolicense-${frontend}-`));
+      const proc = Bun.spawn(
+        [
+          "bun",
+          join(import.meta.dir, "../packages/create-bakorin/src/cli.ts"),
+          "demo",
+          "--dir",
+          dir,
+          "--frontend",
+          frontend,
+          "--schema",
+          "todo",
+          "--yes",
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      expect(await proc.exited).toBe(0);
+      const pkg = (await Bun.file(join(dir, "web/package.json")).json()) as Record<string, unknown>;
+      expect("license" in pkg).toBe(false);
+      const licenseLike = /^(licen[cs]e|copying)(\.(md|txt))?$/i;
+      for (const folder of [dir, join(dir, "web")]) {
+        const names = await readdir(folder);
+        expect(names.filter((name) => licenseLike.test(name))).toEqual([]);
+      }
+      if (await Bun.file(join(dir, "package.json")).exists()) {
+        const rootPkg = (await Bun.file(join(dir, "package.json")).json()) as Record<string, unknown>;
+        expect("license" in rootPkg).toBe(false);
+      }
+    });
+  }
 
   test("--sdk npm writes the unpublished npm spec", async () => {
     const dir = await mkdtemp(join(tmpdir(), "create-npm-"));

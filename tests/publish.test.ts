@@ -51,7 +51,7 @@ describe("publish-ready packages", () => {
     expect(pkg.license).toBe("AGPL-3.0-only");
   });
 
-  test("starters and templates are MIT", async () => {
+  test("starters and templates carry no license label (generated projects are the user's code)", async () => {
     for (const dir of [
       "examples/astro-starter",
       "examples/next-starter",
@@ -59,7 +59,8 @@ describe("publish-ready packages", () => {
       "packages/create-bakorin/templates/next",
     ]) {
       const pkg = await readPkg(dir);
-      expect(pkg.license).toBe("MIT");
+      expect(pkg.license).toBeUndefined();
+      expect(await Bun.file(join(ROOT, dir, "LICENSE")).exists()).toBe(false);
     }
   });
 
