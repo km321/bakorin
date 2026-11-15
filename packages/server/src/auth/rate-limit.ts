@@ -10,13 +10,21 @@ export async function rateLimit(db: BakorinDb, key: string, limit: number, windo
   const fresh = !row || Number.isNaN(windowStart) || now - windowStart >= windowMs;
   if (fresh) {
     await db.deleteFrom(RATE_TABLE).where("key", "=", key).execute();
-    await db
-      .insertInto(RATE_TABLE)
-      .values({ key, count: 1, window_start: new Date(now).toISOString() })
-      .execute();
-    return true;
+    try {
+      await db
+        .insertInto(RATE_TABLE)
+        .values({ key, count: 1, window_start: new Date(now).toISOString() })
+        .execute();
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (!/unique|primary key|constraint/i.test(message)) {
+        throw error;
+      }
+    }
   }
-  const count = Number(row?.count ?? 0);
+  const latest = await db.selectFrom(RATE_TABLE).selectAll().where("key", "=", key).executeTakeFirst();
+  const count = Number(latest?.count ?? 0);
   if (count >= limit) {
     return false;
   }

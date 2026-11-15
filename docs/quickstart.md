@@ -2,30 +2,39 @@
 
 Spin up Bakorin as the API for an Astro or Next.js site.
 
-## 1. Scaffold
+Install [Bun](https://bun.sh) first.
+
+macOS / Linux:
 
 ```bash
-npx create-bakorin my-app --frontend astro --schema todo --yes
-npx create-bakorin my-app --frontend astro --schema todo --mail resend --yes
-cd my-app
-cp .env.example .env
+curl -fsSL https://bun.sh/install | bash
 ```
 
-Set `JWT_SECRET` in `.env` to a long random string. `--mail log|resend|smtp` (or `--email`) writes `MAIL_DRIVER`, `MAIL_FROM`, and an empty `RESEND_API_KEY=` placeholder. Never paste a real key into git. Resend walkthrough: [Email with Resend](resend.md).
+Windows (PowerShell):
 
-## 2. Start the API
+```powershell
+powershell -c "irm bun.sh/install.ps1 | iex"
+```
 
-From a Bakorin checkout (this repo is not published to npm yet):
+## From this checkout (official path)
 
 ```bash
-bun packages/server/src/cli.ts dev --dir ./my-app
+bun install
+bun run create my-app --frontend astro --schema todo --yes
+cp my-app/.env.example my-app/.env
 ```
 
-After a public release you can use `bunx bakorin dev` instead.
+Set `JWT_SECRET` in `my-app/.env` to a long random string. `--mail log|resend|smtp` (or `--email`) writes `MAIL_DRIVER`, `MAIL_FROM`, and an empty `RESEND_API_KEY=` placeholder. Never paste a real key into git. Resend: [Email with Resend](resend.md).
+
+Start the API from the repo root so it loads `my-app/.env`:
+
+```bash
+bun run dev -- --dir my-app
+```
 
 The API listens on http://127.0.0.1:4371. Health: `GET /health`. Admin: http://127.0.0.1:4371/admin/. Docs: http://127.0.0.1:4371/docs.
 
-## 3. Start the front end
+Open `/admin/` and create your first admin (email + password, min 8). Or set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD` before the first start.
 
 ```bash
 cd my-app/web
@@ -35,19 +44,20 @@ npm run dev
 
 Astro defaults to http://127.0.0.1:4321. Next.js defaults to http://127.0.0.1:3000. `BAKORIN_URL` defaults to http://127.0.0.1:4371.
 
-Create an account, then open `/app` and add a record.
-
-## 4. Promote an admin (optional)
+## After publish
 
 ```bash
-sqlite3 my-app/data/app.db "update users set role = 'admin' where email = 'you@example.com';"
+npx create-bakorin my-app --frontend astro --schema todo --yes
+cd my-app
+cp .env.example .env
+bunx bakorin dev
 ```
 
-Or set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD` on first boot.
+This path is marked until the npm `beta` packages are published.
 
 ## Schema choices
 
 - `blank` / `auth-only`: users only
 - `todo`: users plus a private `tasks` list (the starters use this)
 
-Flags: `--frontend astro|next|none`, `--schema blank|auth-only|todo`, `--mail log|resend|smtp`, `--yes`.
+Flags: `--frontend astro|next|none`, `--schema blank|auth-only|todo`, `--mail log|resend|smtp`, `--sdk local|npm`, `--force`, `--yes`, `--help`.

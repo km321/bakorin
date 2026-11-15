@@ -10,6 +10,7 @@ import { publicRow } from "../crud/validate.ts";
 import { decodeRow } from "../crud/query.ts";
 import { sendVerificationEmail } from "./account.ts";
 import { effectiveWritable, safeDefaultRole } from "../crud/write-guards.ts";
+import { createFirstAdmin, hasAdmin } from "./seed.ts";
 
 function clientKey(c: { req: { header: (name: string) => string | undefined } }): string {
   return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "local";
@@ -17,6 +18,74 @@ function clientKey(c: { req: { header: (name: string) => string | undefined } })
 
 export function createAuthRoutes(): Hono {
   const app = new Hono();
+
+  app.get("/setup", async (c) => {
+    const ctx = c.get("app");
+    const firstAdmin = !(await hasAdmin(ctx.ast, ctx.db));
+    return c.json({ data: { firstAdmin } });
+  });
+
+  app.post("/first-admin", async (c) => {
+    const ctx = c.get("app");
+    const ip = clientKey(c);
+    if (!(await rateLimit(ctx.db, `first-admin:${ip}`, 10, 60_000))) {
+      return c.json({ error: { code: "rate_limited", message: "too many attempts" } }, 429);
+    }
+    const entity = ctx.ast.entityMap[ctx.ast.auth.entity];
+    if (!entity) {
+      return c.json({ error: { code: "misconfigured", message: "auth entity missing" } }, 500);
+    }
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
+    const identityField = entity.fieldMap[ctx.ast.auth.identityField];
+    const identityRaw = String(body[ctx.ast.auth.identityField] ?? body.email ?? "").trim();
+    const identity = identityField?.type === "email" ? identityRaw.toLowerCase() : identityRaw;
+    const password = String(body[ctx.ast.auth.passwordField] ?? body.password ?? "");
+    const name = typeof body.name === "string" ? body.name : undefined;
+    if (!identity || password.length < 8) {
+      return c.json(
+        { error: { code: "invalid_input", message: "email and a password of at least 8 characters are required" } },
+        400,
+      );
+    }
+    let result: Awaited<ReturnType<typeof createFirstAdmin>>;
+    try {
+      result = await createFirstAdmin(ctx.ast, ctx.db, { email: identity, password, name });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "could not create admin";
+      return c.json({ error: { code: "invalid_input", message } }, 400);
+    }
+    if (result.status === "exists") {
+      return c.json({ error: { code: "conflict", message: "an admin already exists" } }, 409);
+    }
+    const stored = await ctx.db.selectFrom(entity.name).selectAll().where("id", "=", result.id).executeTakeFirstOrThrow();
+    const after = decodeRow(entity, stored as Record<string, unknown>);
+    const role = String(after[ctx.ast.auth.roleField]);
+    ctx.bus.emit({
+      entity: entity.name,
+      op: "create",
+      before: null,
+      after,
+      actor: { id: result.id, role },
+    });
+    await writeAudit(ctx.db, {
+      action: "first_admin",
+      actorId: result.id,
+      actorRole: role,
+      entity: entity.name,
+      recordId: result.id,
+      ip,
+    });
+    const accessToken = await signAccessToken(
+      { sub: result.id, role, ent: entity.name },
+      ctx.ast.runtime.jwtSecret,
+      ctx.ast.runtime.accessTtlSeconds,
+    );
+    const refreshToken = await issueRefreshToken(ctx.db, result.id, ctx.ast.runtime.refreshTtlSeconds);
+    return c.json(
+      { data: { user: publicRow(entity, after), accessToken, refreshToken, expiresIn: ctx.ast.runtime.accessTtlSeconds } },
+      201,
+    );
+  });
 
   app.post("/signup", async (c) => {
     const ctx = c.get("app");

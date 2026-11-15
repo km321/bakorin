@@ -18,6 +18,7 @@
     "release": "bun scripts/release.ts",
     "dev": "bun packages/server/src/cli.ts dev",
     "start": "bun packages/server/src/cli.ts start",
+    "create": "bun packages/create-bakorin/src/cli.ts",
     "bakorin": "bun packages/server/src/cli.ts",
     "bench": "bun scripts/bench-sqlite.ts",
     "restore-drill": "bun scripts/restore-drill.ts",

@@ -42,6 +42,8 @@ describe("api docs", () => {
     const result = new Validator({ version: 3 }).validate(spec as never);
     expect(result.errors ?? []).toEqual([]);
     expect(spec.openapi).toBe("3.0.3");
+    expect(spec.paths["/api/v1/auth/setup"]?.get).toBeTruthy();
+    expect(spec.paths["/api/v1/auth/first-admin"]?.post).toBeTruthy();
     expect(spec.paths["/api/v1/auth/login"]?.post).toBeTruthy();
     expect(spec.paths["/api/v1/auth/refresh"]?.post).toBeTruthy();
     expect(spec.paths["/api/v1/auth/logout"]?.post).toBeTruthy();

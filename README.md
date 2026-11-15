@@ -1,46 +1,66 @@
 # Bakorin
 
-Bakorin is a self-hosted backend for Melton Studios client projects. One `app.yaml`, one binary, and one database per client. It gives you data, auth, policies, files, an admin UI, and a typed SDK. Nothing else.
+Bakorin is a self-hosted backend you can spin up per client. One folder, one `app.yaml`, one database.
 
-## Quickstart
+It is for agencies and solopreneurs who need auth, data, files, and an admin UI without standing up a custom API every time.
 
-Five minutes to an Astro (or Next.js) site with Bakorin as the API: [docs/quickstart.md](docs/quickstart.md).
+Describe the schema, run it locally, deploy the same project. The typed SDK talks to the API from Astro or Next.js.
+
+## Quick start (from this checkout)
+
+Install [Bun](https://bun.sh) first.
+
+macOS / Linux:
 
 ```bash
-npx create-bakorin my-app --frontend astro --schema todo --yes
-npx create-bakorin my-app --frontend astro --schema todo --mail resend --yes
-bun packages/server/src/cli.ts dev --dir ./my-app
-cd my-app/web && npm install && npm run dev
+curl -fsSL https://bun.sh/install | bash
 ```
 
-`--mail resend` writes `MAIL_DRIVER=resend` and an empty `RESEND_API_KEY=` placeholder. Never commit a real key. Resend setup: [docs/resend.md](docs/resend.md).
+Windows (PowerShell):
 
-From this checkout:
+```powershell
+powershell -c "irm bun.sh/install.ps1 | iex"
+```
+
+Then, in this repo:
 
 ```bash
 bun install
-bun test
-bun run build:ui
-bun run build:bin
-./bakorin init ./my-client
-cd my-client
-../bakorin dev
+bun run create my-app --frontend astro --schema todo --yes
+cp my-app/.env.example my-app/.env
+# set JWT_SECRET in my-app/.env
+bun run dev -- --dir my-app
 ```
 
-Open `http://127.0.0.1:4371/admin/`. Sign up via the API first, then promote that user to `admin` in SQLite or with a one-line update.
+Open http://127.0.0.1:4371/admin/ and use **Create your first admin** (email + password, min 8 characters). Or set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD` in `.env` before the first start.
+
+In another terminal:
 
 ```bash
-curl -s http://127.0.0.1:4371/api/v1/auth/signup \
-  -H 'content-type: application/json' \
-  -d '{"email":"you@studio.test","password":"password123","name":"You"}'
+cd my-app/web
+npm install
+npm run dev
 ```
 
-From the repo, the example app is ready:
+`--mail resend` writes `MAIL_DRIVER=resend` and an empty `RESEND_API_KEY=` placeholder. Never commit a real key. Resend: [docs/resend.md](docs/resend.md). Railway: [docs/deploy-railway.md](docs/deploy-railway.md). Longer walkthrough: [docs/quickstart.md](docs/quickstart.md).
+
+The example app in this repo:
 
 ```bash
 cd examples/studio-leads
 bun ../../packages/server/src/cli.ts dev
 ```
+
+### After publish
+
+```bash
+npx create-bakorin my-app --frontend astro --schema todo --yes
+cd my-app
+cp .env.example .env
+bunx bakorin dev
+```
+
+`npx create-bakorin` is not live yet. Use the checkout path above until the npm `beta` packages are published.
 
 ## What a project folder contains
 
@@ -229,7 +249,7 @@ Mount a volume at `/data` (or whatever you set as `BAKORIN_DATA_DIR`). To run a 
 4. Set `S3_ADDRESSING_STYLE=path`. Railway buckets deny virtual-hosted requests; Bun's S3Client returns Access Denied unless path-style is used.
 5. Set the variables below. Railway sets `PORT`. Railway mounts the volume at `/data`; the image does not declare a Docker `VOLUME`. Set `CORS_ORIGINS` to your admin or front-end origin. Production refuses CORS `*`.
 6. Health check path: `/health`.
-7. Optional first-boot admin: set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD`. Bakorin creates that admin only when the users table is empty; later restarts skip it.
+7. Optional first-boot admin: set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD`. Bakorin creates that admin only while no admin exists. Later restarts skip it. You can also create the first admin at `/admin/`.
 
 Railway volume snapshots are a second copy, not a substitute for `bakorin backup` / scheduled S3 backups.
 
@@ -254,7 +274,7 @@ Railway volume snapshots are a second copy, not a substitute for `bakorin backup
 | `BAKORIN_BACKUP_PREFIX` | optional | Object prefix inside the bucket. Default `backups` |
 | `BAKORIN_BACKUP_DESTINATION` | optional | Override backup destination (`./dir` or `s3://bucket/prefix`) |
 | `BAKORIN_ADMIN_EMAIL` | optional | First-boot admin identity |
-| `BAKORIN_ADMIN_PASSWORD` | optional | First-boot admin password (min 8 chars). Ignored if any user already exists |
+| `BAKORIN_ADMIN_PASSWORD` | optional | First-boot admin password (min 8 chars). Ignored once an admin exists |
 | `BAKORIN_ADMIN_NAME` | optional | Defaults to `Admin` |
 | `DATABASE_URL` | Postgres only | Used when `runtime.dialect` is `postgres` |
 | `CORS_ORIGINS` | production | Comma-separated allowed origins. Overrides `runtime.cors.origins`. Credentials and `Authorization` are allowed. |

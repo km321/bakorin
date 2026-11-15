@@ -1,9 +1,10 @@
 #!/usr/bin/env bun
 import { mkdir, watch } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { formatAppYamlError, generateTypes, isAppYamlValidationError } from "@bakorin/core";
+import { DEV_JWT_SECRET, formatAppYamlError, generateTypes, isAppYamlValidationError } from "@bakorin/core";
 import { loadProject } from "./app.ts";
 import { createDebounced } from "./dev-watch.ts";
+import { applyProjectEnv } from "./env-files.ts";
 import { runBackup } from "./backup/schedule.ts";
 import { exportPortable, importPortable, readManifest } from "./backup/archive.ts";
 import { restoreSqliteSnapshot } from "./backup/sqlite.ts";
@@ -38,39 +39,7 @@ async function cmdInit(): Promise<void> {
   }
   await Bun.write(yamlPath, TEMPLATE_YAML);
   await Bun.write(join(dir, "hooks.ts"), TEMPLATE_HOOKS);
-  await Bun.write(
-    join(dir, ".env.example"),
-    `JWT_SECRET=change-me-to-a-long-random-string
-PORT=4371
-BAKORIN_DATA_DIR=
-DATABASE_URL=postgres://user:pass@localhost:5432/bakorin
-AWS_ENDPOINT_URL=
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
-AWS_DEFAULT_REGION=auto
-BUCKET=
-S3_ENDPOINT=
-S3_BUCKET=
-S3_ACCESS_KEY=
-S3_SECRET_KEY=
-S3_FORCE_PATH_STYLE=true
-S3_VIRTUAL_HOSTED_STYLE=false
-BAKORIN_ADMIN_EMAIL=
-BAKORIN_ADMIN_PASSWORD=
-BAKORIN_ADMIN_NAME=
-APP_URL=http://localhost:4321
-CORS_ORIGINS=http://localhost:4321,http://localhost:3000
-MAIL_DRIVER=log
-MAIL_FROM=
-# Placeholder only. Paste a Resend API key locally. Never commit a real key.
-RESEND_API_KEY=
-SMTP_HOST=
-SMTP_PORT=587
-SMTP_USER=
-SMTP_PASS=
-SMTP_SECURE=false
-`,
-  );
+  await Bun.write(join(dir, ".env.example"), envExampleTemplate());
   await Bun.write(
     join(dir, ".gitignore"),
     `data
@@ -100,7 +69,50 @@ function reportValidationError(error: unknown, context: "startup" | "reload"): v
   console.error(error);
 }
 
+function envExampleTemplate(): string {
+  return `JWT_SECRET=change-me-to-a-long-random-string
+PORT=4371
+APP_URL=http://localhost:4321
+CORS_ORIGINS=http://localhost:4321,http://localhost:3000
+
+# First admin. Leave empty to create one at /admin/ on first run.
+BAKORIN_ADMIN_EMAIL=
+BAKORIN_ADMIN_PASSWORD=
+BAKORIN_ADMIN_NAME=
+
+MAIL_DRIVER=log
+MAIL_FROM=
+
+# --- Optional: production, Railway, S3, Postgres, extra mail ---
+BAKORIN_DATA_DIR=
+BAKORIN_ENV=
+NODE_ENV=
+DATABASE_URL=
+JWT_SECRET_PREVIOUS=
+# Placeholder only. Paste a Resend API key locally. Never commit a real key.
+RESEND_API_KEY=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_SECURE=false
+BUCKET=
+S3_BUCKET=
+S3_ENDPOINT=
+S3_ACCESS_KEY=
+S3_SECRET_KEY=
+S3_REGION=auto
+S3_ADDRESSING_STYLE=path
+S3_FORCE_PATH_STYLE=true
+AWS_ENDPOINT_URL=
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
+AWS_DEFAULT_REGION=auto
+`;
+}
+
 async function loadOrExit(dir: string) {
+  await applyProjectEnv(dir);
   try {
     return await loadProject(dir);
   } catch (error) {
@@ -116,6 +128,11 @@ async function serve(mode: "dev" | "start"): Promise<void> {
   const hostname = runtime.ast.runtime.host;
   console.log(`[bakorin] ${runtime.ast.appName} ${mode} on http://${hostname === "0.0.0.0" ? "127.0.0.1" : hostname}:${port}`);
   console.log(`[bakorin] admin UI http://127.0.0.1:${port}/admin/`);
+  if (mode === "dev" && runtime.ast.runtime.jwtSecret === DEV_JWT_SECRET) {
+    console.warn(
+      "[bakorin] WARNING: using the default JWT secret. Set JWT_SECRET in this project's .env before going beyond local experiments.",
+    );
+  }
   const server = Bun.serve({
     port,
     hostname,

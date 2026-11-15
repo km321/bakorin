@@ -644,11 +644,12 @@ function parseVirtualHostedStyle(files, env) {
   }
   return false;
 }
+var DEV_JWT_SECRET = "dev-only-change-me";
 function compileRuntime(yaml, production, env) {
   const runtime = yaml.runtime ?? {};
   const dialect = runtime.dialect ?? (runtime.postgres?.url ? "postgres" : "sqlite");
-  const jwtSecret = runtime.jwt?.secret ?? env.JWT_SECRET ?? (production ? "" : "dev-only-change-me");
-  if (production && (!jwtSecret || jwtSecret === "dev-only-change-me")) {
+  const jwtSecret = runtime.jwt?.secret ?? env.JWT_SECRET ?? (production ? "" : DEV_JWT_SECRET);
+  if (production && (!jwtSecret || jwtSecret === DEV_JWT_SECRET)) {
     throw new SchemaError("JWT_SECRET is required in production");
   }
   if (dialect === "postgres" && !runtime.postgres?.url) {
@@ -1244,6 +1245,7 @@ export {
   APP_YAML_TOP_LEVEL_KEYS,
   BakorinError,
   DEFAULT_ALLOWED_MIME_TYPES,
+  DEV_JWT_SECRET,
   DiffAbortError,
   FIELD_TYPES,
   IdentError,

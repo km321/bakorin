@@ -1,4 +1,6 @@
 export { createRuntime, loadProject } from "./app.ts";
+export { applyProjectEnv, parseEnvFile } from "./env-files.ts";
+export { countAdmins, createFirstAdmin, hasAdmin, seedAdminIfRequested, seedAdminOrLog } from "./auth/seed.ts";
 export { createDebounced } from "./dev-watch.ts";
 export type { RuntimeHandles } from "./app.ts";
 export { createChangeBus } from "./bus.ts";

@@ -19,7 +19,7 @@ export type {
   SchemaAST,
   WebhookAST,
 } from "./ast.ts";
-export { compileAppYaml, deserializeAst, serializeAst, DEFAULT_ALLOWED_MIME_TYPES } from "./compile.ts";
+export { compileAppYaml, deserializeAst, serializeAst, DEFAULT_ALLOWED_MIME_TYPES, DEV_JWT_SECRET } from "./compile.ts";
 export type { CompileOptions } from "./compile.ts";
 export { assertPlanApplyable, diffSchemas } from "./diff.ts";
 export type { DiffChange, DiffPlan, DiffTier } from "./diff.ts";

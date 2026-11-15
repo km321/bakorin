@@ -296,6 +296,64 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         },
       },
     },
+    "/api/v1/auth/setup": {
+      get: {
+        tags: ["auth"],
+        summary: "First-run setup status",
+        description: "Public. Returns firstAdmin: true while the auth table has no admin, so the admin UI can show Create your first admin.",
+        security: [],
+        responses: {
+          200: {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    data: {
+                      type: "object",
+                      properties: { firstAdmin: { type: "boolean" } },
+                      required: ["firstAdmin"],
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    "/api/v1/auth/first-admin": {
+      post: {
+        tags: ["auth"],
+        summary: "Create the first admin",
+        description:
+          "Public only while zero admins exist. Race-safe: a second call returns 409. After the first admin exists the endpoint stays closed. Alternative: BAKORIN_ADMIN_EMAIL and BAKORIN_ADMIN_PASSWORD on first boot.",
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["email", "password"],
+                properties: {
+                  email: { type: "string", format: "email" },
+                  password: { type: "string", format: "password", minLength: 8 },
+                  name: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: "Created", content: { "application/json": { schema: { $ref: "#/components/schemas/AuthSession" } } } },
+          400: errorResponses[400],
+          409: errorResponses[409],
+          429: errorResponses[429],
+        },
+      },
+    },
     "/api/v1/auth/signup": {
       post: {
         tags: ["auth"],

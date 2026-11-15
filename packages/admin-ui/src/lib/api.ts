@@ -44,21 +44,43 @@ async function request(path: string, init: RequestInit = {}): Promise<Response> 
   return fetch(path, { ...init, headers });
 }
 
+async function storeSession(response: Response, fallback: string): Promise<void> {
+  const json = (await response.json()) as {
+    data?: { accessToken: string; refreshToken: string };
+    error?: { message: string };
+  };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? fallback);
+  }
+  localStorage.setItem(TOKEN_KEY, json.data.accessToken);
+  localStorage.setItem(REFRESH_KEY, json.data.refreshToken);
+}
+
+export async function getSetup(): Promise<{ firstAdmin: boolean }> {
+  const response = await fetch("/api/v1/auth/setup");
+  const json = (await response.json()) as { data?: { firstAdmin: boolean }; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "failed to load setup");
+  }
+  return json.data;
+}
+
 export async function login(identityField: string, identity: string, password: string): Promise<void> {
   const response = await fetch("/api/v1/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ [identityField]: identity, password }),
   });
-  const json = (await response.json()) as {
-    data?: { accessToken: string; refreshToken: string };
-    error?: { message: string };
-  };
-  if (!response.ok || !json.data) {
-    throw new Error(json.error?.message ?? "login failed");
-  }
-  localStorage.setItem(TOKEN_KEY, json.data.accessToken);
-  localStorage.setItem(REFRESH_KEY, json.data.refreshToken);
+  await storeSession(response, "login failed");
+}
+
+export async function createFirstAdmin(email: string, password: string): Promise<void> {
+  const response = await fetch("/api/v1/auth/first-admin", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  await storeSession(response, "could not create admin");
 }
 
 export function logout(): void {

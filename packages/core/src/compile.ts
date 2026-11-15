@@ -240,11 +240,13 @@ function parseVirtualHostedStyle(
   return false;
 }
 
+export const DEV_JWT_SECRET = "dev-only-change-me";
+
 function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, string | undefined>): RuntimeAST {
   const runtime = yaml.runtime ?? {};
   const dialect = runtime.dialect ?? (runtime.postgres?.url ? "postgres" : "sqlite");
-  const jwtSecret = runtime.jwt?.secret ?? env.JWT_SECRET ?? (production ? "" : "dev-only-change-me");
-  if (production && (!jwtSecret || jwtSecret === "dev-only-change-me")) {
+  const jwtSecret = runtime.jwt?.secret ?? env.JWT_SECRET ?? (production ? "" : DEV_JWT_SECRET);
+  if (production && (!jwtSecret || jwtSecret === DEV_JWT_SECRET)) {
     throw new SchemaError("JWT_SECRET is required in production");
   }
   if (dialect === "postgres" && !runtime.postgres?.url) {

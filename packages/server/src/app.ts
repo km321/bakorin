@@ -9,7 +9,7 @@ import { migrateToSchema } from "./db/migrator.ts";
 import { createAuthRoutes, verifyAccessToken } from "./auth/routes.ts";
 import { createAccountRoutes } from "./auth/account.ts";
 import { createMailer, mailFrom } from "./mail/create.ts";
-import { seedAdminIfRequested } from "./auth/seed.ts";
+import { seedAdminOrLog } from "./auth/seed.ts";
 import { createCrudRouter } from "./crud/router.ts";
 import { createFileRoutes } from "./files/routes.ts";
 import { createLocalFileStore, createS3FileStore, type FileStore } from "./files/store.ts";
@@ -85,7 +85,7 @@ export async function createRuntime(options: {
   assertProductionCors(ast, env);
   let opened = openDb(ast, projectDir);
   await migrateToSchema(opened.db, ast);
-  await seedAdminIfRequested(ast, opened.db, env);
+  await seedAdminOrLog(ast, opened.db, env);
   const bus = createChangeBus();
   let hooks = await loadHooks(projectDir, ast.runtime.hooksPath);
   let files = createFiles(ast, projectDir);
