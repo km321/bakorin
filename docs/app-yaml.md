@@ -23,6 +23,8 @@ runtime:
     interval: 24h
     retain: 14
     destination: ./data/backups
+  webhooks:
+    retainDays: 30
   cors:
     origins: ["http://localhost:4321"]
 auth:
@@ -48,7 +50,16 @@ entities:
       create: authenticated
       update: owner(ownerId)
       delete: owner(ownerId)
+webhooks:
+  - entity: tasks
+    events: [create, update, delete]
+    url: ${WEBHOOK_URL}
+    secret: ${WEBHOOK_SECRET}
+    maxAttempts: 10
+    timeoutMs: 10000
 ```
+
+Set `runtime.webhooks.retainDays` (default 30) to control how long delivered outbox rows are kept. See [Webhooks](webhooks.md).
 
 ## Fields
 

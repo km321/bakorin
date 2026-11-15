@@ -22,6 +22,7 @@ import { subscribeAudit } from "./audit/log.ts";
 import { loadHooks } from "./hooks/loader.ts";
 import { subscribeAfterHooks } from "./hooks/after.ts";
 import { startWebhookWorker, subscribeWebhooks } from "./webhooks/dispatcher.ts";
+import { createWebhookRoutes } from "./webhooks/routes.ts";
 import type { AppContext } from "./context.ts";
 import { startBackupScheduler } from "./backup/schedule.ts";
 import { resolveRuntimePath } from "./paths.ts";
@@ -91,11 +92,11 @@ export async function createRuntime(options: {
   let files = createFiles(ast, projectDir);
   const mailer = createMailer(env, mailFrom(env, ast.appName));
   const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir, mailer };
-  subscribeWebhooks(ast, opened.db, (handler) => bus.subscribe(handler));
+  subscribeWebhooks(() => context.ast, opened.db, (handler) => bus.subscribe(handler));
   subscribeAfterHooks(hooks, opened.db, (handler) => bus.subscribe(handler));
   subscribeAudit(ast, opened.db, (handler) => bus.subscribe(handler));
   const stopBackups = startBackupScheduler({ ast, db: opened.db, files, projectDir });
-  const stopWebhooks = ast.webhooks.length > 0 ? startWebhookWorker(opened.db) : () => undefined;
+  const stopWebhooks = startWebhookWorker(opened.db, () => context.ast);
 
   const app = new Hono();
   app.use("*", cors(corsOptions(ast.runtime.corsOrigins)));
@@ -125,6 +126,7 @@ export async function createRuntime(options: {
   app.route("/api/v1/files", createFileRoutes());
   app.route("/api/v1/backups", createBackupRoutes());
   app.route("/api/v1/audit", createAuditRoutes());
+  app.route("/api/v1/webhooks", createWebhookRoutes());
   app.route("/api/v1", createMetaRoutes());
   app.route("/api/v1", createCrudRouter());
   app.route("/admin", createAdminRoutes());

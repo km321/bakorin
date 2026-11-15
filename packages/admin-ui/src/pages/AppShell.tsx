@@ -14,12 +14,28 @@ import { Drawer } from "../components/Drawer.tsx";
 import { InviteUser } from "../components/InviteUser.tsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
 import { ThemeToggle } from "../components/ThemeToggle.tsx";
-import { IconAudit, IconBackup, IconDocs, IconMenu, IconSearch } from "../components/Icons.tsx";
+import { IconAudit, IconBackup, IconDocs, IconMenu, IconSearch, IconWebhook } from "../components/Icons.tsx";
 import { fieldLabel, relatedLabel } from "../lib/label.ts";
 import { emptyLabel, formatDate, formatDateTime, initials } from "../lib/format.ts";
 import { pushToast } from "../lib/toast.ts";
 import { Backups } from "./Backups.tsx";
 import { Audit } from "./Audit.tsx";
+import { Webhooks } from "./Webhooks.tsx";
+
+type AdminPage = "records" | "backups" | "audit" | "webhooks";
+
+function pageFromHash(hash: string): AdminPage {
+  switch (hash) {
+    case "#backups":
+      return "backups";
+    case "#audit":
+      return "audit";
+    case "#webhooks":
+      return "webhooks";
+    default:
+      return "records";
+  }
+}
 
 interface Props {
   onLogout: () => void;
@@ -72,9 +88,7 @@ export function AppShell({ onLogout }: Props) {
   const [pendingDelete, setPendingDelete] = useState<Record<string, unknown> | null>(null);
   const [navOpen, setNavOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
-  const [page, setPage] = useState<"records" | "backups" | "audit">(
-    location.hash === "#backups" ? "backups" : location.hash === "#audit" ? "audit" : "records",
-  );
+  const [page, setPage] = useState<AdminPage>(pageFromHash(location.hash));
   const limit = 20;
 
   const entity: MetaEntity | undefined = useMemo(
@@ -138,7 +152,7 @@ export function AppShell({ onLogout }: Props) {
 
   useEffect(() => {
     function onHash() {
-      setPage(location.hash === "#backups" ? "backups" : location.hash === "#audit" ? "audit" : "records");
+      setPage(pageFromHash(location.hash));
     }
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -220,6 +234,21 @@ export function AppShell({ onLogout }: Props) {
             Backups
           </button>
           <button
+            data-nav="webhooks"
+            class={page === "webhooks" ? "active" : ""}
+            aria-current={page === "webhooks" ? "page" : undefined}
+            onClick={() => {
+              setPage("webhooks");
+              location.hash = "webhooks";
+              setNavOpen(false);
+            }}
+          >
+            <span class="nav-icon">
+              <IconWebhook />
+            </span>
+            Webhooks
+          </button>
+          <button
             data-nav="audit"
             class={page === "audit" ? "active" : ""}
             aria-current={page === "audit" ? "page" : undefined}
@@ -291,10 +320,8 @@ export function AppShell({ onLogout }: Props) {
         </div>
       </header>
       <main class="main">
-        {page === "backups" ? (
-          <Backups />
-        ) : page === "audit" ? (
-          <Audit />
+        {page !== "records" ? (
+          <ProjectScreen page={page} />
         ) : (
           <>
             <div class="toolbar">
@@ -471,4 +498,19 @@ export function AppShell({ onLogout }: Props) {
       ) : null}
     </div>
   );
+}
+
+function ProjectScreen({ page }: { page: Exclude<AdminPage, "records"> }) {
+  switch (page) {
+    case "backups":
+      return <Backups />;
+    case "webhooks":
+      return <Webhooks />;
+    case "audit":
+      return <Audit />;
+    default: {
+      const exhaustive: never = page;
+      return exhaustive;
+    }
+  }
 }

@@ -8,6 +8,9 @@ import { formatZodError } from "./format-schema.ts";
 import { appYamlSchema, type AppYaml, type RawField } from "./yaml-schema.ts";
 import {
   SCHEMA_AST_VERSION,
+  WEBHOOK_DEFAULT_MAX_ATTEMPTS,
+  WEBHOOK_DEFAULT_RETAIN_DAYS,
+  WEBHOOK_DEFAULT_TIMEOUT_MS,
   type ActionName,
   type AuthAST,
   type EntityAST,
@@ -311,7 +314,20 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
     corsOrigins: parseCorsOrigins(runtime.cors?.origins, env),
     hooksPath: runtime.hooks,
     appUrl: parseAppUrl(env, parsePort(runtime.port, env)),
+    webhooksRetainDays: parseWebhookRetainDays(runtime.webhooks?.retainDays, env),
   };
+}
+
+function parseWebhookRetainDays(
+  yamlValue: number | undefined,
+  env: Record<string, string | undefined>,
+): number {
+  const fromEnv = firstEnv(env, ["BAKORIN_WEBHOOK_RETAIN_DAYS"]);
+  const value = fromEnv ? Number(fromEnv) : (yamlValue ?? WEBHOOK_DEFAULT_RETAIN_DAYS);
+  if (!Number.isInteger(value) || value < 1 || value > 3650) {
+    throw new SchemaError("runtime.webhooks.retainDays must be an integer from 1 to 3650");
+  }
+  return value;
 }
 
 function parseCorsOrigins(
@@ -527,6 +543,8 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
       events: hook.events,
       url: hook.url,
       secret: hook.secret,
+      maxAttempts: hook.maxAttempts ?? WEBHOOK_DEFAULT_MAX_ATTEMPTS,
+      timeoutMs: hook.timeoutMs ?? WEBHOOK_DEFAULT_TIMEOUT_MS,
     };
   });
 
@@ -592,6 +610,13 @@ export function deserializeAst(raw: string): SchemaAST {
   }
   if (!parsed.runtime.files.signedUrlTtlSeconds) {
     parsed.runtime.files.signedUrlTtlSeconds = 900;
+  }
+  if (!parsed.runtime.webhooksRetainDays) {
+    parsed.runtime.webhooksRetainDays = WEBHOOK_DEFAULT_RETAIN_DAYS;
+  }
+  for (const hook of parsed.webhooks ?? []) {
+    hook.maxAttempts = hook.maxAttempts ?? WEBHOOK_DEFAULT_MAX_ATTEMPTS;
+    hook.timeoutMs = hook.timeoutMs ?? WEBHOOK_DEFAULT_TIMEOUT_MS;
   }
   return parsed;
 }

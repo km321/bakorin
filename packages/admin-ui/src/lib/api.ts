@@ -216,6 +216,77 @@ export async function listBackups(): Promise<BackupRecord[]> {
   return json.data;
 }
 
+export interface WebhookConfig {
+  id: string;
+  entity: string;
+  events: string[];
+  urlHost: string;
+  maxAttempts: number;
+  timeoutMs: number;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  webhookId: string | null;
+  event: string;
+  urlHost: string;
+  status: "pending" | "delivered" | "failed";
+  attempts: number;
+  lastStatusCode: number | null;
+  lastError: string | null;
+  createdAt: string;
+  deliveredAt: string | null;
+  nextAttemptAt: string;
+}
+
+export async function listWebhooks(): Promise<WebhookConfig[]> {
+  const response = await request("/api/v1/webhooks");
+  const json = (await response.json()) as { data?: WebhookConfig[]; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "failed to list webhooks");
+  }
+  return json.data;
+}
+
+export async function listWebhookDeliveries(params: {
+  limit: number;
+  offset: number;
+  status?: "pending" | "delivered" | "failed" | "all";
+}): Promise<{ data: WebhookDelivery[]; meta: { total: number; limit: number; offset: number } }> {
+  const search = new URLSearchParams({ limit: String(params.limit), offset: String(params.offset) });
+  if (params.status && params.status !== "all") {
+    search.set("status", params.status);
+  }
+  const response = await request(`/api/v1/webhooks/deliveries?${search.toString()}`);
+  const json = (await response.json()) as {
+    data?: WebhookDelivery[];
+    meta?: { total: number; limit: number; offset: number };
+    error?: { message: string };
+  };
+  if (!response.ok || !json.data || !json.meta) {
+    throw new Error(json.error?.message ?? "failed to list deliveries");
+  }
+  return { data: json.data, meta: json.meta };
+}
+
+export async function retryWebhookDelivery(id: string): Promise<WebhookDelivery> {
+  const response = await request(`/api/v1/webhooks/deliveries/${id}/retry`, { method: "POST" });
+  const json = (await response.json()) as { data?: WebhookDelivery; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "retry failed");
+  }
+  return json.data;
+}
+
+export async function sendWebhookTest(id: string): Promise<WebhookDelivery> {
+  const response = await request(`/api/v1/webhooks/${id}/test`, { method: "POST" });
+  const json = (await response.json()) as { data?: WebhookDelivery; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "test event failed");
+  }
+  return json.data;
+}
+
 export async function createBackup(): Promise<BackupRecord> {
   const response = await request("/api/v1/backups", { method: "POST" });
   const json = (await response.json()) as { data?: BackupRecord; error?: { message: string } };

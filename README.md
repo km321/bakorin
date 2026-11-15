@@ -144,6 +144,8 @@ webhooks:
     events: [create, update, delete]
     url: ${WEBHOOK_URL}
     secret: ${WEBHOOK_SECRET}
+    maxAttempts: 10
+    timeoutMs: 10000
 ```
 
 Field types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`.
@@ -404,7 +406,7 @@ bun run release    # linux-x64, linux-arm64, darwin-arm64 in ./release
 
 ## Status of this v0.1
 
-Works: schema compiler, 3-tier diff, SQLite and Postgres migrators (including `indexes:`), CRUD with filters/sort/expand, policies, auth (signup, login, forgot/reset, verify, invites, lockout), DB-backed rate limits, JWT rotation, signed file URLs, audit log, leases for backups and webhooks, admin UI with Backups and Audit, SDK, create-bakorin, Astro and Next starters, backup/restore/export/import including S3 retention, hooks, generated OpenAPI, compiled binary, Docker, Railway template files.
+Works: schema compiler, 3-tier diff, SQLite and Postgres migrators (including `indexes:`), CRUD with filters/sort/expand, policies, auth (signup, login, forgot/reset, verify, invites, lockout), DB-backed rate limits, JWT rotation, signed file URLs, audit log, leases for backups and webhooks, admin UI with Backups, Audit, and Webhooks, SDK, create-bakorin, Astro and Next starters, backup/restore/export/import including S3 retention, hooks, generated OpenAPI, compiled binary, Docker, Railway template files.
 
 ## Roadmap
 

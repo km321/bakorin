@@ -10,5 +10,6 @@
 - Append-only `_bakorin_audit` records signup, login, failed login, reset, invite, role change, admin writes, and backups. `GET /api/v1/audit` is admin-only.
 - `JWT_SECRET_PREVIOUS` keeps old access tokens valid during a rotation.
 - Webhook delivery and scheduled backups take a database lease so a second instance does not double-run.
+- Webhook payloads strip `secret` fields (including password hashes). HMAC signatures cover `timestamp + "." + body` (`x-bakorin-timestamp` plus `x-bakorin-signature`) so receivers can reject replays. See [Webhooks](webhooks.md).
 - Production refuses CORS origin `*` unless `BAKORIN_ALLOW_ANY_ORIGIN=true`.
 - `MAIL_DRIVER=resend` without `RESEND_API_KEY` refuses to start. In production the log line begins `[bakorin] production startup failed`.

@@ -131,10 +131,15 @@ export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): P
     .raw(
       `create table if not exists ${WEBHOOK_OUTBOX_TABLE} (
         id ${text} primary key,
+        webhook_id ${text},
+        event ${text},
         url ${text} not null,
         payload ${text} not null,
         headers ${text} not null,
         attempts ${int} not null,
+        status ${text} not null default 'pending',
+        last_status_code ${int},
+        last_error ${text},
         locked_until ${text},
         next_attempt_at ${text} not null,
         delivered_at ${text},
@@ -142,6 +147,44 @@ export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): P
       )`,
     )
     .execute(db);
+  await ensureOutboxColumns(db, dialect, int, text);
+  await sql
+    .raw(
+      `update ${WEBHOOK_OUTBOX_TABLE} set status = 'delivered' where delivered_at is not null and (status is null or status = 'pending')`,
+    )
+    .execute(db);
+  await sql
+    .raw(`create index if not exists _bakorin_webhook_outbox_due_idx on ${WEBHOOK_OUTBOX_TABLE} (status, next_attempt_at)`)
+    .execute(db);
+}
+
+async function tableColumns(db: BakorinDb, dialect: DialectName, table: string): Promise<Set<string>> {
+  if (dialect === "postgres") {
+    const result = await sql<{ name: string }>`
+      select column_name as name from information_schema.columns where table_name = ${table}
+    `.execute(db);
+    return new Set(result.rows.map((row) => row.name));
+  }
+  const result = await sql.raw(`pragma table_info(${table})`).execute(db);
+  const rows = result.rows as Array<{ name: string }>;
+  return new Set(rows.map((row) => row.name));
+}
+
+async function ensureOutboxColumns(db: BakorinDb, dialect: DialectName, int: string, text: string): Promise<void> {
+  const existing = await tableColumns(db, dialect, WEBHOOK_OUTBOX_TABLE);
+  const additions: Array<{ name: string; sql: string }> = [
+    { name: "webhook_id", sql: `${text}` },
+    { name: "event", sql: `${text}` },
+    { name: "status", sql: `${text} not null default 'pending'` },
+    { name: "last_status_code", sql: int },
+    { name: "last_error", sql: text },
+  ];
+  for (const column of additions) {
+    if (existing.has(column.name)) {
+      continue;
+    }
+    await sql.raw(`alter table ${WEBHOOK_OUTBOX_TABLE} add column ${column.name} ${column.sql}`).execute(db);
+  }
 }
 
 export async function metaGet(db: BakorinDb, key: string): Promise<string | null> {

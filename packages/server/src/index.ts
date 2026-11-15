@@ -19,6 +19,8 @@ export { resetRateLimit } from "./auth/rate-limit.ts";
 export { acquireLease, releaseLease, instanceHolder } from "./db/leases.ts";
 export { signAccessToken, verifyAccessToken } from "./auth/jwt.ts";
 export { writeAudit, listAudit } from "./audit/log.ts";
+export { drainWebhookOutbox, signWebhookPayload, cleanupDelivered, deliverById } from "./webhooks/dispatcher.ts";
+export { redactChangeEvent, redactRecord } from "./webhooks/redact.ts";
 export { openSqlite, openPostgres, createPostgresDatabase, dropPostgresDatabase, postgresUrlWithDatabase } from "./db/dialects.ts";
 export { createLocalFileStore, createS3FileStore, parseS3Url, pruneS3Backups } from "./files/store.ts";
 export type { FileStore } from "./files/store.ts";

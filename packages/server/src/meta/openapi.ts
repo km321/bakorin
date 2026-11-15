@@ -265,6 +265,72 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         },
       },
     },
+    "/api/v1/webhooks": {
+      get: {
+        tags: ["webhooks"],
+        summary: "List webhook endpoints",
+        description: "Admin only. Configured app.yaml webhooks. Secrets are never returned.",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: "OK" },
+          401: errorResponses[401],
+          403: errorResponses[403],
+        },
+      },
+    },
+    "/api/v1/webhooks/deliveries": {
+      get: {
+        tags: ["webhooks"],
+        summary: "List webhook deliveries",
+        description: "Admin only. Recent outbox rows with status, attempt count, and last error.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+          {
+            name: "status",
+            in: "query",
+            schema: { type: "string", enum: ["pending", "delivered", "failed"] },
+          },
+        ],
+        responses: {
+          200: { description: "OK" },
+          401: errorResponses[401],
+          403: errorResponses[403],
+        },
+      },
+    },
+    "/api/v1/webhooks/deliveries/{id}/retry": {
+      post: {
+        tags: ["webhooks"],
+        summary: "Retry a failed delivery",
+        description: "Admin only. Queues one more attempt for a failed outbox row.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          200: { description: "OK" },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: errorResponses[404],
+          409: { description: "Only failed deliveries can be retried" },
+        },
+      },
+    },
+    "/api/v1/webhooks/{id}/test": {
+      post: {
+        tags: ["webhooks"],
+        summary: "Send a test event",
+        description: "Admin only. Enqueues a synthetic payload for one configured webhook.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          201: { description: "Created" },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: errorResponses[404],
+        },
+      },
+    },
     "/api/v1/backups": {
       get: {
         tags: ["backups"],
@@ -891,6 +957,7 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
       { name: "auth", description: "Signup, login, token refresh, logout, and the current user." },
       { name: "files", description: "Upload and download files." },
       { name: "backups", description: "Admin-only live backups. Restore is CLI-only." },
+      { name: "webhooks", description: "Admin-only webhook configuration and delivery log." },
       { name: "audit", description: "Admin-only append-only audit log." },
       { name: "meta", description: "Health, OpenAPI, admin metadata, and docs." },
       ...ast.entities.map((entity) => ({ name: entity.name, description: entity.description ?? entity.plural })),

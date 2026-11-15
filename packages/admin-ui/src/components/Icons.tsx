@@ -44,6 +44,17 @@ export function IconDocs() {
   );
 }
 
+export function IconWebhook() {
+  return (
+    <Svg>
+      <circle cx="4.5" cy="8" r="1.7" stroke="currentColor" stroke-width="1.25" />
+      <circle cx="11.5" cy="4.5" r="1.7" stroke="currentColor" stroke-width="1.25" />
+      <circle cx="11.5" cy="11.5" r="1.7" stroke="currentColor" stroke-width="1.25" />
+      <path d="M6.1 7.2 9.8 5.4M6.1 8.8 9.8 10.6" stroke="currentColor" stroke-width="1.25" />
+    </Svg>
+  );
+}
+
 export function IconMenu() {
   return (
     <Svg>

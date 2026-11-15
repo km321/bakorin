@@ -1,4 +1,9 @@
-export { SCHEMA_AST_VERSION } from "./ast.ts";
+export {
+  SCHEMA_AST_VERSION,
+  WEBHOOK_DEFAULT_MAX_ATTEMPTS,
+  WEBHOOK_DEFAULT_RETAIN_DAYS,
+  WEBHOOK_DEFAULT_TIMEOUT_MS,
+} from "./ast.ts";
 export type {
   ActionName,
   AuthAST,

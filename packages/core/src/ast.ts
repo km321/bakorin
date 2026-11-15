@@ -63,12 +63,18 @@ export interface EntityAST {
   deprecated: boolean;
 }
 
+export const WEBHOOK_DEFAULT_MAX_ATTEMPTS = 10;
+export const WEBHOOK_DEFAULT_TIMEOUT_MS = 10_000;
+export const WEBHOOK_DEFAULT_RETAIN_DAYS = 30;
+
 export interface WebhookAST {
   id: string;
   entity: string | "*";
   events: Array<"create" | "update" | "delete">;
   url: string;
   secret?: string;
+  maxAttempts: number;
+  timeoutMs: number;
 }
 
 export interface FilesRuntimeAST {
@@ -107,6 +113,7 @@ export interface RuntimeAST {
   corsOrigins: string[];
   hooksPath?: string;
   appUrl: string;
+  webhooksRetainDays: number;
 }
 
 export interface AuthAST {

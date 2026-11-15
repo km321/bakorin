@@ -84,6 +84,30 @@ describe("compiler", () => {
     expect(ast.auth.requireVerifiedEmail).toBe(false);
   });
 
+  test("webhooks default maxAttempts, timeoutMs, and retainDays", () => {
+    const ast = compileAppYaml(
+      `${MINI_YAML}
+webhooks:
+  - entity: items
+    events: [create]
+    url: https://example.com/hook
+    secret: s
+  - entity: users
+    events: [create, update]
+    url: https://example.com/users
+    maxAttempts: 3
+    timeoutMs: 1500
+`,
+      { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } },
+    );
+    expect(ast.runtime.webhooksRetainDays).toBe(30);
+    expect(ast.webhooks[0]?.id).toBe("wh_1");
+    expect(ast.webhooks[0]?.maxAttempts).toBe(10);
+    expect(ast.webhooks[0]?.timeoutMs).toBe(10_000);
+    expect(ast.webhooks[1]?.maxAttempts).toBe(3);
+    expect(ast.webhooks[1]?.timeoutMs).toBe(1500);
+  });
+
   test("CORS_ORIGINS overrides yaml and APP_URL is compiled", () => {
     const ast = compileAppYaml(MINI_YAML, {
       env: {

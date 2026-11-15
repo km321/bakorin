@@ -75,6 +75,8 @@ const webhookObject = z
     events: z.array(z.enum(["create", "update", "delete"])).min(1),
     url: z.string().min(1),
     secret: z.string().optional(),
+    maxAttempts: z.number().int().min(1).max(100).optional(),
+    timeoutMs: z.number().int().min(100).max(120_000).optional(),
   })
   .strict();
 
@@ -145,6 +147,12 @@ export const appYamlSchema = z
           .strict()
           .optional(),
         hooks: z.string().optional(),
+        webhooks: z
+          .object({
+            retainDays: z.number().int().min(1).max(3650).optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
