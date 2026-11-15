@@ -1,7 +1,9 @@
 {
   "name": "@bakorin/sdk",
-  "version": "0.1.0",
+  "version": "0.0.1",
+  "description": "Typed client for a Bakorin API, with Astro and Next.js helpers",
   "license": "MIT",
+  "author": "Melton Studios",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -28,9 +30,33 @@
   "files": [
     "dist",
     "src",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "scripts": {
-    "build": "bun build src/index.ts src/astro.ts src/next.ts --outdir dist --format esm --target node && bunx tsc -p tsconfig.json --emitDeclarationOnly --declaration --allowImportingTsExtensions"
-  }
+    "build": "bun build src/index.ts src/astro.ts src/next.ts --outdir dist --format esm --target node && bunx tsc -p tsconfig.json --emitDeclarationOnly --declaration --allowImportingTsExtensions",
+    "prepublishOnly": "bun run build"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/km321/bakorin.git",
+    "directory": "packages/sdk"
+  },
+  "bugs": {
+    "url": "https://github.com/km321/bakorin/issues"
+  },
+  "homepage": "https://github.com/km321/bakorin/tree/main/packages/sdk#readme",
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "bakorin",
+    "sdk",
+    "astro",
+    "next"
+  ]
 }

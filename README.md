@@ -8,9 +8,12 @@ Five minutes to an Astro (or Next.js) site with Bakorin as the API: [docs/quicks
 
 ```bash
 npx create-bakorin my-app --frontend astro --schema todo --yes
+npx create-bakorin my-app --frontend astro --schema todo --mail resend --yes
 bun packages/server/src/cli.ts dev --dir ./my-app
 cd my-app/web && npm install && npm run dev
 ```
+
+`--mail resend` writes `MAIL_DRIVER=resend` and an empty `RESEND_API_KEY=` placeholder. Never commit a real key. Resend setup: [docs/resend.md](docs/resend.md).
 
 From this checkout:
 
@@ -127,8 +130,8 @@ Field types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`
 
 Field write locks (optional on any field):
 
-- `writable: admin` or `adminOnly: true` — only an admin may set the field on create or update. Non-admin writes that include it return **403**.
-- `writable: none` or `readonly: true` — nobody may set the field through generic CRUD. Including it returns **403**.
+- `writable: admin` or `adminOnly: true`: only an admin may set the field on create or update. Non-admin writes that include it return **403**.
+- `writable: none` or `readonly: true`: nobody may set the field through generic CRUD. Including it returns **403**.
 - The auth `role` field is always `writable: admin`, even if you omit the flag. Public signup belongs on `POST /auth/signup`, which ignores a client-supplied role. The default policy for auth-entity **create** is `admin`; do not make `users.create` public.
 
 `auth.requireVerifiedEmail: true` blocks login until `POST /auth/verify-email` succeeds. Bakorin adds an `emailVerified` boolean on the auth entity when the schema does not already define one.
@@ -259,7 +262,7 @@ Railway volume snapshots are a second copy, not a substitute for `bakorin backup
 | `APP_URL` or `BAKORIN_APP_URL` | recommended | Front-end base URL for links in emails. Defaults to `http://127.0.0.1:$PORT` |
 | `MAIL_DRIVER` | optional | `log` (default), `smtp`, or `resend`. `log` prints the link and sends nothing |
 | `MAIL_FROM` | optional | From header. Defaults to `$appName <noreply@localhost>` |
-| `RESEND_API_KEY` | if `MAIL_DRIVER=resend` | Resend API key |
+| `RESEND_API_KEY` | if `MAIL_DRIVER=resend` | Resend API key. Missing key fails startup (loud error in production). Never commit a real key. |
 | `SMTP_HOST` | if `MAIL_DRIVER=smtp` | SMTP hostname |
 | `SMTP_PORT` | optional | Defaults to 587 |
 | `SMTP_USER` | optional | SMTP username |

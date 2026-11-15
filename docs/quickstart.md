@@ -6,11 +6,12 @@ Spin up Bakorin as the API for an Astro or Next.js site.
 
 ```bash
 npx create-bakorin my-app --frontend astro --schema todo --yes
+npx create-bakorin my-app --frontend astro --schema todo --mail resend --yes
 cd my-app
 cp .env.example .env
 ```
 
-Set `JWT_SECRET` in `.env` to a long random string.
+Set `JWT_SECRET` in `.env` to a long random string. `--mail log|resend|smtp` (or `--email`) writes `MAIL_DRIVER`, `MAIL_FROM`, and an empty `RESEND_API_KEY=` placeholder. Never paste a real key into git. Resend walkthrough: [Email with Resend](resend.md).
 
 ## 2. Start the API
 
@@ -49,4 +50,4 @@ Or set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD` on first boot.
 - `blank` / `auth-only`: users only
 - `todo`: users plus a private `tasks` list (the starters use this)
 
-Flags: `--frontend astro|next|none`, `--schema blank|auth-only|todo`, `--yes`.
+Flags: `--frontend astro|next|none`, `--schema blank|auth-only|todo`, `--mail log|resend|smtp`, `--yes`.

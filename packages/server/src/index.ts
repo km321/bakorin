@@ -21,6 +21,7 @@ export { createLocalFileStore, createS3FileStore, parseS3Url, pruneS3Backups } f
 export type { FileStore } from "./files/store.ts";
 export type { Actor, AppContext } from "./context.ts";
 export { buildOpenApi } from "./meta/openapi.ts";
-export { createMailer, mailFrom } from "./mail/create.ts";
+export { createMailer, mailFrom, missingResendApiKeyMessage } from "./mail/create.ts";
+export { createResendMailer } from "./mail/resend.ts";
 export { getLoggedMail, clearLoggedMail } from "./mail/log.ts";
 export type { Mailer, MailMessage, MailDriver } from "./mail/types.ts";

@@ -8,8 +8,19 @@ function readEnv(env: Record<string, string | undefined>, name: string): string 
   return value && value !== "" ? value : undefined;
 }
 
+function isProduction(env: Record<string, string | undefined>): boolean {
+  return env.NODE_ENV === "production" || env.BAKORIN_ENV === "production";
+}
+
 export function mailFrom(env: Record<string, string | undefined>, appName: string): string {
   return readEnv(env, "MAIL_FROM") ?? `${appName} <noreply@localhost>`;
+}
+
+export function missingResendApiKeyMessage(env: Record<string, string | undefined>): string {
+  if (isProduction(env)) {
+    return "[bakorin] production startup failed: MAIL_DRIVER=resend requires RESEND_API_KEY. Set RESEND_API_KEY to a Resend API key (never commit it), or set MAIL_DRIVER=log. Refusing to start.";
+  }
+  return "RESEND_API_KEY is required when MAIL_DRIVER=resend. Set RESEND_API_KEY, or set MAIL_DRIVER=log for local development.";
 }
 
 export function createMailer(env: Record<string, string | undefined>, from: string): Mailer {
@@ -36,7 +47,7 @@ export function createMailer(env: Record<string, string | undefined>, from: stri
     case "resend": {
       const key = readEnv(env, "RESEND_API_KEY");
       if (!key) {
-        throw new Error("RESEND_API_KEY is required when MAIL_DRIVER=resend");
+        throw new Error(missingResendApiKeyMessage(env));
       }
       return createResendMailer(key, from);
     }

@@ -34,3 +34,5 @@ Set `JWT_SECRET` to the new key and `JWT_SECRET_PREVIOUS` to the old key. Verify
 - `/reset-password?token=`
 - `/verify-email?token=`
 - `/accept-invite?token=`
+
+Resend setup (API key, verified domain, `MAIL_FROM`, and how to test the three emails): [Email with Resend](resend.md). Missing `RESEND_API_KEY` with `MAIL_DRIVER=resend` fails at startup. In production the message starts with `[bakorin] production startup failed`.

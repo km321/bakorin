@@ -11,3 +11,4 @@
 - `JWT_SECRET_PREVIOUS` keeps old access tokens valid during a rotation.
 - Webhook delivery and scheduled backups take a database lease so a second instance does not double-run.
 - Production refuses CORS origin `*` unless `BAKORIN_ALLOW_ANY_ORIGIN=true`.
+- `MAIL_DRIVER=resend` without `RESEND_API_KEY` refuses to start. In production the log line begins `[bakorin] production startup failed`.

@@ -2,6 +2,8 @@ node_modules
 dist
 !packages/sdk/dist
 !packages/sdk/dist/**
+!packages/core/dist
+!packages/core/dist/**
 !packages/create-bakorin/dist
 !packages/create-bakorin/dist/**
 .DS_Store

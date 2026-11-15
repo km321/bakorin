@@ -1,10 +1,12 @@
 import type { MailMessage, Mailer } from "./types.ts";
 
-export function createResendMailer(apiKey: string, from: string): Mailer {
+export type FetchLike = typeof fetch;
+
+export function createResendMailer(apiKey: string, from: string, fetcher: FetchLike = fetch): Mailer {
   return {
     driver: "resend",
     async send(message: MailMessage) {
-      const response = await fetch("https://api.resend.com/emails", {
+      const response = await fetcher("https://api.resend.com/emails", {
         method: "POST",
         headers: {
           authorization: `Bearer ${apiKey}`,

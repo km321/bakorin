@@ -46,3 +46,5 @@ const api = createAstroClient({
   cookies: Astro.cookies,
 });
 ```
+
+This package is published on the npm `beta` tag. See `PUBLISHING.md` in the repo root. Do not `npm publish` until you intend a public beta.

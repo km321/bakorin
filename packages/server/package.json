@@ -1,14 +1,55 @@
 {
   "name": "@bakorin/server",
-  "version": "0.1.0",
+  "version": "0.0.1",
+  "description": "Self-hosted Bakorin API: auth, CRUD, files, admin UI, and the bakorin CLI",
   "license": "MIT",
+  "author": "Melton Studios",
   "type": "module",
   "bin": {
-    "bakorin": "./src/cli.ts"
+    "bakorin": "./dist/cli.js"
   },
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "bun": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
   },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "bun build src/cli.ts --outfile dist/cli.js --target bun --format esm",
+    "prepublishOnly": "bun run build"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "beta"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/km321/bakorin.git",
+    "directory": "packages/server"
+  },
+  "bugs": {
+    "url": "https://github.com/km321/bakorin/issues"
+  },
+  "homepage": "https://github.com/km321/bakorin/tree/main/packages/server#readme",
+  "engines": {
+    "bun": ">=1.1.0"
+  },
+  "keywords": [
+    "bakorin",
+    "baas",
+    "sqlite",
+    "postgres"
+  ],
   "dependencies": {
     "@bakorin/core": "workspace:*",
     "hono": "^4.7.4",

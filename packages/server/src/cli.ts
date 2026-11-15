@@ -57,6 +57,17 @@ S3_VIRTUAL_HOSTED_STYLE=false
 BAKORIN_ADMIN_EMAIL=
 BAKORIN_ADMIN_PASSWORD=
 BAKORIN_ADMIN_NAME=
+APP_URL=http://localhost:4321
+CORS_ORIGINS=http://localhost:4321,http://localhost:3000
+MAIL_DRIVER=log
+MAIL_FROM=
+# Placeholder only. Paste a Resend API key locally. Never commit a real key.
+RESEND_API_KEY=
+SMTP_HOST=
+SMTP_PORT=587
+SMTP_USER=
+SMTP_PASS=
+SMTP_SECURE=false
 `,
   );
   await Bun.write(

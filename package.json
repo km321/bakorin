@@ -1,6 +1,6 @@
 {
   "name": "bakorin",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
   "type": "module",
   "workspaces": [
@@ -13,6 +13,8 @@
     "typecheck": "bunx tsc --noEmit -p tsconfig.json",
     "build:ui": "bun run --filter @bakorin/admin-ui build && bun scripts/embed-ui.ts",
     "build:bin": "bun run build:ui && bun build --compile --minify --outfile bakorin packages/server/src/cli.ts",
+    "build:packages": "bun run --filter @bakorin/core build && bun run --filter @bakorin/sdk build && bun run --filter @bakorin/server build && bun run --filter create-bakorin build",
+    "pack:check": "bun scripts/npm-pack-check.ts",
     "release": "bun scripts/release.ts",
     "dev": "bun packages/server/src/cli.ts dev",
     "start": "bun packages/server/src/cli.ts start",
@@ -21,6 +23,10 @@
     "restore-drill": "bun scripts/restore-drill.ts",
     "build:sdk": "bun run --filter @bakorin/sdk build",
     "build:create": "bun run --filter create-bakorin build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/km321/bakorin.git"
   },
   "engines": {
     "bun": ">=1.1.0"

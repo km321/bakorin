@@ -12,6 +12,13 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:4321}
       APP_URL: ${APP_URL:-http://localhost:4321}
       MAIL_DRIVER: ${MAIL_DRIVER:-log}
+      MAIL_FROM: ${MAIL_FROM:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
       S3_ADDRESSING_STYLE: ${S3_ADDRESSING_STYLE:-path}
     volumes:
       - bakorin-data:/data

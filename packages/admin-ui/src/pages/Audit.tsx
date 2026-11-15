@@ -64,10 +64,10 @@ export function Audit() {
                 <tr key={row.id}>
                   <td>{formatWhen(row.at)}</td>
                   <td class="mono">{row.action}</td>
-                  <td class="mono">{row.actorId ?? "—"}</td>
-                  <td>{row.entity ?? "—"}</td>
-                  <td class="mono">{row.recordId ?? "—"}</td>
-                  <td class="mono">{row.ip ?? "—"}</td>
+                  <td class="mono">{row.actorId ?? "-"}</td>
+                  <td>{row.entity ?? "-"}</td>
+                  <td class="mono">{row.recordId ?? "-"}</td>
+                  <td class="mono">{row.ip ?? "-"}</td>
                 </tr>
               ))}
             </tbody>

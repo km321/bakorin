@@ -20,7 +20,8 @@ A Postgres plugin is optional. SQLite on the volume is the default.
 | `CORS_ORIGINS` | your Astro/Next origin, comma-separated if more than one |
 | `APP_URL` | public URL of the front end |
 | `MAIL_DRIVER` | `log`, `smtp`, or `resend` |
-| `MAIL_FROM` | From header when sending mail |
+| `MAIL_FROM` | From header. For Resend: `App Name <noreply@your-verified-domain.com>` |
+| `RESEND_API_KEY` | Required when `MAIL_DRIVER=resend`. Set the Railway secret; never commit it. Missing key fails startup. |
 
 Bucket reference variables (names depend on the plugin; Bakorin accepts either style):
 
@@ -30,7 +31,9 @@ Bucket reference variables (names depend on the plugin; Bakorin accepts either s
 - `S3_SECRET_KEY` or `AWS_SECRET_ACCESS_KEY`
 - `S3_REGION` or `AWS_DEFAULT_REGION` (defaults to `auto`)
 
-Optional: `JWT_SECRET_PREVIOUS`, `BAKORIN_ADMIN_EMAIL`, `BAKORIN_ADMIN_PASSWORD`, `DATABASE_URL`, SMTP/Resend keys.
+Optional: `JWT_SECRET_PREVIOUS`, `BAKORIN_ADMIN_EMAIL`, `BAKORIN_ADMIN_PASSWORD`, `DATABASE_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`.
+
+Resend walkthrough: [Email with Resend](resend.md).
 
 Railway injects `PORT`. Production refuses CORS `*`. Health check path: `/health`.
 
@@ -45,6 +48,7 @@ docker run --rm -p 4371:4371 \
   -e BAKORIN_DATA_DIR=/data \
   -e CORS_ORIGINS=https://your-frontend.example \
   -e APP_URL=https://your-frontend.example \
+  -e MAIL_DRIVER=log \
   -v bakorin-data:/data \
   bakorin
 ```
