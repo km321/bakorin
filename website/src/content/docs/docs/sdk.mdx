@@ -1,0 +1,82 @@
+---
+title: SDK
+description: The typed @bakorin/sdk client for auth and entity CRUD, plus Astro and Next.js cookie helpers.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+`@bakorin/sdk` is a small fetch based client. It handles auth calls, token refresh, and typed CRUD for your entities.
+
+<Aside type="note" title="Private beta">
+`@bakorin/sdk` is not on npm yet. Projects scaffolded from a checkout link it locally (`--sdk local`).
+</Aside>
+
+## Create a client
+
+```ts
+import { createClient } from "@bakorin/sdk";
+import type { BakorinEntities } from "./bakorin.gen.ts";
+
+const api = createClient<BakorinEntities>({
+  baseUrl: "http://127.0.0.1:4371",
+  getAccessToken: () => localStorage.getItem("access"),
+  getRefreshToken: () => localStorage.getItem("refresh"),
+  setTokens: (tokens) => {
+    localStorage.setItem("access", tokens.accessToken);
+    localStorage.setItem("refresh", tokens.refreshToken);
+  },
+});
+```
+
+| Option | Notes |
+|---|---|
+| `baseUrl` | Bakorin API origin |
+| `getAccessToken`, `getRefreshToken` | Return the stored tokens (sync or async) |
+| `setTokens` | Called after login, signup, accept invite, and refresh |
+| `fetch` | Optional custom fetch |
+
+On a 401, the client calls `/api/v1/auth/refresh` once and retries. Refresh is mutexed, so parallel 401s share one rotation.
+
+For server rendered apps, use the [Astro](/docs/astro/) or [Next.js](/docs/nextjs/) helpers, which keep tokens in httpOnly cookies.
+
+## Auth methods
+
+```ts
+await api.signup({ email: "you@studio.test", password: "password123", name: "You" });
+await api.login({ email: "you@studio.test", password: "password123" });
+const me = await api.me();
+await api.logout(refreshToken);
+
+await api.forgotPassword({ email: "you@studio.test" });
+await api.resetPassword({ token, password: "new-password-1" });
+await api.verifyEmail({ token });
+await api.resendVerification({ email: "you@studio.test" });
+
+await api.invite({ email: "new@studio.test", role: "user" }); // admin only
+await api.acceptInvite({ token, password: "password123", name: "You" });
+```
+
+## Entities
+
+```ts
+const tasks = api.entity("tasks");
+
+const page = await tasks.list({
+  filter: { done: false, dueOn: { op: "lte", value: "2026-12-01" } },
+  sort: "-createdAt",
+  limit: 20,
+  expand: "leadId",
+});
+// page.data, page.meta.total
+
+const task = await tasks.get(id, "leadId");
+const created = await tasks.create({ title: "Send proposal" });
+await tasks.update(created.id, { done: true });
+await tasks.delete(created.id);
+```
+
+Errors throw an `Error` with the server's message.
+
+## Generated types
+
+`bakorin typegen` writes `bakorin.gen.ts`. Pass its entity map to `createClient`, `createAstroClient`, or `createNextClient` for typed `entity()` names and records.

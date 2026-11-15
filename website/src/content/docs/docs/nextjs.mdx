@@ -1,0 +1,71 @@
+---
+title: Next.js
+description: Use Bakorin from Next.js Server Actions, Route Handlers, and Server Components.
+---
+
+`@bakorin/sdk/next` wraps the client and keeps tokens in `bakorin_access` and `bakorin_refresh` httpOnly cookies. It does not depend on `next` itself.
+
+## Quick start
+
+```bash
+bun run create my-app --frontend next --schema todo --yes
+```
+
+The starter has the same pages as the Astro starter: signup, login, logout, forgot and reset password, accept invite, and a protected `/app`.
+
+## Client helper
+
+```ts title="lib/bakorin.ts"
+import { createNextClient } from "@bakorin/sdk/next";
+import { cookies } from "next/headers";
+
+export async function api() {
+  return createNextClient({
+    baseUrl: process.env.BAKORIN_URL ?? "http://127.0.0.1:4371",
+    cookies: await cookies(),
+  });
+}
+```
+
+`cookies().set` only works in Server Actions and Route Handlers. Keep login and signup in `"use server"` actions so the SDK can write the token cookies.
+
+```ts title="app/actions.ts"
+"use server";
+
+import { redirect } from "next/navigation";
+import { api } from "../lib/bakorin";
+
+export async function loginAction(formData: FormData) {
+  const client = await api();
+  await client.login({
+    email: String(formData.get("email") ?? ""),
+    password: String(formData.get("password") ?? ""),
+  });
+  redirect("/app");
+}
+```
+
+## Protect a route
+
+```ts title="middleware.ts"
+import { NextResponse, type NextRequest } from "next/server";
+
+export async function middleware(request: NextRequest) {
+  const token = request.cookies.get("bakorin_access")?.value;
+  if (!token) return NextResponse.redirect(new URL("/login", request.url));
+  const base = process.env.BAKORIN_URL ?? "http://127.0.0.1:4371";
+  const me = await fetch(new URL("/api/v1/auth/me", base), {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!me.ok) return NextResponse.redirect(new URL("/login", request.url));
+  return NextResponse.next();
+}
+
+export const config = { matcher: ["/app/:path*"] };
+```
+
+## Settings
+
+- Set `CORS_ORIGINS` on the API to the Next.js origin (`http://localhost:3000` locally).
+- Set `APP_URL` on the API to the Next.js origin for email links.
+- Set `BAKORIN_URL` in the Next.js app if the API is elsewhere.

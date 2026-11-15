@@ -1,0 +1,93 @@
+---
+import "@fontsource-variable/geist";
+import "@fontsource-variable/geist-mono";
+import "../styles/marketing.css";
+import Logo from "../components/Logo.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+
+interface Props { title: string; description: string; current?: "home" | "why"; }
+const { title, description, current = "home" } = Astro.props;
+const nav = [
+  { href: "/#features", label: "Features" },
+  { href: "/#how", label: "How it works" },
+  { href: "/why/", label: "Why Bakorin", key: "why" },
+  { href: "/#faq", label: "FAQ" },
+];
+---
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta name="color-scheme" content="light dark" />
+    <script is:inline>
+      (() => {
+        let t = "";
+        try { t = localStorage.getItem("starlight-theme") || ""; } catch {}
+        if (t !== "light" && t !== "dark") t = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        document.documentElement.dataset.theme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+    <div class="beta-bar">Private beta. Packages are not yet published to npm and the repository is private.</div>
+    <header class="site-header">
+      <div class="wrap header-inner">
+        <a href="/" class="brand" aria-label="Bakorin home"><Logo /></a>
+        <nav class="main-nav" aria-label="Main">
+          {nav.map((item) => (
+            <a href={item.href} aria-current={item.key === current ? "page" : undefined}>{item.label}</a>
+          ))}
+          <a href="/docs/">Docs</a>
+        </nav>
+        <div class="header-actions">
+          <ThemeToggle />
+          <a class="btn btn-primary btn-sm hide-xs" href="/docs/getting-started/">Get started</a>
+          <details class="mobile-nav">
+            <summary aria-label="Menu">
+              <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+            </summary>
+            <nav aria-label="Mobile">
+              {nav.map((item) => <a href={item.href}>{item.label}</a>)}
+              <a href="/docs/">Docs</a>
+              <a href="/docs/getting-started/">Get started</a>
+            </nav>
+          </details>
+        </div>
+      </div>
+    </header>
+    <main id="main">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <div class="wrap footer-inner">
+        <div class="footer-brand">
+          <Logo size={24} />
+          <p>A self-hosted backend you can spin up per client. MIT licensed. Made by Melton Studios.</p>
+          <p class="muted small">Private beta preview. Not yet published to npm.</p>
+        </div>
+        <div class="footer-cols">
+          <div>
+            <h2>Product</h2>
+            <a href="/#features">Features</a>
+            <a href="/#how">How it works</a>
+            <a href="/why/">Why Bakorin</a>
+            <a href="/#faq">FAQ</a>
+          </div>
+          <div>
+            <h2>Docs</h2>
+            <a href="/docs/getting-started/">Getting started</a>
+            <a href="/docs/app-yaml/">app.yaml reference</a>
+            <a href="/docs/sdk/">SDK</a>
+            <a href="/docs/deploy-railway/">Deploy</a>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,94 @@
+// @ts-check
+import { defineConfig } from "astro/config";
+import starlight from "@astrojs/starlight";
+
+// Private preview build. Fully static output for Cloudflare Pages.
+export default defineConfig({
+  site: "https://bakorin-preview.pages.dev",
+  output: "static",
+  trailingSlash: "ignore",
+  integrations: [
+    starlight({
+      title: "Bakorin",
+      description: "A self-hosted backend you can spin up per client. One app.yaml, one binary, one database.",
+      logo: {
+        light: "./src/assets/mark-light.svg",
+        dark: "./src/assets/mark-dark.svg",
+        alt: "Bakorin",
+      },
+      favicon: "/favicon.svg",
+      customCss: [
+        "@fontsource-variable/geist",
+        "@fontsource-variable/geist-mono",
+        "./src/styles/starlight.css",
+      ],
+      head: [
+        { tag: "meta", attrs: { name: "robots", content: "noindex, nofollow" } },
+      ],
+      components: {
+        SocialIcons: "./src/components/DocsHeaderLinks.astro",
+        Banner: "./src/components/DocsBanner.astro",
+      },
+      lastUpdated: false,
+      pagination: true,
+      expressiveCode: {
+        themes: ["github-dark-default", "github-light-default"],
+        styleOverrides: { borderRadius: "10px", codeFontFamily: "'Geist Mono Variable', ui-monospace, monospace" },
+      },
+      sidebar: [
+        {
+          label: "Start here",
+          items: [
+            { label: "Introduction", slug: "docs" },
+            { label: "Getting started", slug: "docs/getting-started" },
+            { label: "Project structure", slug: "docs/project-structure" },
+          ],
+        },
+        {
+          label: "Build your schema",
+          items: [
+            { label: "app.yaml reference", slug: "docs/app-yaml" },
+            { label: "Data and relations", slug: "docs/data" },
+            { label: "Permissions", slug: "docs/permissions" },
+            { label: "Hooks and custom routes", slug: "docs/hooks" },
+          ],
+        },
+        {
+          label: "Features",
+          items: [
+            { label: "Auth", slug: "docs/auth" },
+            { label: "Email", slug: "docs/email" },
+            { label: "Files", slug: "docs/files" },
+            { label: "Webhooks", slug: "docs/webhooks" },
+            { label: "Admin UI", slug: "docs/admin-ui" },
+            { label: "Schema visualizer", slug: "docs/schema" },
+          ],
+        },
+        {
+          label: "Front ends",
+          items: [
+            { label: "SDK", slug: "docs/sdk" },
+            { label: "Astro", slug: "docs/astro" },
+            { label: "Next.js", slug: "docs/nextjs" },
+          ],
+        },
+        {
+          label: "Operate",
+          items: [
+            { label: "Deploy on Railway", slug: "docs/deploy-railway" },
+            { label: "Deploy with Docker", slug: "docs/deploy-docker" },
+            { label: "Backup and restore", slug: "docs/backups" },
+            { label: "Configuration", slug: "docs/configuration" },
+            { label: "CLI", slug: "docs/cli" },
+            { label: "Security", slug: "docs/security" },
+            { label: "Scaling", slug: "docs/scaling" },
+          ],
+        },
+        {
+          label: "Project",
+          items: [{ label: "Status and roadmap", slug: "docs/roadmap" }],
+        },
+      ],
+    }),
+  ],
+});

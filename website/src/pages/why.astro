@@ -1,0 +1,143 @@
+---
+import Marketing from "../layouts/Marketing.astro";
+import CodeBlock from "../components/CodeBlock.astro";
+
+const intake = `entities:
+  inquiries:
+    label: Inquiry
+    display: company
+    fields:
+      company: { type: text, required: true }
+      email: { type: email, required: true }
+      budget: { type: enum, values: [small, medium, large] }
+      brief: { type: file }
+    policies:
+      create: authenticated
+      read: admin
+      update: admin
+      delete: admin
+
+webhooks:
+  - entity: inquiries
+    events: [create]
+    url: \${ZAPIER_HOOK_URL}
+    secret: \${WEBHOOK_SECRET}`;
+
+const cases = [
+  {
+    title: "Client portals",
+    body: "Give each client a login, private records scoped with owner(), file uploads for briefs and assets, and an admin your team runs.",
+  },
+  {
+    title: "Lead and intake forms",
+    body: "Store submissions with attachments, then fan them out to Zapier, Make, or n8n with signed webhooks that retry until they land.",
+  },
+  {
+    title: "Member areas",
+    body: "Signup, email verification, password reset, and invites for an Astro or Next.js site, with protected pages from the starters.",
+  },
+  {
+    title: "Small internal tools",
+    body: "Trackers, CRMs, and checklists where the generated admin UI is most of the app and the schema fits on one screen.",
+  },
+];
+
+const compare = [
+  { left: "Write a custom API for each client", right: "Describe the client in app.yaml" },
+  { left: "Wire auth, reset emails, and invites again", right: "Auth flows are built in and tested" },
+  { left: "Build a separate admin panel", right: "The admin UI is generated from the schema" },
+  { left: "Share one database across clients", right: "One folder and one database per client" },
+  { left: "Hand-roll webhook retries", right: "Durable outbox with signatures and retries" },
+];
+---
+<Marketing title="Why Bakorin" description="Why agencies and solopreneurs use one app.yaml per client instead of writing a custom backend every time." current="why">
+  <section class="page-hero">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="wrap narrow">
+      <p class="kicker">Why Bakorin</p>
+      <h1>Stop rebuilding the same backend for every client.</h1>
+      <p class="lede">Most client sites need the same things: accounts, a few tables, uploads, permissions, a way to notify other tools, and somewhere for the client to edit data. Bakorin packages those into one self-hosted project per client, described in one file.</p>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <div class="compare" role="table" aria-label="Before and after Bakorin">
+        <div class="compare-head" role="row">
+          <span role="columnheader">Without it</span>
+          <span role="columnheader">With Bakorin</span>
+        </div>
+        {compare.map((row) => (
+          <div class="compare-row" role="row">
+            <span role="cell" class="was">{row.left}</span>
+            <span role="cell" class="now">{row.right}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker">Use cases</p>
+        <h2>What people build on it.</h2>
+      </div>
+      <div class="feature-grid four">
+        {cases.map((c) => (
+          <article class="feature">
+            <h3>{c.title}</h3>
+            <p>{c.body}</p>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap split">
+      <div>
+        <p class="kicker">Example</p>
+        <h2>An intake form with uploads and a Zapier hook.</h2>
+        <p>Signed in visitors submit an inquiry with a brief attached. Only admins can read or change submissions. Each new inquiry posts a signed webhook to Zapier, retried with backoff if Zapier is down.</p>
+        <p>Add the entity to the project's <code>app.yaml</code> and save. In dev, the schema reloads without a restart and the admin shows an Inquiries table.</p>
+        <a class="text-link" href="/docs/webhooks/">Webhooks docs</a>
+      </div>
+      <CodeBlock code={intake} lang="yaml" title="app.yaml (excerpt)" />
+    </div>
+  </section>
+
+  <section class="section section-alt">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker">Principles</p>
+        <h2>Small on purpose.</h2>
+      </div>
+      <div class="audience">
+        <article>
+          <h3>Portable</h3>
+          <p>A project is a folder: app.yaml, hooks.ts, and data. Back it up, zip it, or move it from SQLite to Postgres with export and import.</p>
+        </article>
+        <article>
+          <h3>Safe defaults</h3>
+          <p>Production refuses wildcard CORS and a missing JWT secret. Roles and owner fields cannot be set by regular users. Downloads need signed URLs.</p>
+        </article>
+        <article>
+          <h3>One escape hatch</h3>
+          <p>When YAML is not enough, hooks.ts gives you before and after hooks and custom routes in TypeScript. No plugin system to learn.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="section final-cta">
+    <div class="wrap narrow center">
+      <h2>See it for yourself.</h2>
+      <p>The getting started guide takes about five minutes from a checkout.</p>
+      <div class="cta-row center">
+        <a class="btn btn-primary" href="/docs/getting-started/">Get started</a>
+        <a class="btn btn-ghost" href="/docs/">Read the docs</a>
+      </div>
+    </div>
+  </section>
+</Marketing>

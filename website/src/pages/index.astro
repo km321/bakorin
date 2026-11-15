@@ -1,0 +1,356 @@
+---
+import { Image } from "astro:assets";
+import Marketing from "../layouts/Marketing.astro";
+import CodeBlock from "../components/CodeBlock.astro";
+import schemaLight from "../assets/screens/schema-light.png";
+import schemaDark from "../assets/screens/schema-dark.png";
+import editLight from "../assets/screens/admin-edit-light.png";
+import editDark from "../assets/screens/admin-edit-dark.png";
+import listLight from "../assets/screens/admin-list-light.png";
+import listDark from "../assets/screens/admin-list-dark.png";
+
+const heroYaml = `app:
+  name: studio-leads
+
+entities:
+  users:
+    auth: true
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      name: { type: text, required: true }
+      role: { type: enum, values: [user, admin], default: user }
+
+  leads:
+    display: company
+    fields:
+      company: { type: text, required: true }
+      status: { type: enum, values: [new, won, lost], default: new }
+      brief: { type: file }
+      ownerId: { type: relation, to: users, required: true }
+    policies:
+      read: [owner(ownerId), admin]
+      create: authenticated
+      update: owner(ownerId)
+
+webhooks:
+  - entity: leads
+    events: [create]
+    url: \${WEBHOOK_URL}
+    secret: \${WEBHOOK_SECRET}`;
+
+const heroShell = `$ bun run create my-app --frontend astro --schema todo --yes
+$ bun run dev -- --dir my-app
+[bakorin] my-app dev on http://127.0.0.1:4371
+[bakorin] admin UI http://127.0.0.1:4371/admin/`;
+
+const astroSnippet = `// src/lib/bakorin.ts
+import { createAstroClient } from "@bakorin/sdk/astro";
+
+export const api = (cookies) =>
+  createAstroClient({ baseUrl: import.meta.env.BAKORIN_URL, cookies });
+
+// src/pages/app/index.astro (frontmatter)
+const { data: tasks } = await api(Astro.cookies)
+  .entity("tasks")
+  .list({ sort: "-createdAt", limit: 50 });`;
+
+const nextSnippet = `// lib/bakorin.ts
+import { createNextClient } from "@bakorin/sdk/next";
+import { cookies } from "next/headers";
+
+export const api = async () =>
+  createNextClient({ baseUrl: process.env.BAKORIN_URL!, cookies: await cookies() });
+
+// app/app/page.tsx (Server Component)
+const client = await api();
+const { data: tasks } = await client.entity("tasks").list({ sort: "-createdAt" });`;
+
+const features = [
+  {
+    title: "Data and relations",
+    body: "Eleven field types, relations with restrict, cascade, or set_null on delete, indexes, filters, sorting, and expand. Every entity gets a REST resource.",
+    tag: "GET /api/v1/tasks?expand=leadId",
+  },
+  {
+    title: "Auth that is already done",
+    body: "Email and password with verification, password reset, and invites. Refresh token rotation, argon2id hashing, rate limits, and lockout.",
+    tag: "POST /api/v1/auth/invites",
+  },
+  {
+    title: "Permissions in plain words",
+    body: "Per action policies like owner(ownerId), authenticated, role(editor), and admin. Field write locks keep roles and owners safe.",
+    tag: "read: [owner(ownerId), admin]",
+  },
+  {
+    title: "Files",
+    body: "Uploads to local disk or any S3 compatible bucket, including R2 and Railway buckets. Size and type limits, served by short lived signed URLs.",
+    tag: "POST /api/v1/files",
+  },
+  {
+    title: "Webhooks you can trust",
+    body: "A durable outbox, HMAC signatures over timestamp and body, retries with backoff, secret fields stripped, and a delivery log with retry.",
+    tag: "x-bakorin-signature: sha256=",
+  },
+  {
+    title: "Admin UI, light and dark",
+    body: "Sortable, searchable tables, create and edit drawers, invites, backups, audit log, and webhooks. Generated from your schema.",
+    tag: "/admin/",
+  },
+  {
+    title: "Schema map",
+    body: "See every entity and relation as a diagram in the admin, export SVG, or print Mermaid and JSON from the CLI.",
+    tag: "bakorin schema --format mermaid",
+  },
+  {
+    title: "Backups and moves",
+    body: "Scheduled snapshots to a folder or S3 with retention, portable exports, and a documented path from SQLite to Postgres.",
+    tag: "bakorin backup",
+  },
+];
+
+const faqs = [
+  {
+    q: "Is Bakorin available to install today?",
+    a: "Not publicly. Bakorin is in private beta, the repository is private, and the npm packages are not published yet. The install commands on this site show the intended usage.",
+  },
+  {
+    q: "What does it run on?",
+    a: "Bun. The server is built with Hono, Kysely, and Zod, and the admin UI is Preact. It compiles to a single binary with the admin embedded, or runs from a Docker image.",
+  },
+  {
+    q: "SQLite or Postgres?",
+    a: "SQLite by default, on a volume. Switch runtime.dialect to postgres when you need more than one instance. The same app.yaml works on both, and bakorin export and import move data between them.",
+  },
+  {
+    q: "Do I have to use Astro or Next.js?",
+    a: "No. The API is plain REST with a generated OpenAPI document. The SDK has cookie helpers for Astro and Next.js, and a generic client for anything that runs fetch.",
+  },
+  {
+    q: "Can I add custom logic?",
+    a: "Yes, in hooks.ts. You get before and after hooks for create, update, and delete on each entity, plus custom Hono routes. There is no plugin system on purpose.",
+  },
+  {
+    q: "Does it do realtime?",
+    a: "Not yet. Realtime over WebSocket or SSE is planned and will build on the existing change bus. Webhooks cover most integration needs today.",
+  },
+  {
+    q: "Many to many relations?",
+    a: "There is no built in many to many type. Model it with a join entity that has two relation fields.",
+  },
+  {
+    q: "Where does my data live?",
+    a: "Wherever you deploy it. Each project is one folder with one database, so every client can have their own backend on your own infrastructure.",
+  },
+];
+---
+<Marketing title="Bakorin: one app.yaml, a whole backend" description="Bakorin is a self-hosted backend for agencies and solopreneurs. One app.yaml gives you auth, data, files, permissions, webhooks, and an admin UI for Astro or Next.js sites.">
+  <section class="hero">
+    <div class="hero-bg" aria-hidden="true"></div>
+    <div class="wrap hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Private beta</p>
+        <h1>One file.<br /><span class="accent">A whole backend.</span></h1>
+        <p class="lede">
+          Bakorin turns a single <code>app.yaml</code> into users, auth, data, files, permissions, webhooks, and an admin UI.
+          Self-hosted, one binary, one database per project. Built for agencies and solopreneurs shipping Astro and Next.js sites.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="/docs/getting-started/">Get started</a>
+          <a class="btn btn-ghost" href="#how">See how it works</a>
+        </div>
+        <ul class="hero-points" aria-label="Highlights">
+          <li>SQLite or Postgres</li>
+          <li>Typed SDK</li>
+          <li>MIT licensed</li>
+        </ul>
+      </div>
+      <div class="hero-code">
+        <CodeBlock code={heroYaml} lang="yaml" title="app.yaml" />
+        <CodeBlock code={heroShell} lang="shellsession" title="terminal" />
+      </div>
+    </div>
+  </section>
+
+  <section class="showcase" aria-label="Admin UI preview">
+    <div class="wrap">
+      <div class="browser">
+        <div class="browser-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url">127.0.0.1:4371/admin/</span></div>
+        <Image class="only-light" src={schemaLight} alt="Bakorin admin Schema page in light mode showing User, Lead, and Task entities connected by relation arrows" widths={[640, 1024]} sizes="(max-width: 1100px) 100vw, 1024px" loading="eager" />
+        <Image class="only-dark" src={schemaDark} alt="Bakorin admin Schema page in dark mode showing User, Lead, and Task entities connected by relation arrows" widths={[640, 1024]} sizes="(max-width: 1100px) 100vw, 1024px" loading="eager" />
+      </div>
+      <p class="caption">The real admin UI, generated from the example project's app.yaml.</p>
+    </div>
+  </section>
+
+  <section id="how" class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker">How it works</p>
+        <h2>Describe it, run it, ship it.</h2>
+        <p>Every client project is the same three things. Nothing to wire together.</p>
+      </div>
+      <ol class="steps">
+        <li>
+          <span class="step-num">01</span>
+          <h3>One app.yaml</h3>
+          <p>Entities, fields, relations, policies, auth settings, and webhooks in one readable file. Save it and <code>bakorin dev</code> reloads the schema without a restart.</p>
+        </li>
+        <li>
+          <span class="step-num">02</span>
+          <h3>One binary</h3>
+          <p>The API, auth, file handling, webhooks worker, scheduled backups, and admin UI ship together. Run the compiled binary or the Docker image.</p>
+        </li>
+        <li>
+          <span class="step-num">03</span>
+          <h3>One database per project</h3>
+          <p>SQLite on a volume to start, Postgres when you grow. Each client's data stays in its own folder you can back up, zip, and move.</p>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <section id="features" class="section section-alt">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker">Features</p>
+        <h2>The parts every client site ends up needing.</h2>
+        <p>Built in, tested, and configured from the same file.</p>
+      </div>
+      <div class="feature-grid">
+        {features.map((f) => (
+          <article class="feature">
+            <h3>{f.title}</h3>
+            <p>{f.body}</p>
+            <code class="feature-tag">{f.tag}</code>
+          </article>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap split">
+      <div>
+        <p class="kicker">Admin UI</p>
+        <h2>An admin panel your clients can actually use.</h2>
+        <p>Tables show names instead of ids, forms use your field descriptions as help text, and relations become searchable pickers. Pick System, Light, or Dark.</p>
+        <ul class="checks">
+          <li>Create and edit in a side drawer</li>
+          <li>Invite users and resend verification</li>
+          <li>Live backups, audit log, and webhook deliveries</li>
+          <li>Bundled API docs with Swagger UI</li>
+        </ul>
+        <a class="text-link" href="/docs/admin-ui/">Admin UI docs</a>
+      </div>
+      <div class="stack-shots">
+        <div class="shot shot-back">
+          <Image class="only-light" src={listLight} alt="Leads table in the Bakorin admin, light mode" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
+          <Image class="only-dark" src={listDark} alt="Leads table in the Bakorin admin, dark mode" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
+        </div>
+        <div class="shot shot-front">
+          <Image class="only-light" src={editLight} alt="Edit Lead drawer with company, contact, email, status, notes, owner, and brief fields, light mode" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
+          <Image class="only-dark" src={editDark} alt="Edit Lead drawer with company, contact, email, status, notes, owner, and brief fields, dark mode" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="who" class="section section-alt">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker">Who it is for</p>
+        <h2>For people who build sites for other people.</h2>
+      </div>
+      <div class="audience">
+        <article>
+          <h3>Agencies</h3>
+          <p>Spin up a backend per client from the same pattern. Each project is a folder with its own database, so handoff, backups, and moving hosts stay simple. Clients get a clean admin instead of a database console.</p>
+        </article>
+        <article>
+          <h3>Solopreneurs</h3>
+          <p>Add logins, member areas, forms with file uploads, and a dashboard to an Astro or Next.js site without writing an API. The typed SDK and starters handle the session plumbing.</p>
+        </article>
+        <article class="muted-card">
+          <h3>Maybe not for you yet</h3>
+          <p>If you need realtime subscriptions today, a plugin ecosystem, or a hosted service someone else runs, Bakorin is not there. It is a small, self-hosted v0.1.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section id="quickstart" class="section">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker">Quickstart</p>
+        <h2>Talk to it from Astro or Next.js.</h2>
+        <p>Cookie based sessions with httpOnly tokens and automatic refresh. Starters include signup, login, reset, invites, and a protected page.</p>
+      </div>
+      <div class="tabs" data-tabs>
+        <div class="tablist" role="tablist" aria-label="Framework">
+          <button role="tab" id="tab-astro" aria-controls="panel-astro" aria-selected="true" tabindex="0">Astro</button>
+          <button role="tab" id="tab-next" aria-controls="panel-next" aria-selected="false" tabindex="-1">Next.js</button>
+        </div>
+        <div role="tabpanel" id="panel-astro" aria-labelledby="tab-astro">
+          <CodeBlock code={astroSnippet} lang="ts" title="Astro" />
+        </div>
+        <div role="tabpanel" id="panel-next" aria-labelledby="tab-next" hidden>
+          <CodeBlock code={nextSnippet} lang="ts" title="Next.js" />
+        </div>
+      </div>
+      <p class="note">Private beta, not yet published. <code>@bakorin/sdk</code> is linked from a checkout today. <a href="/docs/getting-started/">Getting started</a> shows the current path.</p>
+    </div>
+  </section>
+
+  <section id="faq" class="section section-alt">
+    <div class="wrap narrow">
+      <div class="section-head">
+        <p class="kicker">FAQ</p>
+        <h2>Questions, answered plainly.</h2>
+      </div>
+      <div class="faq">
+        {faqs.map((f) => (
+          <details>
+            <summary>{f.q}</summary>
+            <p>{f.a}</p>
+          </details>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <section class="section final-cta">
+    <div class="wrap narrow center">
+      <h2>Your next client backend is one file away.</h2>
+      <p>Read the docs, scaffold a project, and sign in to your admin in a few minutes.</p>
+      <div class="cta-row center">
+        <a class="btn btn-primary" href="/docs/getting-started/">Get started</a>
+        <a class="btn btn-ghost" href="/docs/app-yaml/">app.yaml reference</a>
+      </div>
+    </div>
+  </section>
+
+  <script>
+    for (const root of document.querySelectorAll<HTMLElement>("[data-tabs]")) {
+      const tabs = Array.from(root.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
+      const select = (tab: HTMLButtonElement) => {
+        for (const t of tabs) {
+          const on = t === tab;
+          t.setAttribute("aria-selected", String(on));
+          t.tabIndex = on ? 0 : -1;
+          const panel = document.getElementById(t.getAttribute("aria-controls")!);
+          if (panel) panel.hidden = !on;
+        }
+      };
+      tabs.forEach((tab, i) => {
+        tab.addEventListener("click", () => select(tab));
+        tab.addEventListener("keydown", (e) => {
+          if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+          const next = tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length];
+          select(next);
+          next.focus();
+        });
+      });
+    }
+  </script>
+</Marketing>

@@ -1,0 +1,21 @@
+---
+title: Status and roadmap
+description: What works in v0.1 and what is planned.
+---
+
+Bakorin is a v0.1 private beta.
+
+## Works today
+
+Schema compiler, tiered schema diffs, SQLite and Postgres migrators (including `indexes:`), CRUD with filters, sorting, and expand, relations with `onDelete`, policies, auth (signup, login, forgot and reset password, email verification, invites, lockout), database backed rate limits, JWT rotation, signed file URLs, audit log, leases for backups and webhooks, durable signed webhooks with retries and an admin log, the admin UI with light and dark themes, Backups, Audit, Webhooks, and Schema pages, `bakorin schema`, the SDK, `create-bakorin`, Astro and Next.js starters, backup, restore, export, and import including S3 retention, hooks, generated OpenAPI, a compiled binary, Docker, and Railway config files.
+
+## Planned
+
+These are not in v0.1:
+
+- **npm packages.** `create-bakorin`, `@bakorin/sdk`, and `@bakorin/server` will be published as `beta`. Until then, run from a checkout.
+- **Realtime.** WebSocket or SSE with per subscriber read policy filtering, built on the existing change bus, and Postgres LISTEN/NOTIFY for more than one instance.
+- **One click Railway template.** Today you create the service by hand.
+- **Hosted docs.** This site is a private preview.
+
+There is no plugin system. `hooks.ts` is the escape hatch.

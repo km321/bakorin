@@ -1,0 +1,219 @@
+---
+title: app.yaml reference
+description: Every key app.yaml accepts, with defaults taken from the schema compiler.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+One file describes the app, runtime, auth, entities, policies, and webhooks. Bakorin validates it with a strict schema, so unknown keys are rejected with a readable error.
+
+The top level keys are `app`, `runtime`, `auth`, `entities`, and `webhooks`. At least one entity is required.
+
+## A complete example
+
+```yaml title="app.yaml"
+app:
+  name: my-app
+runtime:
+  dialect: sqlite          # or postgres
+  sqlite:
+    path: ./data/app.db
+  postgres:
+    url: ${DATABASE_URL}
+  files:
+    driver: local          # or s3
+    path: ./data/uploads
+    maxBytes: 10485760
+    allowedMimeTypes: [image/png, image/jpeg, application/pdf, text/plain]
+    signedUrlTtlSeconds: 900
+  jwt:
+    secret: ${JWT_SECRET}
+  backups:
+    interval: 24h
+    retain: 14
+    destination: ./data/backups
+  webhooks:
+    retainDays: 30
+  cors:
+    origins: ["http://localhost:4321"]
+auth:
+  entity: users
+  adminRole: admin
+entities:
+  users:
+    auth: true
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      name: { type: text, required: true }
+      role: { type: enum, values: [user, admin], default: user, writable: admin }
+  tasks:
+    fields:
+      title: { type: text, required: true }
+      done: { type: boolean, default: false }
+      ownerId: { type: relation, to: users, required: true }
+    indexes:
+      - [ownerId, done]
+    policies:
+      read: [owner(ownerId), admin]
+      create: authenticated
+      update: owner(ownerId)
+      delete: owner(ownerId)
+webhooks:
+  - entity: tasks
+    events: [create, update, delete]
+    url: ${WEBHOOK_URL}
+    secret: ${WEBHOOK_SECRET}
+    maxAttempts: 10
+    timeoutMs: 10000
+```
+
+## Environment variables in app.yaml
+
+Use `${NAME}` to read an environment variable, or `${NAME:-fallback}` to provide a default. A referenced variable that is missing and has no fallback stops startup with `missing environment variable NAME referenced from app.yaml`.
+
+```yaml
+jwt:
+  secret: ${JWT_SECRET:-dev-only-change-me}
+```
+
+## app
+
+| Key | Type | Notes |
+|---|---|---|
+| `name` | string | Required. Shown in the admin UI and email subjects |
+| `version` | string | Optional |
+| `description` | string | Optional |
+
+## runtime
+
+| Key | Default | Notes |
+|---|---|---|
+| `dialect` | `sqlite` | `sqlite` or `postgres` |
+| `host` | `0.0.0.0` | Listen address |
+| `port` | `4371` | The `PORT` environment variable wins |
+| `sqlite.path` | `./data/app.db` | Moves under `BAKORIN_DATA_DIR` when that is set |
+| `postgres.url` | | Usually `${DATABASE_URL}` |
+| `jwt.secret` | dev secret | Required in production. Usually `${JWT_SECRET}` |
+| `jwt.accessTtlSeconds` | `900` | Access token lifetime (15 minutes) |
+| `jwt.refreshTtlSeconds` | `2592000` | Refresh token lifetime (30 days) |
+| `files.driver` | `local` | `local` or `s3`. A bucket in the environment switches to `s3` |
+| `files.path` | `./data/uploads` | Local upload folder |
+| `files.bucket`, `files.endpoint`, `files.accessKey`, `files.secretKey`, `files.region` | | S3 settings. Prefer environment variables |
+| `files.pathStyle`, `files.virtualHostedStyle` | path style | S3 addressing style |
+| `files.maxBytes` | `10485760` | 10 MiB upload limit |
+| `files.allowedMimeTypes` | png, jpeg, webp, gif, pdf, plain text | `["*"]` allows any type |
+| `files.signedUrlTtlSeconds` | `900` | Signed download URL lifetime |
+| `backups.interval` | | For example `24h` or `7d`. Turns on scheduled backups |
+| `backups.retain` | `14` | Snapshots to keep |
+| `backups.destination` | `./data/backups` | Folder or `s3://bucket/prefix` |
+| `webhooks.retainDays` | `30` | How long delivered outbox rows are kept (1 to 3650) |
+| `cors.origins` | | Allowed origins. `CORS_ORIGINS` overrides it |
+| `hooks` | `./hooks.ts` | Path to the hooks module |
+
+## auth
+
+| Key | Default | Notes |
+|---|---|---|
+| `entity` | | The entity with `auth: true`, usually `users` |
+| `identity` | `email` | Field used to sign in |
+| `password` | `password` | Password field |
+| `role` | `role` | Role field. Always admin writable |
+| `adminRole` | `admin` | Role value that counts as admin |
+| `requireVerifiedEmail` | `false` | Block login until the email is verified |
+
+When `requireVerifiedEmail` is on, Bakorin adds an `emailVerified` boolean to the auth entity if the schema does not define one.
+
+## entities
+
+Each key under `entities` is an entity name. Names must start with a letter or underscore and contain only letters, digits, and underscores (64 characters max).
+
+| Key | Notes |
+|---|---|
+| `label`, `plural` | Human names for the admin UI |
+| `display` | Field used as the row label in tables and relation pickers. Falls back to `name`, `title`, `email`, `company`, then `id`. Cannot be a secret field |
+| `description` | Shown in the admin UI and OpenAPI |
+| `auth` | Marks the auth entity |
+| `fields` | Map of field name to a type or a field object |
+| `indexes` | List of field names or arrays of field names |
+| `policies` | `read`, `create`, `update`, `delete`. See [Permissions](/docs/permissions/) |
+
+Every entity gets three system fields you cannot redefine: `id`, `createdAt`, and `updatedAt`.
+
+### Field types
+
+`text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`.
+
+A field can be a bare type (`title: text`) or an object:
+
+| Flag | Notes |
+|---|---|
+| `type` | Required |
+| `required` | Fields with a `default` are required unless you set `required: false` |
+| `unique` | Unique index |
+| `index` | Single field index |
+| `default` | Default value |
+| `values` | Enum values (required for `enum`) |
+| `to` | Target entity (required for `relation`) |
+| `onDelete` | `restrict` (default), `cascade`, or `set_null` |
+| `writable` | `admin` or `none` |
+| `adminOnly` | Same as `writable: admin` |
+| `readonly` | Same as `writable: none` |
+| `secret` | Hidden from API responses and webhook payloads. `password` fields are always secret |
+| `description` | Help text in the admin UI and OpenAPI |
+| `renameFrom` | Rename a column without losing data |
+
+### Write locks
+
+- `writable: admin` (or `adminOnly: true`): only an admin may set the field. A non admin write that includes it returns **403**.
+- `writable: none` (or `readonly: true`): nobody may set it through the generic CRUD API. Including it returns **403**.
+- The auth `role` field is always `writable: admin`, even when you leave the flag out.
+
+### Relations
+
+```yaml
+tasks:
+  fields:
+    leadId: { type: relation, to: leads, onDelete: set_null }
+    ownerId: { type: relation, to: users, required: true, onDelete: cascade }
+```
+
+Relation fields store the related row's `id`, are indexed automatically, and become a database foreign key with the `onDelete` action when the table is created. See [Data and relations](/docs/data/) for `expand` and filtering.
+
+<Aside type="tip" title="Many to many">
+There is no built in many to many type. Model it with a join entity that has two relations.
+</Aside>
+
+### Indexes
+
+```yaml
+indexes:
+  - status
+  - [ownerId, status]
+```
+
+The migrator runs `create index if not exists`. `index: true` on a field still works.
+
+## webhooks
+
+| Key | Default | Notes |
+|---|---|---|
+| `entity` | | Entity name, or `"*"` for every entity |
+| `events` | | Any of `create`, `update`, `delete` |
+| `url` | | Usually `${WEBHOOK_URL}` |
+| `secret` | | Enables the HMAC signature |
+| `maxAttempts` | `10` | 1 to 100 |
+| `timeoutMs` | `10000` | 100 to 120000 |
+
+See [Webhooks](/docs/webhooks/).
+
+## Schema changes
+
+When `app.yaml` changes, Bakorin plans the migration in tiers:
+
+- **auto:** add an entity, add an optional or defaulted field, add an index
+- **safe:** `renameFrom` on a field
+- **deprecate:** dropped fields and entities stay in the database and disappear from the API
+- **abort:** type changes, required without a default, unique on an existing column
+
+Abort tier changes stop the reload (or startup) instead of guessing.

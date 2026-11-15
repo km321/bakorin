@@ -1,0 +1,66 @@
+---
+title: Schema visualizer
+description: See entities and relations as a diagram in the admin, or print them as Mermaid or JSON with bakorin schema.
+---
+
+import schemaDark from "../../../assets/screens/schema-dark.png";
+import schemaPanel from "../../../assets/screens/schema-panel.png";
+import { Image } from "astro:assets";
+
+Bakorin can draw your schema two ways: in the admin UI, and from the CLI.
+
+## In the admin
+
+Open **Project, then Schema**. Each entity is a card listing its fields and types. Relation fields are highlighted, and arrows point from the relation field to the target entity, labeled with the field name and its `onDelete` rule.
+
+<Image src={schemaDark} alt="Schema page in dark mode with User, Lead, and Task cards and relation arrows labeled ownerId restrict and leadId restrict" />
+
+- Drag to pan, scroll to zoom, or use the **-**, **+**, and **Fit** buttons.
+- `*` marks a required field and `U` marks a unique one. Secret fields show as `hidden`.
+- Click a card to open a details panel with the entity description, its policies, indexes, and each field's type and description.
+- **Download SVG** saves the diagram in the current theme's colors.
+- **Copy as Mermaid** copies an `erDiagram` you can paste into a README or a docs page.
+
+<Image src={schemaPanel} alt="Schema details panel for Lead showing policies, indexes, and fields" />
+
+## From the CLI
+
+```bash
+bakorin schema                  # Mermaid (default)
+bakorin schema --format json    # JSON graph
+bakorin schema --dir ./client   # another project folder
+```
+
+Output for the `studio-leads` example, trimmed:
+
+```text
+erDiagram
+  users {
+    text id PK
+    datetime createdAt
+    datetime updatedAt
+    email email UK
+    hidden password
+    text name
+    enum role
+    boolean emailVerified
+  }
+  leads {
+    text id PK
+    text company
+    enum status
+    relation ownerId FK
+    file brief
+  }
+  tasks {
+    text id PK
+    text title
+    relation leadId FK
+    relation ownerId FK
+  }
+  leads }o--|| users : "ownerId restrict"
+  tasks }o--|| leads : "leadId restrict"
+  tasks }o--|| users : "ownerId restrict"
+```
+
+The JSON format includes the app name, a dependency order, layers used for layout, and each entity with its fields, relations, and flags. It reads `app.yaml` only and does not touch the database.

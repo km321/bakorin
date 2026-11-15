@@ -1,0 +1,111 @@
+---
+title: Getting started
+description: Scaffold a Bakorin project, start the API, and create your first admin.
+---
+
+import { Steps, Tabs, TabItem, Aside } from "@astrojs/starlight/components";
+
+This takes about five minutes. You will scaffold a project with a starter front end, run the API, and sign in to the admin UI.
+
+## Install Bun
+
+<Tabs>
+  <TabItem label="macOS / Linux">
+    ```bash
+    curl -fsSL https://bun.sh/install | bash
+    ```
+  </TabItem>
+  <TabItem label="Windows (PowerShell)">
+    ```powershell
+    powershell -c "irm bun.sh/install.ps1 | iex"
+    ```
+  </TabItem>
+</Tabs>
+
+Bakorin needs Bun 1.1 or newer.
+
+## Create a project from a checkout
+
+<Aside type="note" title="Private beta">
+Packages are not on npm yet, so the supported path today is a checkout of the repository.
+</Aside>
+
+<Steps>
+
+1. Install dependencies and scaffold a project with the Astro starter and the `todo` schema:
+
+   ```bash
+   bun install
+   bun run create my-app --frontend astro --schema todo --yes
+   cp my-app/.env.example my-app/.env
+   ```
+
+2. Open `my-app/.env` and set `JWT_SECRET` to a long random string.
+
+3. Start the API from the repository root so it loads `my-app/.env`:
+
+   ```bash
+   bun run dev -- --dir my-app
+   ```
+
+   The API listens on `http://127.0.0.1:4371`. Health is `GET /health`. The admin UI is at `/admin/` and the interactive API docs are at `/docs`.
+
+4. Open `http://127.0.0.1:4371/admin/` and use **Create your first admin** (email and password, at least 8 characters).
+
+   Prefer environment variables? Set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD` in `.env` before the first start. Bakorin creates that admin only while no admin exists.
+
+5. In a second terminal, start the front end:
+
+   ```bash
+   cd my-app/web
+   npm install
+   npm run dev
+   ```
+
+   Astro runs on `http://127.0.0.1:4321`. Next.js runs on `http://127.0.0.1:3000`. `BAKORIN_URL` defaults to `http://127.0.0.1:4371`.
+
+</Steps>
+
+`bun run dev` watches `app.yaml` and `hooks.ts`. Save a change and the schema swaps in without restarting the process. If the new file is invalid, Bakorin logs the error and keeps the previous schema.
+
+## create-bakorin options
+
+| Flag | Values | Default |
+|---|---|---|
+| `--frontend`, `--fw` | `astro`, `next`, `none` | `astro` |
+| `--schema`, `--starter` | `blank`, `auth-only`, `todo` | `todo` |
+| `--mail`, `--email` | `log`, `resend`, `smtp` | `log` |
+| `--sdk` | `local`, `npm` | |
+| `--name` | project name | first argument |
+| `--dir` | output folder | project name |
+| `--force` | write into a non empty folder | |
+| `--yes`, `-y` | skip prompts | |
+| `--help`, `-h` | print help and exit | |
+
+Schemas: `blank` and `auth-only` give you users only. `todo` adds a private `tasks` list, which is what the starters use.
+
+`--mail resend` writes `MAIL_DRIVER=resend` and an empty `RESEND_API_KEY=` placeholder. Never commit a real key. See [Email](/docs/email/).
+
+## Try the example app
+
+The repository ships a lead and task tracker you can run directly:
+
+```bash
+cd examples/studio-leads
+bun ../../packages/server/src/cli.ts dev
+```
+
+## After publish
+
+Once the npm packages are published, the same flow will look like this:
+
+```bash
+npx create-bakorin my-app --frontend astro --schema todo --yes
+cd my-app
+cp .env.example .env
+bunx bakorin dev
+```
+
+<Aside type="caution">
+`npx create-bakorin` is not live yet. Use the checkout path above.
+</Aside>

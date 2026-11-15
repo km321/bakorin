@@ -1,0 +1,73 @@
+---
+title: Astro
+description: Use Bakorin as the backend for an Astro site with cookie based sessions.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+`@bakorin/sdk/astro` wraps the client and keeps tokens in `bakorin_access` and `bakorin_refresh` httpOnly cookies. Pages that read or write user data need server rendering, so the starter uses `output: "server"` with the Node adapter.
+
+## Quick start
+
+```bash
+bun run create my-app --frontend astro --schema todo --yes
+```
+
+The starter includes signup, login, logout, forgot and reset password, accept invite, and a protected `/app` task list.
+
+## Client helper
+
+```ts title="src/lib/bakorin.ts"
+import { createAstroClient } from "@bakorin/sdk/astro";
+
+export function api(cookies: Parameters<typeof createAstroClient>[0]["cookies"]) {
+  return createAstroClient({
+    baseUrl: import.meta.env.BAKORIN_URL ?? "http://127.0.0.1:4371",
+    cookies,
+  });
+}
+```
+
+## Protect a route
+
+```ts title="src/middleware.ts"
+import { defineMiddleware } from "astro:middleware";
+import { api } from "./lib/bakorin";
+
+export const onRequest = defineMiddleware(async (context, next) => {
+  if (!context.url.pathname.startsWith("/app")) return next();
+  try {
+    await api(context.cookies).me();
+    return next();
+  } catch {
+    return context.redirect("/login");
+  }
+});
+```
+
+## Read and write data
+
+```astro title="src/pages/app/index.astro"
+---
+import { api } from "../../lib/bakorin";
+
+const client = api(Astro.cookies);
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  await client.entity("tasks").create({ title: String(form.get("title") ?? "") });
+  return Astro.redirect("/app");
+}
+const { data: tasks } = await client.entity("tasks").list({ sort: "-createdAt", limit: 50 });
+---
+<ul>{tasks.map((t) => <li>{t.title}</li>)}</ul>
+```
+
+## Settings
+
+- Set `CORS_ORIGINS` on the API to the Astro origin.
+- Set `APP_URL` on the API to the Astro origin so email links land on your pages.
+- Set `BAKORIN_URL` in the Astro app if the API is not on `http://127.0.0.1:4371`.
+
+<Aside type="tip">
+Static Astro pages can still call public endpoints (entities with a `public` read policy) at build time or in the browser.
+</Aside>

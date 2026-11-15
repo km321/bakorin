@@ -1,0 +1,13 @@
+---
+interface Props { size?: number; }
+const { size = 28 } = Astro.props;
+---
+<span class="logo">
+  <svg class="logo-mark" width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+    <rect width="32" height="32" rx="8" class="lm-bg" />
+    <rect x="7" y="8" width="18" height="4" rx="2" class="lm-key" />
+    <rect x="11" y="14" width="14" height="4" rx="2" class="lm-val" />
+    <rect x="11" y="20" width="9" height="4" rx="2" class="lm-val" />
+  </svg>
+  <span class="logo-word">bakorin</span>
+</span>
