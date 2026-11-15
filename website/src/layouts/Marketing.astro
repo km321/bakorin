@@ -5,12 +5,13 @@ import "../styles/marketing.css";
 import Logo from "../components/Logo.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
 
-interface Props { title: string; description: string; current?: "home" | "why"; }
+interface Props { title: string; description: string; current?: "home" | "why" | "builder"; }
 const { title, description, current = "home" } = Astro.props;
 const nav = [
   { href: "/#features", label: "Features" },
   { href: "/#how", label: "How it works" },
   { href: "/why/", label: "Why Bakorin", key: "why" },
+  { href: "/builder/", label: "Config builder", key: "builder" },
   { href: "/#faq", label: "FAQ" },
 ];
 ---
@@ -77,12 +78,14 @@ const nav = [
             <a href="/#features">Features</a>
             <a href="/#how">How it works</a>
             <a href="/why/">Why Bakorin</a>
+            <a href="/builder/">Config builder</a>
             <a href="/#faq">FAQ</a>
           </div>
           <div>
             <h2>Docs</h2>
             <a href="/docs/getting-started/">Getting started</a>
             <a href="/docs/app-yaml/">app.yaml reference</a>
+            <a href="/builder/">app.yaml builder</a>
             <a href="/docs/sdk/">SDK</a>
             <a href="/docs/deploy-railway/">Deploy</a>
           </div>

@@ -48,6 +48,7 @@ export default defineConfig({
           label: "Build your schema",
           items: [
             { label: "app.yaml reference", slug: "docs/app-yaml" },
+            { label: "app.yaml builder", link: "/builder/" },
             { label: "Data and relations", slug: "docs/data" },
             { label: "Permissions", slug: "docs/permissions" },
             { label: "Hooks and custom routes", slug: "docs/hooks" },

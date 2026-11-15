@@ -1,0 +1,90 @@
+---
+import Marketing from "../layouts/Marketing.astro";
+import "../styles/builder.css";
+import { STARTERS } from "../builder/starters.ts";
+---
+<Marketing
+  title="app.yaml builder | Bakorin"
+  description="Build a Bakorin app.yaml in your browser: entities, fields, relations, permissions, auth, and mail rules, checked with the server's own schema."
+  current="builder"
+>
+  <section class="builder-hero">
+    <div class="wrap">
+      <p class="kicker">Config builder</p>
+      <h1>Build your app.yaml</h1>
+      <p class="lede">
+        Start from a starter, add entities and fields, set who can read and write, and add mail rules.
+        Everything runs in your browser and is checked with the same schema and compiler the server uses at boot.
+      </p>
+      <div class="builder-toolbar">
+        <div class="ctl starter-ctl">
+          <label for="bk-starter">Starter</label>
+          <select id="bk-starter" aria-describedby="bk-starter-hint">
+            {STARTERS.map((starter) => <option value={starter.id}>{starter.label}</option>)}
+            <option value="custom">Your edits or import</option>
+          </select>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm" id="bk-open-import">Import app.yaml</button>
+        <a class="btn btn-ghost btn-sm jump-out" href="#bk-output">Jump to app.yaml</a>
+      </div>
+      <ul class="starter-notes" id="bk-starter-hint">
+        {STARTERS.map((starter) => <li><strong>{starter.label}:</strong> {starter.description}</li>)}
+      </ul>
+      <p class="hint">Your draft is saved in this browser only. Nothing is sent anywhere.</p>
+    </div>
+  </section>
+
+  <div class="wrap builder-layout">
+    <div id="builder-forms" class="builder-forms">
+      <noscript><p class="panel">The builder needs JavaScript. You can still copy a starter from the <a href="/docs/app-yaml/">app.yaml reference</a>.</p></noscript>
+    </div>
+    <aside class="builder-output" id="bk-output" aria-labelledby="bk-output-h">
+      <div class="output-inner">
+        <div class="output-head">
+          <h2 id="bk-output-h">app.yaml</h2>
+          <div class="output-actions">
+            <button type="button" class="btn btn-primary btn-sm" id="bk-copy">Copy</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="bk-download">Download</button>
+          </div>
+        </div>
+        <p id="bk-status" class="status" role="status">Checking...</p>
+        <ul id="bk-issues" class="issues" aria-label="Problems"></ul>
+        <ul id="bk-notes" class="notes" aria-label="Before you boot" hidden></ul>
+        <pre class="yaml-out" tabindex="0" aria-label="Generated app.yaml"><code id="bk-yaml"></code></pre>
+      </div>
+    </aside>
+  </div>
+
+  <section class="wrap diagram-section" aria-labelledby="bk-diagram-h">
+    <h2 id="bk-diagram-h">How your data connects</h2>
+    <p class="hint">Each card is an entity. Arrows go from a relation field to the entity it points to, labeled with what happens on delete. Same layout as the admin's schema visualizer.</p>
+    <p class="hint" id="bk-diagram-note"></p>
+    <div class="diagram-scroll" id="bk-diagram" tabindex="0" role="region" aria-label="Schema diagram"></div>
+  </section>
+
+  <div id="bk-live" class="sr-only" aria-live="polite"></div>
+
+  <dialog id="bk-import" class="import-dialog" aria-labelledby="bk-import-h">
+    <form method="dialog" class="import-form" onsubmit="return false">
+      <h2 id="bk-import-h">Import an app.yaml</h2>
+      <p class="hint">Paste your file or pick it from disk. This replaces the current draft. Webhooks and runtime settings are kept as they are.</p>
+      <div class="ctl ctl-wide">
+        <label for="bk-import-text">app.yaml contents</label>
+        <textarea id="bk-import-text" rows="14" spellcheck="false" aria-describedby="bk-import-error"></textarea>
+      </div>
+      <div class="ctl">
+        <label for="bk-import-file">Or choose a file</label>
+        <input type="file" id="bk-import-file" accept=".yaml,.yml,text/yaml" />
+      </div>
+      <p id="bk-import-error" class="err" role="alert"></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn btn-ghost btn-sm" id="bk-import-cancel">Cancel</button>
+        <button type="button" class="btn btn-primary btn-sm" id="bk-import-load">Load</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script>
+    import "../builder/app.ts";
+  </script>
+</Marketing>
