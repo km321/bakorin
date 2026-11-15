@@ -923,6 +923,7 @@ export function metaPayload(ast: SchemaAST): Record<string, unknown> {
       label: entity.label,
       plural: entity.plural,
       display: entity.display,
+      description: entity.description,
       auth: entity.auth,
       fields: entity.fields.map((field) => ({
         name: field.name,
@@ -931,6 +932,7 @@ export function metaPayload(ast: SchemaAST): Record<string, unknown> {
         unique: field.unique,
         secret: field.secret,
         writable: field.writable,
+        description: field.description,
         enumValues: field.enumValues,
         relation: field.relation
           ? {

@@ -6,6 +6,7 @@ export interface MetaEntity {
   label: string;
   plural: string;
   display: string;
+  description?: string;
   fields: Array<{
     name: string;
     type: string;
@@ -15,6 +16,7 @@ export interface MetaEntity {
     enumValues?: string[];
     relation?: { to: string; display?: string };
     defaultValue?: unknown;
+    description?: string;
   }>;
 }
 
@@ -92,6 +94,15 @@ export function hasToken(): boolean {
   return Boolean(localStorage.getItem(TOKEN_KEY));
 }
 
+export async function getMe(): Promise<Record<string, unknown>> {
+  const response = await request("/api/v1/auth/me");
+  const json = (await response.json()) as { data?: Record<string, unknown>; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "failed to load profile");
+  }
+  return json.data;
+}
+
 export async function getMeta(): Promise<MetaResponse> {
   const response = await request("/api/v1/_meta");
   const json = (await response.json()) as { data?: MetaResponse; error?: { message: string } };
@@ -103,12 +114,12 @@ export async function getMeta(): Promise<MetaResponse> {
 
 export async function listRecords(
   entity: string,
-  params: { limit: number; offset: number; filter?: string; filterField?: string; expand?: string },
+  params: { limit: number; offset: number; filter?: string; filterField?: string; expand?: string; sort?: string },
 ): Promise<{ data: Array<Record<string, unknown>>; meta: { total: number } }> {
   const search = new URLSearchParams({
     limit: String(params.limit),
     offset: String(params.offset),
-    sort: "-createdAt",
+    sort: params.sort ?? "-createdAt",
   });
   if (params.filter && params.filterField) {
     search.set(`filter[${params.filterField}][like]`, params.filter);
@@ -143,7 +154,7 @@ export async function deleteRecord(entity: string, id: string): Promise<void> {
   }
 }
 
-export async function uploadFile(file: File): Promise<string> {
+export async function uploadFile(file: File): Promise<{ id: string; url?: string; filename: string; contentType?: string }> {
   const body = new FormData();
   body.set("file", file);
   const response = await request("/api/v1/files", { method: "POST", body });
@@ -151,7 +162,12 @@ export async function uploadFile(file: File): Promise<string> {
   if (!response.ok) {
     throw new Error(json.error?.message ?? "upload failed");
   }
-  return json.data.id as string;
+  return {
+    id: json.data.id as string,
+    url: json.data.url as string | undefined,
+    filename: (json.data.filename as string | undefined) ?? file.name,
+    contentType: json.data.contentType as string | undefined,
+  };
 }
 
 export interface BackupRecord {
@@ -226,6 +242,15 @@ export async function resendVerification(userId: string): Promise<void> {
   if (!response.ok) {
     throw new Error(json.error?.message ?? "resend failed");
   }
+}
+
+export async function signFile(id: string): Promise<string> {
+  const response = await request(`/api/v1/files/${id}/sign`, { method: "POST" });
+  const json = (await response.json()) as { data?: { url: string }; error?: { message: string } };
+  if (!response.ok || !json.data?.url) {
+    throw new Error(json.error?.message ?? "could not load file");
+  }
+  return json.data.url;
 }
 
 export async function listRelated(entity: string): Promise<Array<Record<string, unknown>>> {

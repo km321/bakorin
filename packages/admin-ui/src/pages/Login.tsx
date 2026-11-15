@@ -1,5 +1,6 @@
 import { useState } from "preact/hooks";
 import { login } from "../lib/api.ts";
+import { AuthLayout } from "../components/AuthLayout.tsx";
 
 interface Props {
   onLoggedIn: () => void;
@@ -21,37 +22,43 @@ export function Login({ onLoggedIn }: Props) {
       await login("email", identity, secret);
       onLoggedIn();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "login failed");
+      setError(err instanceof Error ? err.message : "Could not sign in. Check the email and password.");
     }
   }
 
   return (
-    <div class="login">
-      <form class="login-card" onSubmit={submit}>
+    <AuthLayout>
+      <form class="auth-card" onSubmit={submit}>
         <div class="brand">
           <strong>Bakorin</strong>
           <span>Admin</span>
         </div>
         <h1>Sign in</h1>
-        <p class="muted">Use an admin account from your app.yaml auth entity.</p>
+        <p class="muted">Use an admin account from this project's auth entity.</p>
         {error ? <div class="banner">{error}</div> : null}
         <div class="field">
-          <label>Email</label>
+          <label>
+            Email <span class="req">*</span>
+          </label>
           <input
             name="email"
             type="email"
             value={email}
             required
+            autoComplete="username"
             onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
           />
         </div>
         <div class="field">
-          <label>Password</label>
+          <label>
+            Password <span class="req">*</span>
+          </label>
           <input
             name="password"
             type="password"
             value={password}
             required
+            autoComplete="current-password"
             onInput={(event) => setPassword((event.target as HTMLInputElement).value)}
           />
         </div>
@@ -59,6 +66,6 @@ export function Login({ onLoggedIn }: Props) {
           Continue
         </button>
       </form>
-    </div>
+    </AuthLayout>
   );
 }

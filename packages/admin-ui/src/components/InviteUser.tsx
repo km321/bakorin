@@ -1,6 +1,7 @@
-import { useState } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import type { MetaResponse } from "../lib/api.ts";
 import { inviteUser } from "../lib/api.ts";
+import { pushToast } from "../lib/toast.ts";
 
 interface Props {
   meta: MetaResponse;
@@ -15,14 +16,32 @@ export function InviteUser({ meta, onClose, onInvited }: Props) {
   const [name, setName] = useState("");
   const [role, setRole] = useState(defaultRole);
   const [error, setError] = useState<string | null>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   async function submit(event: Event) {
     event.preventDefault();
     setSaving(true);
     setError(null);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setEmailError("Enter a valid email");
+      setSaving(false);
+      return;
+    }
+    setEmailError(null);
     try {
       await inviteUser({ email, name: name || undefined, role });
+      pushToast("ok", "Invite sent");
       onInvited();
     } catch (err) {
       setError(err instanceof Error ? err.message : "invite failed");
@@ -34,12 +53,20 @@ export function InviteUser({ meta, onClose, onInvited }: Props) {
   return (
     <>
       <div class="drawer-backdrop" onClick={onClose} />
-      <form class="drawer" onSubmit={submit}>
-        <h2>Invite user</h2>
+      <form class="drawer" onSubmit={submit} aria-labelledby="invite-title">
+        <h2 id="invite-title">Invite user</h2>
         {error ? <div class="banner">{error}</div> : null}
-        <div class="field">
-          <label>Email *</label>
-          <input type="email" required value={email} onInput={(event) => setEmail((event.target as HTMLInputElement).value)} />
+        <div class={emailError ? "field invalid" : "field"}>
+          <label>
+            Email <span class="req">*</span>
+          </label>
+          <input
+            type="email"
+            required
+            value={email}
+            onInput={(event) => setEmail((event.target as HTMLInputElement).value)}
+          />
+          {emailError ? <p class="field-error">{emailError}</p> : null}
         </div>
         <div class="field">
           <label>Name</label>
@@ -57,7 +84,7 @@ export function InviteUser({ meta, onClose, onInvited }: Props) {
         </div>
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
           <button class="btn" disabled={saving} type="submit">
-            {saving ? "Sending…" : "Send invite"}
+            {saving ? "Sending" : "Send invite"}
           </button>
           <button class="btn secondary" type="button" onClick={onClose}>
             Cancel

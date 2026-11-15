@@ -1,23 +1,28 @@
+import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
-import { deleteRecord, getMeta, listRecords, logout, resendVerification, type MetaEntity, type MetaResponse } from "../lib/api.ts";
+import {
+  deleteRecord,
+  getMe,
+  getMeta,
+  listRecords,
+  logout,
+  resendVerification,
+  type MetaEntity,
+  type MetaResponse,
+} from "../lib/api.ts";
 import { Drawer } from "../components/Drawer.tsx";
 import { InviteUser } from "../components/InviteUser.tsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
+import { ThemeToggle } from "../components/ThemeToggle.tsx";
+import { IconAudit, IconBackup, IconDocs, IconMenu, IconSearch } from "../components/Icons.tsx";
 import { fieldLabel, relatedLabel } from "../lib/label.ts";
+import { emptyLabel, formatDate, formatDateTime, initials } from "../lib/format.ts";
+import { pushToast } from "../lib/toast.ts";
 import { Backups } from "./Backups.tsx";
 import { Audit } from "./Audit.tsx";
 
 interface Props {
   onLogout: () => void;
-}
-
-function cell(value: unknown): string {
-  if (value === null || value === undefined) {
-    return "";
-  }
-  if (typeof value === "boolean") {
-    return value ? "yes" : "no";
-  }
-  return String(value);
 }
 
 function relationCell(row: Record<string, unknown>, fieldName: string, display?: string): string {
@@ -31,16 +36,42 @@ function relationCell(row: Record<string, unknown>, fieldName: string, display?:
   return "";
 }
 
+function cell(row: Record<string, unknown>, field: MetaEntity["fields"][number]): ComponentChildren {
+  if (field.relation) {
+    return relationCell(row, field.name, field.relation.display);
+  }
+  const value = row[field.name];
+  switch (field.type) {
+    case "boolean":
+      return <span class={value ? "badge yes" : "badge no"}>{value ? "Yes" : "No"}</span>;
+    case "date":
+      return formatDate(value);
+    case "datetime":
+      return formatDateTime(value);
+    default:
+      if (value === null || value === undefined) {
+        return "";
+      }
+      return String(value);
+  }
+}
+
 export function AppShell({ onLogout }: Props) {
   const [meta, setMeta] = useState<MetaResponse | null>(null);
+  const [me, setMe] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [entityName, setEntityName] = useState<string>("");
   const [rows, setRows] = useState<Array<Record<string, unknown>>>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState("");
+  const [sort, setSort] = useState("-createdAt");
+  const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Record<string, unknown> | null | undefined>(undefined);
   const [inviting, setInviting] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<Record<string, unknown> | null>(null);
+  const [navOpen, setNavOpen] = useState(false);
+  const [userOpen, setUserOpen] = useState(false);
   const [page, setPage] = useState<"records" | "backups" | "audit">(
     location.hash === "#backups" ? "backups" : location.hash === "#audit" ? "audit" : "records",
   );
@@ -51,12 +82,14 @@ export function AppShell({ onLogout }: Props) {
     [meta, entityName],
   );
 
-  async function refresh(nextEntity = entityName, nextOffset = offset, nextFilter = filter) {
+  async function refresh(nextEntity = entityName, nextOffset = offset, nextFilter = filter, nextSort = sort) {
     if (!nextEntity) {
       return;
     }
-    const filterField = meta?.entities.find((item) => item.name === nextEntity)?.fields.find((field) => field.type === "text" || field.type === "email");
-    const expandFields = (meta?.entities.find((item) => item.name === nextEntity)?.fields ?? [])
+    setLoading(true);
+    const current = meta?.entities.find((item) => item.name === nextEntity);
+    const filterField = current?.fields.find((field) => field.type === "text" || field.type === "email");
+    const expandFields = (current?.fields ?? [])
       .filter((field) => field.relation)
       .map((field) => field.name)
       .join(",");
@@ -66,15 +99,18 @@ export function AppShell({ onLogout }: Props) {
       filter: nextFilter,
       filterField: filterField?.name,
       expand: expandFields || undefined,
+      sort: nextSort,
     });
     setRows(result.data);
     setTotal(result.meta.total);
+    setLoading(false);
   }
 
   useEffect(() => {
-    void getMeta()
-      .then((payload) => {
+    void Promise.all([getMeta(), getMe().catch(() => null)])
+      .then(([payload, profile]) => {
         setMeta(payload);
+        setMe(profile);
         const first = payload.entities[0]?.name ?? "";
         setEntityName(first);
       })
@@ -88,10 +124,17 @@ export function AppShell({ onLogout }: Props) {
   }, []);
 
   useEffect(() => {
-    if (entityName && page === "records") {
-      void refresh(entityName, 0, filter).catch((err: unknown) => setError(err instanceof Error ? err.message : "list failed"));
+    if (!entityName || page !== "records") {
+      return;
     }
-  }, [entityName, page]);
+    const handle = window.setTimeout(() => {
+      void refresh(entityName, offset, filter, sort).catch((err: unknown) => {
+        setLoading(false);
+        setError(err instanceof Error ? err.message : "list failed");
+      });
+    }, filter ? 250 : 0);
+    return () => window.clearTimeout(handle);
+  }, [entityName, page, filter, sort, offset, meta]);
 
   useEffect(() => {
     function onHash() {
@@ -101,69 +144,152 @@ export function AppShell({ onLogout }: Props) {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setNavOpen(false);
+        setUserOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   const columns = (entity?.fields ?? [])
     .filter((field) => !field.secret && field.name !== "id" && field.name !== "createdAt" && field.name !== "updatedAt")
     .slice(0, 6);
 
+  const meLabel =
+    (typeof me?.email === "string" && me.email) ||
+    (typeof me?.name === "string" && me.name) ||
+    "Admin";
+
+  function openEntity(name: string) {
+    setOffset(0);
+    setFilter("");
+    setSort("-createdAt");
+    setEntityName(name);
+    setPage("records");
+    setNavOpen(false);
+    if (location.hash) {
+      location.hash = "";
+    }
+  }
+
+  function toggleSort(fieldName: string) {
+    setOffset(0);
+    setSort((current) => (current === fieldName ? `-${fieldName}` : fieldName));
+  }
+
   return (
     <div class="app-shell">
-      <aside class="sidebar">
+      {navOpen ? <div class="sidebar-backdrop" onClick={() => setNavOpen(false)} /> : null}
+      <aside class={navOpen ? "sidebar open" : "sidebar"} id="app-sidebar">
         <div class="brand">
           <strong>Bakorin</strong>
           <span>{meta?.app.name ?? "loading"}</span>
         </div>
-        <nav class="nav">
+        <nav class="nav" aria-label="Entities">
+          <div class="nav-section">Data</div>
           {(meta?.entities ?? []).map((item) => (
             <button
               key={item.name}
               data-nav={item.name}
               class={page === "records" && item.name === entityName ? "active" : ""}
-              onClick={() => {
-                setOffset(0);
-                setEntityName(item.name);
-                setPage("records");
-                if (location.hash) {
-                  location.hash = "";
-                }
-              }}
+              aria-current={page === "records" && item.name === entityName ? "page" : undefined}
+              onClick={() => openEntity(item.name)}
             >
+              <span class="nav-mark">{initials(item.plural)}</span>
               {item.plural}
             </button>
           ))}
+          <div class="nav-section">Project</div>
           <button
             data-nav="backups"
             class={page === "backups" ? "active" : ""}
+            aria-current={page === "backups" ? "page" : undefined}
             onClick={() => {
               setPage("backups");
               location.hash = "backups";
+              setNavOpen(false);
             }}
           >
+            <span class="nav-icon">
+              <IconBackup />
+            </span>
             Backups
           </button>
           <button
             data-nav="audit"
             class={page === "audit" ? "active" : ""}
+            aria-current={page === "audit" ? "page" : undefined}
             onClick={() => {
               setPage("audit");
               location.hash = "audit";
+              setNavOpen(false);
             }}
           >
+            <span class="nav-icon">
+              <IconAudit />
+            </span>
             Audit
           </button>
           <a data-nav="docs" href="/docs" target="_blank" rel="noreferrer">
+            <span class="nav-icon">
+              <IconDocs />
+            </span>
             API docs
           </a>
         </nav>
-        <button
-          class="btn secondary"
-          onClick={() => {
-            logout();
-            onLogout();
-          }}
-        >
-          Sign out
-        </button>
       </aside>
+      <header class="header">
+        <div class="header-title">
+          <button
+            class="menu-btn"
+            type="button"
+            aria-label="Open navigation"
+            aria-controls="app-sidebar"
+            aria-expanded={navOpen}
+            onClick={() => setNavOpen((open) => !open)}
+          >
+            <IconMenu />
+          </button>
+          <strong>{meta?.app.name ?? "Bakorin"}</strong>
+        </div>
+        <div class="header-actions">
+          <ThemeToggle />
+          <div class="user-menu">
+            <button
+              class="user-chip"
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={userOpen}
+              onClick={() => setUserOpen((open) => !open)}
+            >
+              <span class="nav-mark">{initials(String(meLabel))}</span>
+              <span class="user-chip-label">{meLabel}</span>
+            </button>
+            {userOpen ? (
+              <div class="menu-pop" role="menu">
+                <p>
+                  {meLabel}
+                  {typeof me?.role === "string" ? ` · ${me.role}` : ""}
+                </p>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    logout();
+                    onLogout();
+                  }}
+                >
+                  Sign out
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </header>
       <main class="main">
         {page === "backups" ? (
           <Backups />
@@ -171,115 +297,135 @@ export function AppShell({ onLogout }: Props) {
           <Audit />
         ) : (
           <>
-        <div class="toolbar">
-          <div>
-            <h1>{entity?.plural ?? "Records"}</h1>
-            <div class="muted">{total} rows</div>
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {meta && entityName === meta.auth.entity ? (
-              <button class="btn secondary" type="button" onClick={() => setInviting(true)}>
-                Invite user
-              </button>
-            ) : null}
-            <button class="btn" id="bakorin-new" onClick={() => setEditing(null)}>
-              New
-            </button>
-          </div>
-        </div>
-        {error ? <div class="banner">{error}</div> : null}
-        <div class="filters">
-          <input
-            placeholder="Filter"
-            value={filter}
-            onInput={(event) => setFilter((event.target as HTMLInputElement).value)}
-          />
-          <button
-            class="btn secondary"
-            onClick={() => {
-              setOffset(0);
-              void refresh(entityName, 0, filter);
-            }}
-          >
-            Apply
-          </button>
-        </div>
-        <div class="table-wrap">
-          {rows.length === 0 ? (
-            <div class="empty">No rows yet. Create one to populate this table.</div>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  {columns.map((field) => (
-                    <th key={field.name}>{fieldLabel(field.name)}</th>
-                  ))}
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={String(row.id)}>
-                    {columns.map((field) => (
-                      <td key={field.name} class={field.name === "id" ? "mono" : undefined}>
-                        {field.relation ? relationCell(row, field.name, field.relation.display) : cell(row[field.name])}
-                      </td>
+            <div class="toolbar">
+              <div>
+                <h1>{entity?.plural ?? "Records"}</h1>
+                <div class="muted">{total} {total === 1 ? "row" : "rows"}</div>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {meta && entityName === meta.auth.entity ? (
+                  <button class="btn secondary" type="button" onClick={() => setInviting(true)}>
+                    Invite user
+                  </button>
+                ) : null}
+                <button class="btn" id="bakorin-new" onClick={() => setEditing(null)}>
+                  New {entity?.label ?? "record"}
+                </button>
+              </div>
+            </div>
+            {error ? <div class="banner">{error}</div> : null}
+            <div class="filters">
+              <label class="search-field">
+                <span class="sr-only">Search</span>
+                <IconSearch />
+                <input
+                  placeholder={`Search ${entity?.plural.toLowerCase() ?? "records"}`}
+                  value={filter}
+                  onInput={(event) => {
+                    setFilter((event.target as HTMLInputElement).value);
+                    setOffset(0);
+                  }}
+                />
+              </label>
+            </div>
+            <div class="table-wrap">
+              {loading && rows.length === 0 ? (
+                <div class="skeleton" aria-busy="true" aria-label="Loading">
+                  <div class="skeleton-row" />
+                  <div class="skeleton-row" />
+                  <div class="skeleton-row" />
+                  <div class="skeleton-row" />
+                </div>
+              ) : rows.length === 0 ? (
+                <div class="empty">
+                  <h2>{emptyLabel(entity?.plural ?? "records")}</h2>
+                  <p>Create the first {entity?.label.toLowerCase() ?? "record"} to start this list.</p>
+                  <button class="btn" type="button" onClick={() => setEditing(null)}>
+                    New {entity?.label ?? "record"}
+                  </button>
+                </div>
+              ) : (
+                <table>
+                  <thead>
+                    <tr>
+                      {columns.map((field) => {
+                        const active = sort === field.name || sort === `-${field.name}`;
+                        const dir = sort === `-${field.name}` ? "descending" : sort === field.name ? "ascending" : "none";
+                        return (
+                          <th key={field.name} class="sortable" aria-sort={dir}>
+                            <button type="button" onClick={() => toggleSort(field.name)}>
+                              {fieldLabel(field.name)}
+                              {active ? (sort.startsWith("-") ? " ↓" : " ↑") : ""}
+                            </button>
+                          </th>
+                        );
+                      })}
+                      <th>
+                        <span class="sr-only">Actions</span>
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={String(row.id)}>
+                        {columns.map((field) => (
+                          <td key={field.name} class={field.name === "id" ? "mono" : undefined}>
+                            {cell(row, field)}
+                          </td>
+                        ))}
+                        <td>
+                          <div class="row-actions">
+                            <button class="btn secondary" onClick={() => setEditing(row)}>
+                              Edit
+                            </button>
+                            {meta && entityName === meta.auth.entity && row.emailVerified !== true ? (
+                              <button
+                                class="btn secondary"
+                                type="button"
+                                onClick={() => {
+                                  void resendVerification(String(row.id))
+                                    .then(() => {
+                                      setError(null);
+                                      pushToast("ok", "Verification email sent");
+                                    })
+                                    .catch((err: unknown) =>
+                                      setError(err instanceof Error ? err.message : "resend failed"),
+                                    );
+                                }}
+                              >
+                                Resend verification
+                              </button>
+                            ) : null}
+                            <button class="btn danger" onClick={() => setPendingDelete(row)}>
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
                     ))}
-                    <td>
-                      <button class="btn secondary" onClick={() => setEditing(row)}>
-                        Edit
-                      </button>{" "}
-                      {meta && entityName === meta.auth.entity && row.emailVerified !== true ? (
-                        <>
-                          <button
-                            class="btn secondary"
-                            type="button"
-                            onClick={() => {
-                              void resendVerification(String(row.id))
-                                .then(() => setError(null))
-                                .catch((err: unknown) => setError(err instanceof Error ? err.message : "resend failed"));
-                            }}
-                          >
-                            Resend verification
-                          </button>{" "}
-                        </>
-                      ) : null}
-                      <button
-                        class="btn danger"
-                        onClick={() => {
-                          if (confirm("Delete this row?")) {
-                            void deleteRecord(entityName, String(row.id)).then(() => refresh());
-                          }
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-        <div class="pager">
-          <button class="btn secondary" disabled={offset === 0} onClick={() => {
-            const next = Math.max(0, offset - limit);
-            setOffset(next);
-            void refresh(entityName, next, filter);
-          }}>
-            Previous
-          </button>
-          <span>
-            {offset + 1}-{Math.min(offset + limit, total)} of {total}
-          </span>
-          <button class="btn secondary" disabled={offset + limit >= total} onClick={() => {
-            const next = offset + limit;
-            setOffset(next);
-            void refresh(entityName, next, filter);
-          }}>
-            Next
-          </button>
-        </div>
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div class="pager">
+              <button
+                class="btn secondary"
+                disabled={offset === 0}
+                onClick={() => setOffset(Math.max(0, offset - limit))}
+              >
+                Previous
+              </button>
+              <span>
+                {total === 0 ? "0 of 0" : `${offset + 1}-${Math.min(offset + limit, total)} of ${total}`}
+              </span>
+              <button
+                class="btn secondary"
+                disabled={offset + limit >= total}
+                onClick={() => setOffset(offset + limit)}
+              >
+                Next
+              </button>
+            </div>
           </>
         )}
       </main>
@@ -301,6 +447,25 @@ export function AppShell({ onLogout }: Props) {
           onInvited={() => {
             setInviting(false);
             void refresh();
+          }}
+        />
+      ) : null}
+      {pendingDelete && entity ? (
+        <ConfirmDialog
+          title={`Delete this ${entity.label}?`}
+          body="This cannot be undone from the admin UI."
+          confirmLabel="Delete"
+          danger
+          onClose={() => setPendingDelete(null)}
+          onConfirm={() => {
+            const id = String(pendingDelete.id);
+            setPendingDelete(null);
+            void deleteRecord(entityName, id)
+              .then(() => {
+                pushToast("ok", `${entity.label} deleted`);
+                return refresh();
+              })
+              .catch((err: unknown) => setError(err instanceof Error ? err.message : "delete failed"));
           }}
         />
       ) : null}

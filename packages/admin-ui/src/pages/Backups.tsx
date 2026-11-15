@@ -1,5 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { createBackup, listBackups, type BackupRecord } from "../lib/api.ts";
+import { formatDateTime } from "../lib/format.ts";
+import { pushToast } from "../lib/toast.ts";
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) {
@@ -9,14 +11,6 @@ function formatSize(bytes: number): string {
     return `${(bytes / 1024).toFixed(1)} KB`;
   }
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-function formatWhen(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-  return date.toLocaleString();
 }
 
 export function Backups() {
@@ -43,6 +37,7 @@ export function Backups() {
     try {
       await createBackup();
       await refresh();
+      pushToast("ok", "Backup saved");
     } catch (err) {
       setError(err instanceof Error ? err.message : "backup failed");
     } finally {
@@ -58,15 +53,24 @@ export function Backups() {
           <div class="muted">Snapshot the live database. Restore stays on the CLI.</div>
         </div>
         <button class="btn" id="bakorin-backup-now" disabled={busy} onClick={() => void runLiveBackup()}>
-          {busy ? "Backing up…" : "Run backup"}
+          {busy ? "Backing up" : "Run backup"}
         </button>
       </div>
       {error ? <div class="banner">{error}</div> : null}
       <div class="table-wrap">
         {loading ? (
-          <div class="empty">Loading backups…</div>
+          <div class="skeleton" aria-hidden="true">
+            <div class="skeleton-row" />
+            <div class="skeleton-row" />
+          </div>
         ) : rows.length === 0 ? (
-          <div class="empty">No backups yet. Run a live backup to snapshot the database.</div>
+          <div class="empty">
+            <h2>No backups yet</h2>
+            <p>Run a live backup to snapshot the database.</p>
+            <button class="btn" type="button" disabled={busy} onClick={() => void runLiveBackup()}>
+              Run backup
+            </button>
+          </div>
         ) : (
           <table>
             <thead>
@@ -80,7 +84,7 @@ export function Backups() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
-                  <td>{formatWhen(row.createdAt)}</td>
+                  <td>{formatDateTime(row.createdAt)}</td>
                   <td>{formatSize(row.size)}</td>
                   <td class="mono">{row.location}</td>
                   <td>

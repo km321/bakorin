@@ -1,13 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { listAudit, type AuditRecord } from "../lib/api.ts";
-
-function formatWhen(iso: string): string {
-  const date = new Date(iso);
-  if (Number.isNaN(date.getTime())) {
-    return iso;
-  }
-  return date.toLocaleString();
-}
+import { formatDateTime } from "../lib/format.ts";
 
 export function Audit() {
   const [rows, setRows] = useState<AuditRecord[]>([]);
@@ -44,9 +37,16 @@ export function Audit() {
       {error ? <div class="banner">{error}</div> : null}
       <div class="table-wrap">
         {loading ? (
-          <div class="empty">Loading audit events…</div>
+          <div class="skeleton" aria-hidden="true">
+            <div class="skeleton-row" />
+            <div class="skeleton-row" />
+            <div class="skeleton-row" />
+          </div>
         ) : rows.length === 0 ? (
-          <div class="empty">No audit events yet.</div>
+          <div class="empty">
+            <h2>No audit events yet</h2>
+            <p>Sign-in, writes, and backups will show up here.</p>
+          </div>
         ) : (
           <table>
             <thead>
@@ -62,12 +62,12 @@ export function Audit() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id}>
-                  <td>{formatWhen(row.at)}</td>
+                  <td>{formatDateTime(row.at)}</td>
                   <td class="mono">{row.action}</td>
-                  <td class="mono">{row.actorId ?? "-"}</td>
-                  <td>{row.entity ?? "-"}</td>
-                  <td class="mono">{row.recordId ?? "-"}</td>
-                  <td class="mono">{row.ip ?? "-"}</td>
+                  <td class="mono">{row.actorId ?? ""}</td>
+                  <td>{row.entity ?? ""}</td>
+                  <td class="mono">{row.recordId ?? ""}</td>
+                  <td class="mono">{row.ip ?? ""}</td>
                 </tr>
               ))}
             </tbody>

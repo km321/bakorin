@@ -4,6 +4,24 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Bakorin Admin</title>
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("bakorin_theme");
+          var mode = stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+          var dark =
+            mode === "dark" ||
+            (mode !== "light" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var theme = dark ? "dark" : "light";
+          document.documentElement.setAttribute("data-theme", theme);
+          document.documentElement.setAttribute("data-theme-mode", mode);
+          document.documentElement.style.colorScheme = theme;
+        } catch (err) {
+          document.documentElement.setAttribute("data-theme", "light");
+          document.documentElement.setAttribute("data-theme-mode", "system");
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="app"></div>

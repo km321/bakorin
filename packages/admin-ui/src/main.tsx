@@ -1,15 +1,24 @@
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { getSetup, hasToken } from "./lib/api.ts";
+import { applyTheme, readStoredThemeMode } from "./lib/theme.ts";
 import { FirstAdmin } from "./pages/FirstAdmin.tsx";
 import { Login } from "./pages/Login.tsx";
 import { AppShell } from "./pages/AppShell.tsx";
+import { AuthLayout } from "./components/AuthLayout.tsx";
+import { ToastHost } from "./components/ToastHost.tsx";
+import { syncSystemTheme } from "./components/ThemeToggle.tsx";
 import "./styles/app.css";
 
 type Gate = "loading" | "first-admin" | "login" | "app";
 
 function Root() {
   const [gate, setGate] = useState<Gate>(hasToken() ? "app" : "loading");
+
+  useEffect(() => {
+    applyTheme(readStoredThemeMode());
+    return syncSystemTheme();
+  }, []);
 
   useEffect(() => {
     if (hasToken()) {
@@ -20,30 +29,42 @@ function Root() {
       .catch(() => setGate("login"));
   }, []);
 
+  let screen;
   switch (gate) {
     case "loading":
-      return (
-        <div class="login">
-          <div class="login-card">
+      screen = (
+        <AuthLayout>
+          <div class="auth-card">
             <div class="brand">
               <strong>Bakorin</strong>
               <span>Admin</span>
             </div>
             <p class="muted">Loading...</p>
           </div>
-        </div>
+        </AuthLayout>
       );
+      break;
     case "first-admin":
-      return <FirstAdmin onCreated={() => setGate("app")} />;
+      screen = <FirstAdmin onCreated={() => setGate("app")} />;
+      break;
     case "login":
-      return <Login onLoggedIn={() => setGate("app")} />;
+      screen = <Login onLoggedIn={() => setGate("app")} />;
+      break;
     case "app":
-      return <AppShell onLogout={() => setGate("login")} />;
+      screen = <AppShell onLogout={() => setGate("login")} />;
+      break;
     default: {
       const _never: never = gate;
-      return _never;
+      screen = _never;
     }
   }
+
+  return (
+    <>
+      {screen}
+      <ToastHost />
+    </>
+  );
 }
 
 render(<Root />, document.getElementById("app")!);
