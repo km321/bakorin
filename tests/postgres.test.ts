@@ -111,11 +111,14 @@ describe.skipIf(!url)("postgres", () => {
     let rows: Array<Record<string, unknown>> = [];
     for (let i = 0; i < 100 && rows.length === 0; i += 1) {
       await Bun.sleep(20);
-      rows = (await runtime.db.selectFrom(MAIL_OUTBOX_TABLE).selectAll().execute()) as Array<Record<string, unknown>>;
+      rows = (await runtime.db.selectFrom(MAIL_OUTBOX_TABLE).selectAll().where("source", "=", "hook").execute()) as Array<Record<string, unknown>>;
     }
     await Bun.sleep(100);
-    rows = (await runtime.db.selectFrom(MAIL_OUTBOX_TABLE).selectAll().execute()) as Array<Record<string, unknown>>;
+    rows = (await runtime.db.selectFrom(MAIL_OUTBOX_TABLE).selectAll().where("source", "=", "hook").execute()) as Array<Record<string, unknown>>;
     expect(rows).toHaveLength(1);
+    const verify = await runtime.db.selectFrom(MAIL_OUTBOX_TABLE).selectAll().where("source", "=", "auth").execute();
+    expect(verify.map((row) => row.purpose)).toEqual(["verify"]);
+    expect(String(verify[0]?.html)).toContain("[redacted]");
     const sent: MailMessage[] = [];
     const mailer = { driver: "log" as const, send: async (message: MailMessage) => void sent.push(message) };
     const id = String(rows[0]?.id);
