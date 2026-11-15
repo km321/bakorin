@@ -14,16 +14,17 @@ import { Drawer } from "../components/Drawer.tsx";
 import { InviteUser } from "../components/InviteUser.tsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
 import { ThemeToggle } from "../components/ThemeToggle.tsx";
-import { IconAudit, IconBackup, IconDocs, IconMenu, IconSchema, IconSearch, IconWebhook } from "../components/Icons.tsx";
+import { IconAudit, IconBackup, IconDocs, IconMenu, IconSchema, IconSearch, IconWebhook, IconMail } from "../components/Icons.tsx";
 import { fieldLabel, relatedLabel } from "../lib/label.ts";
 import { emptyLabel, formatDate, formatDateTime, initials } from "../lib/format.ts";
 import { pushToast } from "../lib/toast.ts";
 import { Backups } from "./Backups.tsx";
 import { Audit } from "./Audit.tsx";
 import { Webhooks } from "./Webhooks.tsx";
+import { Mail } from "./Mail.tsx";
 import { Schema } from "./Schema.tsx";
 
-type AdminPage = "records" | "backups" | "audit" | "webhooks" | "schema";
+type AdminPage = "records" | "backups" | "audit" | "webhooks" | "mail" | "schema";
 
 function pageFromHash(hash: string): AdminPage {
   switch (hash) {
@@ -33,6 +34,8 @@ function pageFromHash(hash: string): AdminPage {
       return "audit";
     case "#webhooks":
       return "webhooks";
+    case "#mail":
+      return "mail";
     case "#schema":
       return "schema";
     default:
@@ -303,6 +306,21 @@ export function AppShell({ onLogout, onForbidden }: Props) {
             Webhooks
           </button>
           <button
+            data-nav="mail"
+            class={page === "mail" ? "active" : ""}
+            aria-current={page === "mail" ? "page" : undefined}
+            onClick={() => {
+              setPage("mail");
+              location.hash = "mail";
+              setNavOpen(false);
+            }}
+          >
+            <span class="nav-icon">
+              <IconMail />
+            </span>
+            Mail
+          </button>
+          <button
             data-nav="audit"
             class={page === "audit" ? "active" : ""}
             aria-current={page === "audit" ? "page" : undefined}
@@ -568,6 +586,8 @@ function ProjectScreen({
       return <Backups />;
     case "webhooks":
       return <Webhooks />;
+    case "mail":
+      return <Mail meta={meta} />;
     case "schema":
       return <Schema initial={meta} onOpenEntity={onOpenEntity} />;
     case "audit":

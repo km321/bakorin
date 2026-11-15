@@ -23,7 +23,7 @@ export const FIELD_TYPES = [
   "relation",
 ] as const;
 
-export const APP_YAML_TOP_LEVEL_KEYS = ["app", "runtime", "auth", "entities", "webhooks"] as const;
+export const APP_YAML_TOP_LEVEL_KEYS = ["app", "runtime", "auth", "entities", "webhooks", "mail"] as const;
 
 const fieldType = z.enum(FIELD_TYPES);
 
@@ -77,6 +77,47 @@ const webhookObject = z
     secret: z.string().optional(),
     maxAttempts: z.number().int().min(1).max(100).optional(),
     timeoutMs: z.number().int().min(100).max(120_000).optional(),
+  })
+  .strict();
+
+const mailAddressList = z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]);
+
+const mailScalar = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+const mailCondition = z.union([
+  mailScalar,
+  z
+    .object({
+      equals: mailScalar.optional(),
+      not: mailScalar.optional(),
+      in: z.array(mailScalar).min(1).optional(),
+      notIn: z.array(mailScalar).min(1).optional(),
+      exists: z.boolean().optional(),
+    })
+    .strict()
+    .refine((value) => Object.keys(value).length > 0, {
+      message: "use one of equals, not, in, notIn, or exists",
+    }),
+]);
+
+const mailRuleObject = z
+  .object({
+    name: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/, "must be letters, digits, dashes, or underscores")
+      .optional(),
+    entity: ident,
+    events: z.array(z.enum(["create", "update", "delete"])).min(1),
+    to: mailAddressList,
+    cc: mailAddressList.optional(),
+    bcc: mailAddressList.optional(),
+    replyTo: z.string().min(1).optional(),
+    subject: z.string().min(1).max(500).optional(),
+    template: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/, "must be a file name like receipt or order-shipped"),
+    when: z.record(ident, mailCondition).optional(),
+    changed: z.array(ident).min(1).optional(),
+    expand: z.array(ident).min(1).optional(),
+    maxAttempts: z.number().int().min(1).max(100).optional(),
   })
   .strict();
 
@@ -153,6 +194,12 @@ export const appYamlSchema = z
           })
           .strict()
           .optional(),
+        mail: z
+          .object({
+            retainDays: z.number().int().min(1).max(3650).optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
@@ -171,6 +218,7 @@ export const appYamlSchema = z
       message: "at least one entity is required",
     }),
     webhooks: z.array(webhookObject).optional(),
+    mail: z.array(mailRuleObject).optional(),
   })
   .strict();
 

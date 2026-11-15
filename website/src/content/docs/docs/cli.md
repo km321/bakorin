@@ -16,6 +16,9 @@ Commands:
   restore <dir>       Restore a snapshot or portable archive
   export [dir]        Portable NDJSON archive for moving SQLite <-> Postgres
   import <dir>        Import a portable archive into the current dialect
+  mail list           List templates in mail/
+  mail preview <template|rule> [--record <id>] [--entity name] [--format html|text|json]
+                      Render a mail template against a sample or real record
 ```
 
 Most commands accept `--dir <path>` to point at a project folder (default: the current directory). `dev` and `start` accept `--port`.
@@ -43,3 +46,7 @@ Prints the schema graph from `app.yaml`. See [Schema visualizer](/docs/schema/).
 ## backup, restore, export, import
 
 See [Backup and restore](/docs/backups/).
+
+## mail
+
+`bakorin mail list` prints the templates in `mail/`. `bakorin mail preview receipt` renders a template (or a rule by name) against sample data, and `--entity orders --record <id>` uses a real record. `--format text` prints the subject and plain text version, `--format json` prints everything. Preview never starts the delivery worker, so it does not send queued mail. See [Email](/docs/email/#cli-preview).

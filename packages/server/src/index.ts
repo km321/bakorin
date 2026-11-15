@@ -28,5 +28,20 @@ export type { Actor, AppContext } from "./context.ts";
 export { buildOpenApi } from "./meta/openapi.ts";
 export { createMailer, mailFrom, missingResendApiKeyMessage } from "./mail/create.ts";
 export { createResendMailer } from "./mail/resend.ts";
+export { renderTemplate, escapeHtml, htmlToText, TemplateError } from "./mail/engine.ts";
+export { renderMail, listTemplates, validateMailTemplates } from "./mail/files.ts";
+export type { RenderedMail, TemplateInfo } from "./mail/files.ts";
+export {
+  drainMailOutbox,
+  deliverMailById,
+  enqueueMail,
+  retryMailDelivery,
+  recoverStuckSends,
+  cleanupSentMail,
+  normalizeAddress,
+} from "./mail/outbox.ts";
+export type { HookMailInput, MailApi } from "./mail/outbox.ts";
+export { conditionMatches, ruleMatches, matchingRules, buildRuleData } from "./mail/rules.ts";
+export { buildPreview } from "./mail/routes.ts";
 export { getLoggedMail, clearLoggedMail } from "./mail/log.ts";
 export type { Mailer, MailMessage, MailDriver } from "./mail/types.ts";

@@ -23,6 +23,9 @@ import { loadHooks } from "./hooks/loader.ts";
 import { subscribeAfterHooks } from "./hooks/after.ts";
 import { startWebhookWorker, subscribeWebhooks } from "./webhooks/dispatcher.ts";
 import { createWebhookRoutes } from "./webhooks/routes.ts";
+import { validateMailTemplates } from "./mail/files.ts";
+import { createMailApi, startMailWorker, subscribeMail } from "./mail/outbox.ts";
+import { createMailRoutes } from "./mail/routes.ts";
 import type { AppContext } from "./context.ts";
 import { startBackupScheduler } from "./backup/schedule.ts";
 import { resolveRuntimePath } from "./paths.ts";
@@ -79,11 +82,14 @@ export async function createRuntime(options: {
   projectDir: string;
   yamlSource: string;
   env?: Record<string, string | undefined>;
+  /** Background workers (backups, webhook and mail delivery). Off for one-shot CLI commands like mail preview. */
+  workers?: boolean;
 }): Promise<RuntimeHandles> {
   const projectDir = resolve(options.projectDir);
   const env = options.env ?? process.env;
   let ast = compileAppYaml(options.yamlSource, { env });
   assertProductionCors(ast, env);
+  validateMailTemplates(projectDir, ast.mail);
   let opened = openDb(ast, projectDir);
   await migrateToSchema(opened.db, ast);
   await seedAdminOrLog(ast, opened.db, env);
@@ -91,12 +97,17 @@ export async function createRuntime(options: {
   let hooks = await loadHooks(projectDir, ast.runtime.hooksPath);
   let files = createFiles(ast, projectDir);
   const mailer = createMailer(env, mailFrom(env, ast.appName));
-  const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir, mailer };
+  const mail = createMailApi(opened.db, () => context.ast, projectDir);
+  const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir, mailer, mail };
   subscribeWebhooks(() => context.ast, opened.db, (handler) => bus.subscribe(handler));
-  subscribeAfterHooks(hooks, opened.db, (handler) => bus.subscribe(handler));
+  subscribeMail(() => context.ast, opened.db, projectDir, (handler) => bus.subscribe(handler));
+  subscribeAfterHooks(hooks, opened.db, (handler) => bus.subscribe(handler), mail);
   subscribeAudit(ast, opened.db, (handler) => bus.subscribe(handler));
-  const stopBackups = startBackupScheduler({ ast, db: opened.db, files, projectDir });
-  const stopWebhooks = startWebhookWorker(opened.db, () => context.ast);
+  const workers = options.workers !== false;
+  const noop = () => {};
+  const stopBackups = workers ? startBackupScheduler({ ast, db: opened.db, files, projectDir }) : noop;
+  const stopWebhooks = workers ? startWebhookWorker(opened.db, () => context.ast) : noop;
+  const stopMail = workers ? startMailWorker(opened.db, () => context.ast, () => context.mailer) : noop;
 
   const app = new Hono();
   app.use("*", cors(corsOptions(ast.runtime.corsOrigins)));
@@ -127,6 +138,7 @@ export async function createRuntime(options: {
   app.route("/api/v1/backups", createBackupRoutes());
   app.route("/api/v1/audit", createAuditRoutes());
   app.route("/api/v1/webhooks", createWebhookRoutes());
+  app.route("/api/v1/mail", createMailRoutes());
   app.route("/api/v1", createMetaRoutes());
   app.route("/api/v1", createCrudRouter());
   app.route("/admin", createAdminRoutes());
@@ -143,6 +155,7 @@ export async function createRuntime(options: {
     context,
     async reload(source: string) {
       const next = compileAppYaml(source, { env });
+      validateMailTemplates(projectDir, next.mail);
       await migrateToSchema(context.db, next);
       context.ast = next;
       context.hooks = await loadHooks(projectDir, next.runtime.hooksPath);
@@ -151,15 +164,16 @@ export async function createRuntime(options: {
     async close() {
       stopBackups();
       stopWebhooks();
+      stopMail();
       await opened.close();
     },
   };
 }
 
-export async function loadProject(projectDir: string): Promise<RuntimeHandles> {
+export async function loadProject(projectDir: string, options: { workers?: boolean } = {}): Promise<RuntimeHandles> {
   const yamlPath = join(projectDir, "app.yaml");
   const source = await Bun.file(yamlPath).text();
-  return createRuntime({ projectDir, yamlSource: source });
+  return createRuntime({ projectDir, yamlSource: source, workers: options.workers });
 }
 
 function corsOptions(origins: string[]) {

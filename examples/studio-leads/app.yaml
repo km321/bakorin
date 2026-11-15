@@ -141,3 +141,23 @@ entities:
       create: authenticated
       update: owner(ownerId)
       delete: owner(ownerId)
+
+# Transactional email. Templates live in ./mail. See docs/mail.md.
+mail:
+  - name: lead-assigned
+    entity: leads
+    events: [create]
+    to: "{{ expand.ownerId.email }}"
+    template: new-lead
+    expand: [ownerId]
+
+  - name: lead-won
+    entity: leads
+    events: [update]
+    changed: [status]
+    when:
+      status: won
+    to: "{{ expand.ownerId.email }}"
+    subject: "Won: {{ record.company }}"
+    template: lead-won
+    expand: [ownerId]

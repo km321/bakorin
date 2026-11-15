@@ -39,7 +39,18 @@ export default hooks;
 | `beforeDelete` | Before delete | Nothing |
 | `afterDelete` | After a successful delete | Nothing |
 
-Each hook receives `{ entity, record, before, actor, db }`. `actor` is the signed in user or `null`. `db` is the Kysely database.
+Each hook receives `{ entity, record, before, actor, db, mail }`. `actor` is the signed in user or `null`. `db` is the Kysely database. `mail.send()` queues an email in the mail outbox:
+
+```ts
+await ctx.mail.send({
+  to: String(ctx.record.email),
+  template: "refund",           // mail/refund.html
+  data: { order: ctx.record },
+  idempotencyKey: `refund-${ctx.record.id}`,
+});
+```
+
+Sends are never inline: they get retries, backoff, and a row in the admin delivery log. See [Email](/docs/email/#sending-from-hooks).
 
 ## Custom routes
 
@@ -47,6 +58,6 @@ Each hook receives `{ entity, record, before, actor, db }`. `actor` is the signe
 
 ## The change bus
 
-Every successful create, update, and delete emits one event on an in process change bus with `entity`, `op`, `before`, `after`, and `actor`. Webhooks and `after*` hooks subscribe to it.
+Every successful create, update, and delete emits one event on an in process change bus with `entity`, `op`, `before`, `after`, and `actor`. Webhooks, mail rules, and `after*` hooks subscribe to it.
 
 In `bakorin dev`, saving `hooks.ts` reloads it along with `app.yaml`.

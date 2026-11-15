@@ -1,6 +1,7 @@
 import type { Hono } from "hono";
 import type { Actor } from "../context.ts";
 import type { BakorinDb } from "../db/dialects.ts";
+import type { MailApi } from "../mail/outbox.ts";
 
 export interface HookContext {
   entity: string;
@@ -8,6 +9,11 @@ export interface HookContext {
   before?: Record<string, unknown> | null;
   actor: Actor | null;
   db: BakorinDb;
+  /**
+   * Queue an email. Sends go through the mail outbox (retries, backoff, delivery
+   * log), never inline. Prefer after* hooks so mail only goes out for saved writes.
+   */
+  mail: MailApi;
 }
 
 export interface EntityHooks {

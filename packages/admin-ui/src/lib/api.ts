@@ -363,3 +363,127 @@ export async function listRelated(entity: string): Promise<Array<Record<string, 
   }
   return json.data ?? [];
 }
+
+export interface MailTemplateInfo {
+  name: string;
+  html: boolean;
+  text: boolean;
+  subject: boolean;
+  rules: string[];
+}
+
+export interface MailRuleInfo {
+  id: string;
+  entity: string;
+  events: string[];
+  template: string;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  replyTo: string | null;
+  subject: string | null;
+  when: Array<{ field: string; op: string; value?: unknown; values?: unknown[]; exists?: boolean }>;
+  changed: string[];
+  expand: string[];
+  maxAttempts: number;
+}
+
+export interface MailOverview {
+  driver: string;
+  layout: boolean;
+  templates: MailTemplateInfo[];
+  rules: MailRuleInfo[];
+}
+
+export interface MailPreviewRequest {
+  template?: string;
+  ruleId?: string;
+  entity?: string;
+  recordId?: string;
+}
+
+export interface MailPreview {
+  template: string;
+  ruleId: string | null;
+  entity: string | null;
+  recordId: string | null;
+  sample: boolean;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  html: string;
+  text: string;
+  frameUrl: string;
+}
+
+export type MailDeliveryStatus = "pending" | "sending" | "sent" | "failed";
+
+export interface MailDelivery {
+  id: string;
+  source: string;
+  ruleId: string | null;
+  template: string | null;
+  entity: string | null;
+  recordId: string | null;
+  event: string | null;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  subject: string;
+  status: MailDeliveryStatus;
+  attempts: number;
+  maxAttempts: number;
+  lastError: string | null;
+  nextAttemptAt: string | null;
+  sentAt: string | null;
+  createdAt: string;
+}
+
+async function mailJson<T>(response: Response, fallback: string): Promise<T> {
+  const json = (await response.json().catch(() => ({}))) as { data?: T; error?: { message: string } };
+  if (!response.ok || json.data === undefined) {
+    throw new Error(json.error?.message ?? fallback);
+  }
+  return json.data;
+}
+
+export async function getMailOverview(): Promise<MailOverview> {
+  return mailJson<MailOverview>(await request("/api/v1/mail"), "failed to load mail");
+}
+
+export async function previewMail(body: MailPreviewRequest): Promise<MailPreview> {
+  const response = await request("/api/v1/mail/preview", { method: "POST", body: JSON.stringify(body) });
+  return mailJson<MailPreview>(response, "preview failed");
+}
+
+export async function sendMailTest(body: MailPreviewRequest): Promise<MailDelivery> {
+  const response = await request("/api/v1/mail/test", { method: "POST", body: JSON.stringify(body) });
+  return mailJson<MailDelivery>(response, "test send failed");
+}
+
+export async function listMailDeliveries(params: {
+  limit: number;
+  offset: number;
+  status?: MailDeliveryStatus | "all";
+}): Promise<{ data: MailDelivery[]; meta: { total: number; limit: number; offset: number } }> {
+  const search = new URLSearchParams({ limit: String(params.limit), offset: String(params.offset) });
+  if (params.status && params.status !== "all") {
+    search.set("status", params.status);
+  }
+  const response = await request(`/api/v1/mail/deliveries?${search.toString()}`);
+  const json = (await response.json()) as {
+    data?: MailDelivery[];
+    meta?: { total: number; limit: number; offset: number };
+    error?: { message: string };
+  };
+  if (!response.ok || !json.data || !json.meta) {
+    throw new Error(json.error?.message ?? "failed to list mail deliveries");
+  }
+  return { data: json.data, meta: json.meta };
+}
+
+export async function retryMailDelivery(id: string): Promise<MailDelivery> {
+  const response = await request(`/api/v1/mail/deliveries/${id}/retry`, { method: "POST" });
+  return mailJson<MailDelivery>(response, "retry failed");
+}

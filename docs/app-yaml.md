@@ -61,6 +61,23 @@ webhooks:
 
 Set `runtime.webhooks.retainDays` (default 30) to control how long delivered outbox rows are kept. See [Webhooks](webhooks.md).
 
+## Mail
+
+A top-level `mail:` list declares transactional email. Each rule names an entity, events, recipients (templates like `"{{ record.email }}"`), and a template file in `mail/`:
+
+```yaml
+mail:
+  - name: receipt
+    entity: orders
+    events: [create]
+    to: "{{ record.email }}"
+    subject: "Your receipt for order {{ record.number }}"
+    template: receipt          # mail/receipt.html
+    expand: [customer]
+```
+
+`runtime.mail.retainDays` (default 30) controls how long sent mail rows are kept. Full reference: [Transactional email](mail.md).
+
 ## Fields
 
 Types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`.

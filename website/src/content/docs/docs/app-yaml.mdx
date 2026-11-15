@@ -5,9 +5,9 @@ description: Every key app.yaml accepts, with defaults taken from the schema com
 
 import { Aside } from "@astrojs/starlight/components";
 
-One file describes the app, runtime, auth, entities, policies, and webhooks. Bakorin validates it with a strict schema, so unknown keys are rejected with a readable error.
+One file describes the app, runtime, auth, entities, policies, webhooks, and mail. Bakorin validates it with a strict schema, so unknown keys are rejected with a readable error.
 
-The top level keys are `app`, `runtime`, `auth`, `entities`, and `webhooks`. At least one entity is required.
+The top level keys are `app`, `runtime`, `auth`, `entities`, `webhooks`, and `mail`. At least one entity is required.
 
 ## A complete example
 
@@ -108,6 +108,7 @@ jwt:
 | `backups.retain` | `14` | Snapshots to keep |
 | `backups.destination` | `./data/backups` | Folder or `s3://bucket/prefix` |
 | `webhooks.retainDays` | `30` | How long delivered outbox rows are kept (1 to 3650) |
+| `mail.retainDays` | `30` | How long sent mail rows are kept (1 to 3650) |
 | `cors.origins` | | Allowed origins. `CORS_ORIGINS` overrides it |
 | `hooks` | `./hooks.ts` | Path to the hooks module |
 
@@ -206,6 +207,37 @@ The migrator runs `create index if not exists`. `index: true` on a field still w
 | `timeoutMs` | `10000` | 100 to 120000 |
 
 See [Webhooks](/docs/webhooks/).
+
+## mail
+
+Transactional email rules. Templates live in the project's `mail/` folder.
+
+```yaml
+mail:
+  - name: receipt
+    entity: orders
+    events: [create]
+    to: "{{ record.email }}"
+    subject: "Your receipt for order {{ record.number }}"
+    template: receipt          # mail/receipt.html
+    expand: [customer]
+```
+
+| Key | Default | Notes |
+|---|---|---|
+| `name` | `mail_<n>` | Id shown in the admin |
+| `entity` | | Entity whose writes trigger the rule |
+| `events` | | Any of `create`, `update`, `delete` |
+| `to`, `cc`, `bcc` | | Address or list, each can be a template |
+| `replyTo` | | One address |
+| `subject` | `mail/<template>.subject` | Subject template |
+| `template` | | File name in `mail/` |
+| `when` | | Field conditions: a value, or `in`, `notIn`, `not`, `exists` |
+| `changed` | | Update rules only: fire when one of these fields changed |
+| `expand` | | Relation fields exposed as `expand.<field>` (secret fields stripped) |
+| `maxAttempts` | `8` | 1 to 100 |
+
+See [Email](/docs/email/#transactional-email).
 
 ## Schema changes
 

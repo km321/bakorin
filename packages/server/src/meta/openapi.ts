@@ -265,6 +265,70 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         },
       },
     },
+    "/api/v1/mail": {
+      get: {
+        tags: ["mail"],
+        summary: "List mail rules and templates",
+        description: "Admin only. Mail rules from app.yaml, templates in mail/, and the active driver.",
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: "OK" }, 401: errorResponses[401], 403: errorResponses[403] },
+      },
+    },
+    "/api/v1/mail/preview": {
+      post: {
+        tags: ["mail"],
+        summary: "Render a mail template",
+        description:
+          "Admin only. Body: { template?, ruleId?, entity?, recordId? }. Renders against sample data or a real record (secret fields stripped). Returns subject, html, text, and a short lived frameUrl for a sandboxed preview.",
+        security: [{ bearerAuth: [] }],
+        responses: {
+          200: { description: "OK" },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: errorResponses[404],
+          422: { description: "Template error" },
+        },
+      },
+    },
+    "/api/v1/mail/test": {
+      post: {
+        tags: ["mail"],
+        summary: "Send a test email to yourself",
+        description: "Admin only. Same body as preview. Sends the rendered message to the signed in admin.",
+        security: [{ bearerAuth: [] }],
+        responses: { 201: { description: "Created" }, 401: errorResponses[401], 403: errorResponses[403] },
+      },
+    },
+    "/api/v1/mail/deliveries": {
+      get: {
+        tags: ["mail"],
+        summary: "List mail deliveries",
+        description: "Admin only. Mail outbox rows with status, attempts, and last error.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+          { name: "status", in: "query", schema: { type: "string", enum: ["pending", "sending", "sent", "failed"] } },
+        ],
+        responses: { 200: { description: "OK" }, 401: errorResponses[401], 403: errorResponses[403] },
+      },
+    },
+    "/api/v1/mail/deliveries/{id}/retry": {
+      post: {
+        tags: ["mail"],
+        summary: "Retry a failed email",
+        description: "Admin only. Sent messages are final and are never sent again.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          200: { description: "OK" },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: errorResponses[404],
+          409: { description: "Only failed deliveries can be retried" },
+        },
+      },
+    },
     "/api/v1/webhooks": {
       get: {
         tags: ["webhooks"],

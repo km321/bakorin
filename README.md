@@ -148,6 +148,21 @@ webhooks:
     timeoutMs: 10000
 ```
 
+Transactional email is declared in a top-level `mail:` list. Templates live in the project's `mail/` folder (`mail/receipt.html`, optional `.txt` and `.subject`, shared `_layout.html`), values are HTML escaped, and every message goes through a mail outbox with retries and a delivery log in the admin:
+
+```yaml
+mail:
+  - name: receipt
+    entity: orders
+    events: [create]
+    to: "{{ record.email }}"
+    subject: "Your receipt for order {{ record.number }}"
+    template: receipt          # mail/receipt.html
+    expand: [customer]
+```
+
+See [docs/mail.md](docs/mail.md).
+
 Field types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`.
 
 Field write locks (optional on any field):
@@ -196,7 +211,9 @@ const hooks: BakorinHooks = {
 export default hooks;
 ```
 
-Successful create/update/delete always emit on one in-process change bus (`entity`, `op`, `before`, `after`, `actor`). Webhooks and `after*` hooks subscribe to that bus. Realtime can subscribe later without touching CRUD.
+Every hook context also has `ctx.mail.send({ to, subject, template, data })`, which queues an email in the mail outbox (never inline).
+
+Successful create/update/delete always emit on one in-process change bus (`entity`, `op`, `before`, `after`, `actor`). Webhooks, mail rules, and `after*` hooks subscribe to that bus. Realtime can subscribe later without touching CRUD.
 
 ## Backup, restore, and moving hosts
 
@@ -372,11 +389,11 @@ Point `APP_URL` at that front end so reset, verify, and invite emails use its or
 - File downloads require a short-lived signed URL. Upload size and MIME types are set in `app.yaml`.
 - Admin and docs send CSP, nosniff, frame-ancestors, Referrer-Policy, and HSTS on HTTPS.
 - Audit log: `GET /api/v1/audit` (admin) and the admin Audit page.
-- The admin UI is admins only. After sign in it checks `GET /api/v1/_meta` (403 for non-admins) and shows an **Admins only** screen with Sign out instead of the dashboard. Admin endpoints (`_meta`, backups, audit, webhooks, invites) return 403 to non-admins on the server.
+- The admin UI is admins only. After sign in it checks `GET /api/v1/_meta` (403 for non-admins) and shows an **Admins only** screen with Sign out instead of the dashboard. Admin endpoints (`_meta`, backups, audit, webhooks, mail, invites) return 403 to non-admins on the server.
 
 ## CLI
 
-`init`, `dev` (watches `app.yaml` and `hooks.ts` and swaps the schema without restarting the process), `start`, `typegen`, `schema` (`--format mermaid|json`), `backup`, `restore`, `export`, `import`. The admin Schema page (under Project) draws the same graph.
+`init`, `dev` (watches `app.yaml` and `hooks.ts` and swaps the schema without restarting the process), `start`, `typegen`, `schema` (`--format mermaid|json`), `backup`, `restore`, `export`, `import`, `mail list`, `mail preview <template> [--record <id>]`. The admin Schema page (under Project) draws the same graph.
 
 ## Tests and CI
 

@@ -2,7 +2,7 @@ import { connect as tcpConnect } from "node:net";
 import { connect as tlsConnect } from "node:tls";
 import type { Socket } from "node:net";
 import type { TLSSocket } from "node:tls";
-import type { MailMessage, Mailer } from "./types.ts";
+import { recipientList, type MailMessage, type Mailer } from "./types.ts";
 
 export interface SmtpConfig {
   host: string;
@@ -47,24 +47,35 @@ async function sendSmtp(config: SmtpConfig, message: MailMessage): Promise<void>
       await command(socket, Buffer.from(config.pass).toString("base64"));
     }
     await command(socket, `MAIL FROM:<${extractEmail(config.from)}>`);
-    await command(socket, `RCPT TO:<${extractEmail(message.to)}>`);
+    const to = recipientList(message.to);
+    const cc = message.cc ?? [];
+    for (const address of [...to, ...cc, ...(message.bcc ?? [])]) {
+      await command(socket, `RCPT TO:<${headerSafe(extractEmail(address))}>`);
+    }
     await command(socket, "DATA");
+    const headers = [
+      `From: ${headerSafe(config.from)}`,
+      `To: ${to.map(headerSafe).join(", ")}`,
+      ...(cc.length > 0 ? [`Cc: ${cc.map(headerSafe).join(", ")}`] : []),
+      ...(message.replyTo ? [`Reply-To: ${headerSafe(message.replyTo)}`] : []),
+      `Subject: ${encodeHeader(message.subject)}`,
+      `Date: ${new Date().toUTCString()}`,
+      `Message-ID: <${messageIdLocal(message.idempotencyKey)}@${domainOf(config.from)}>`,
+    ];
     const payload = [
-      `From: ${config.from}`,
-      `To: ${message.to}`,
-      `Subject: ${message.subject}`,
+      ...headers,
       "MIME-Version: 1.0",
       'Content-Type: multipart/alternative; boundary="bakorin"',
       "",
       "--bakorin",
       "Content-Type: text/plain; charset=utf-8",
       "",
-      message.text,
+      dotStuff(message.text),
       "",
       "--bakorin",
       "Content-Type: text/html; charset=utf-8",
       "",
-      message.html,
+      dotStuff(message.html),
       "",
       "--bakorin--",
       ".",
@@ -74,6 +85,35 @@ async function sendSmtp(config: SmtpConfig, message: MailMessage): Promise<void>
   } finally {
     socket.end();
   }
+}
+
+/** Strips CR and LF so a value can never start a new header or SMTP command. */
+export function headerSafe(value: string): string {
+  return value.replace(/[\r\n]+/g, " ").trim();
+}
+
+function encodeHeader(value: string): string {
+  const safe = headerSafe(value);
+  // eslint-disable-next-line no-control-regex
+  if (/^[\x20-\x7e]*$/.test(safe)) {
+    return safe;
+  }
+  return `=?UTF-8?B?${Buffer.from(safe, "utf8").toString("base64")}?=`;
+}
+
+function messageIdLocal(key: string | undefined): string {
+  const base = key ? key.replace(/[^A-Za-z0-9._-]/g, "") : crypto.randomUUID();
+  return base || crypto.randomUUID();
+}
+
+function domainOf(from: string): string {
+  const email = extractEmail(from);
+  const domain = email.split("@")[1] ?? "bakorin.local";
+  return domain.replace(/[^A-Za-z0-9.-]/g, "") || "bakorin.local";
+}
+
+function dotStuff(body: string): string {
+  return body.replace(/\r?\n/g, "\r\n").replace(/^\./gm, "..");
 }
 
 function openSocket(host: string, port: number, secure: boolean): Promise<SmtpSocket> {

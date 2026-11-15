@@ -1,4 +1,4 @@
-import type { MailMessage, Mailer } from "./types.ts";
+import { recipientList, type MailMessage, type Mailer } from "./types.ts";
 
 const mailbox: MailMessage[] = [];
 
@@ -16,7 +16,7 @@ export function createLogMailer(): Mailer {
     async send(message: MailMessage) {
       mailbox.push(message);
       const link = message.meta?.link ?? "";
-      console.log(`[bakorin:mail] to=${message.to} subject=${message.subject}${link ? ` link=${link}` : ""}`);
+      console.log(`[bakorin:mail] to=${recipientList(message.to).join(",")} subject=${message.subject}${link ? ` link=${link}` : ""}`);
     },
   };
 }

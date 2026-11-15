@@ -78,7 +78,7 @@ async function runBefore(
   if (!fn) {
     return record;
   }
-  const result = await fn({ entity, record, before, actor, db: ctx.db });
+  const result = await fn({ entity, record, before, actor, db: ctx.db, mail: ctx.mail });
   return hook === "beforeDelete" ? record : ((result as Record<string, unknown> | undefined) ?? record);
 }
 

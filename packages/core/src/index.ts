@@ -1,4 +1,6 @@
 export {
+  MAIL_DEFAULT_MAX_ATTEMPTS,
+  MAIL_DEFAULT_RETAIN_DAYS,
   SCHEMA_AST_VERSION,
   WEBHOOK_DEFAULT_MAX_ATTEMPTS,
   WEBHOOK_DEFAULT_RETAIN_DAYS,
@@ -17,6 +19,9 @@ export type {
   FieldWritable,
   FileDriver,
   FilesRuntimeAST,
+  MailConditionAST,
+  MailRuleAST,
+  MailScalar,
   OnDelete,
   PolicyAST,
   PolicyKind,

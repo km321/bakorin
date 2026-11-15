@@ -65,6 +65,15 @@ export function IconWebhook() {
   );
 }
 
+export function IconMail() {
+  return (
+    <Svg>
+      <rect x="2.5" y="3.75" width="11" height="8.5" rx="1.5" stroke="currentColor" stroke-width="1.25" />
+      <path d="m3 4.75 5 3.75 5-3.75" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round" />
+    </Svg>
+  );
+}
+
 export function IconMenu() {
   return (
     <Svg>

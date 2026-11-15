@@ -9,6 +9,7 @@ Keep each client in one directory you can zip and move.
 client/
   app.yaml          schema, policies, runtime
   hooks.ts          optional TypeScript escape hatch
+  mail/             optional email templates (receipt.html, _layout.html)
   .env              JWT_SECRET and DATABASE_URL
   data/app.db       SQLite (local)
   data/uploads/     local files

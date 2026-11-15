@@ -12,6 +12,7 @@ export const LOCKOUT_TABLE = "_bakorin_lockouts";
 export const LEASE_TABLE = "_bakorin_leases";
 export const AUDIT_TABLE = "_bakorin_audit";
 export const WEBHOOK_OUTBOX_TABLE = "_bakorin_webhook_outbox";
+export const MAIL_OUTBOX_TABLE = "_bakorin_mail_outbox";
 
 export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): Promise<void> {
   const text = "text";
@@ -155,6 +156,41 @@ export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): P
     .execute(db);
   await sql
     .raw(`create index if not exists _bakorin_webhook_outbox_due_idx on ${WEBHOOK_OUTBOX_TABLE} (status, next_attempt_at)`)
+    .execute(db);
+  await sql
+    .raw(
+      `create table if not exists ${MAIL_OUTBOX_TABLE} (
+        id ${text} primary key,
+        idempotency_key ${text} not null,
+        source ${text} not null,
+        rule_id ${text},
+        template ${text},
+        entity ${text},
+        record_id ${text},
+        event ${text},
+        to_addrs ${text} not null,
+        cc_addrs ${text} not null,
+        bcc_addrs ${text} not null,
+        reply_to ${text},
+        subject ${text} not null,
+        html ${text} not null,
+        body_text ${text} not null,
+        attempts ${int} not null,
+        max_attempts ${int} not null,
+        status ${text} not null default 'pending',
+        last_error ${text},
+        locked_until ${text},
+        next_attempt_at ${text} not null,
+        sent_at ${text},
+        created_at ${text} not null
+      )`,
+    )
+    .execute(db);
+  await sql
+    .raw(`create unique index if not exists _bakorin_mail_outbox_key_idx on ${MAIL_OUTBOX_TABLE} (idempotency_key)`)
+    .execute(db);
+  await sql
+    .raw(`create index if not exists _bakorin_mail_outbox_due_idx on ${MAIL_OUTBOX_TABLE} (status, next_attempt_at)`)
     .execute(db);
 }
 

@@ -34,6 +34,7 @@ The real enforcement is on the server. These endpoints return 401 when signed ou
 - `GET` and `POST /api/v1/backups`
 - `GET /api/v1/audit`
 - `GET /api/v1/webhooks`, `GET /api/v1/webhooks/deliveries`, and the retry and test routes
+- `GET /api/v1/mail`, `POST /api/v1/mail/preview`, `POST /api/v1/mail/test`, `GET /api/v1/mail/deliveries`, and the retry route
 - `POST /api/v1/auth/invites`
 
 Regular users still use your front end and the entity API, where your [policies](/docs/permissions/) decide what they can read and write.
@@ -61,6 +62,7 @@ Each entity appears under **Data** in the sidebar.
 | **Backups** | Lists snapshots and takes a live backup (`POST /api/v1/backups`). Restore stays CLI only |
 | **Schema** | Draws your entities and relations. See [Schema visualizer](/docs/schema/) |
 | **Webhooks** | Lists configured webhooks and deliveries, filters by status, retries failed rows, sends a test event |
+| **Mail** | Lists mail rules and templates, previews a template against sample data or a real record in a sandboxed frame, sends a test to you, and shows the delivery log with Retry. See [Email](/docs/email/#admin-mail-page) |
 | **Audit** | The append only audit log: signups, logins, failed logins, resets, invites, role changes, admin writes, backups |
 | **API docs** | Opens the bundled Swagger UI at `/docs` |
 

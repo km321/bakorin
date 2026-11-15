@@ -75,3 +75,5 @@ Do not bake the key into the image.
 ## SMTP
 
 `--mail smtp` writes `MAIL_DRIVER=smtp` plus `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `SMTP_SECURE`. Use that when you are not on Resend.
+
+Mail rules from `app.yaml` and `ctx.mail.send()` in hooks use the same driver and `MAIL_FROM`. See [Transactional email](mail.md).

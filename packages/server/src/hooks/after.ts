@@ -1,11 +1,13 @@
 import type { ChangeEvent } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
+import type { MailApi } from "../mail/outbox.ts";
 import type { BakorinHooks } from "./types.ts";
 
 export function subscribeAfterHooks(
   hooks: BakorinHooks,
   db: BakorinDb,
   subscribe: (handler: (event: ChangeEvent) => void) => void,
+  mail: MailApi,
 ): void {
   subscribe((event) => {
     const entityHooks = hooks.entities?.[event.entity];
@@ -19,6 +21,7 @@ export function subscribeAfterHooks(
       before: event.before,
       actor,
       db,
+      mail,
     };
     void (async () => {
       switch (event.op) {

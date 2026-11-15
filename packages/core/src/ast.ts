@@ -77,6 +77,35 @@ export interface WebhookAST {
   timeoutMs: number;
 }
 
+export const MAIL_DEFAULT_MAX_ATTEMPTS = 8;
+export const MAIL_DEFAULT_RETAIN_DAYS = 30;
+
+export type MailScalar = string | number | boolean | null;
+
+export interface MailConditionAST {
+  field: string;
+  op: "equals" | "not" | "in" | "notIn" | "exists";
+  value?: MailScalar;
+  values?: MailScalar[];
+  exists?: boolean;
+}
+
+export interface MailRuleAST {
+  id: string;
+  entity: string;
+  events: Array<"create" | "update" | "delete">;
+  to: string[];
+  cc: string[];
+  bcc: string[];
+  replyTo?: string;
+  subject?: string;
+  template: string;
+  when: MailConditionAST[];
+  changed: string[];
+  expand: string[];
+  maxAttempts: number;
+}
+
 export interface FilesRuntimeAST {
   driver: FileDriver;
   path: string;
@@ -114,6 +143,7 @@ export interface RuntimeAST {
   hooksPath?: string;
   appUrl: string;
   webhooksRetainDays: number;
+  mailRetainDays: number;
 }
 
 export interface AuthAST {
@@ -136,6 +166,7 @@ export interface SchemaAST {
   order: string[];
   auth: AuthAST;
   webhooks: WebhookAST[];
+  mail: MailRuleAST[];
 }
 
 export type ChangeOp = "create" | "update" | "delete";
