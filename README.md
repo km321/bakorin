@@ -231,7 +231,7 @@ To move SQLite to Postgres: `bakorin export ./portable` on the old host, set `ru
 
 Scheduled backups: set `runtime.backups.interval` (for example `24h`) and `retain`. Destination may be a local folder or `s3://bucket/prefix` (R2 works with `files.endpoint`). S3/R2 destinations list objects under that prefix and delete older stamps so `retain` is honored.
 
-The live OpenAPI 3 document is `GET /api/v1/openapi.json`. Interactive docs (Swagger UI, bundled, no CDN) are at `GET /docs` and `GET /api/v1/docs`. Try-it-out uses the admin session token from `localStorage` (`bakorin_access`) when present, or a pasted bearer token. Admins can also open docs from the admin nav.
+The live OpenAPI 3 document is `GET /api/v1/openapi.json`. Interactive docs (Swagger UI, bundled, no CDN) are at `GET /docs` and `GET /api/v1/docs`. Try-it-out uses the admin session token from `localStorage` (`bakorin_access`) when present, or a pasted bearer token. Admins can also open docs from the admin nav. The docs page follows the admin's light or dark theme (same System, Light, Dark setting) and both themes meet WCAG 2.2 AA contrast.
 
 Admins can take a live backup from the admin **Backups** page (`POST /api/v1/backups`). That writes the same consistent SQLite snapshot plus portable export as `bakorin backup`. Restore stays CLI-only.
 
