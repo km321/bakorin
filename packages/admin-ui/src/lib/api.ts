@@ -7,17 +7,27 @@ export interface MetaEntity {
   plural: string;
   display: string;
   description?: string;
+  auth?: boolean;
+  indexes?: string[][];
+  policies?: Record<string, string[]>;
   fields: Array<{
     name: string;
     type: string;
     required: boolean;
+    unique?: boolean;
     secret: boolean;
     writable?: "any" | "admin" | "none";
     enumValues?: string[];
-    relation?: { to: string; display?: string };
+    relation?: { to: string; display?: string; onDelete?: "restrict" | "cascade" | "set_null" };
     defaultValue?: unknown;
     description?: string;
   }>;
+}
+
+export interface MetaWebhook {
+  id: string;
+  entity: string;
+  events: string[];
 }
 
 export interface MetaResponse {
@@ -31,6 +41,9 @@ export interface MetaResponse {
     requireVerifiedEmail: boolean;
     roles?: string[];
   };
+  order?: string[];
+  layers?: string[][];
+  webhooks?: MetaWebhook[];
   entities: MetaEntity[];
 }
 

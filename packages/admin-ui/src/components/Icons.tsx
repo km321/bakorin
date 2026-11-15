@@ -44,6 +44,16 @@ export function IconDocs() {
   );
 }
 
+export function IconSchema() {
+  return (
+    <Svg>
+      <rect x="2.5" y="2.5" width="5.2" height="4.5" rx="0.8" stroke="currentColor" stroke-width="1.25" />
+      <rect x="8.3" y="9" width="5.2" height="4.5" rx="0.8" stroke="currentColor" stroke-width="1.25" />
+      <path d="M5.1 7v2.2h3.2" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
+    </Svg>
+  );
+}
+
 export function IconWebhook() {
   return (
     <Svg>

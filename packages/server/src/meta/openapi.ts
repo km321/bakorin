@@ -1,4 +1,4 @@
-import type { EntityAST, FieldAST, SchemaAST } from "@bakorin/core";
+import { buildSchemaGraph, type EntityAST, type FieldAST, type SchemaAST } from "@bakorin/core";
 
 function jsonSchemaForField(field: FieldAST, write: boolean): Record<string, unknown> {
   let schema: Record<string, unknown>;
@@ -979,38 +979,46 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
 }
 
 export function metaPayload(ast: SchemaAST): Record<string, unknown> {
+  const graph = buildSchemaGraph(ast);
   return {
     app: { name: ast.appName, version: ast.appVersion },
     auth: {
       ...ast.auth,
       roles: ast.entityMap[ast.auth.entity]?.fieldMap[ast.auth.roleField]?.enumValues ?? [],
     },
-    entities: ast.entities.map((entity) => ({
-      name: entity.name,
-      label: entity.label,
-      plural: entity.plural,
-      display: entity.display,
-      description: entity.description,
-      auth: entity.auth,
-      fields: entity.fields.map((field) => ({
-        name: field.name,
-        type: field.type,
-        required: field.required,
-        unique: field.unique,
-        secret: field.secret,
-        writable: field.writable,
-        description: field.description,
-        enumValues: field.enumValues,
-        relation: field.relation
-          ? {
-              to: field.relation.to,
-              onDelete: field.relation.onDelete,
-              display: ast.entityMap[field.relation.to]?.display ?? "id",
-            }
-          : undefined,
-        defaultValue: field.defaultValue ?? null,
-      })),
-      policies: entity.policies,
-    })),
+    order: graph.order,
+    layers: graph.layers,
+    webhooks: graph.webhooks,
+    entities: ast.entities.map((entity) => {
+      const graphed = graph.entities.find((item) => item.name === entity.name);
+      return {
+        name: entity.name,
+        label: entity.label,
+        plural: entity.plural,
+        display: entity.display,
+        description: entity.description,
+        auth: entity.auth,
+        indexes: entity.indexes,
+        fields: entity.fields.map((field) => ({
+          name: field.name,
+          type: field.type,
+          required: field.required,
+          unique: field.unique,
+          secret: field.secret,
+          writable: field.writable,
+          description: field.description,
+          enumValues: field.enumValues,
+          relation: field.relation
+            ? {
+                to: field.relation.to,
+                onDelete: field.relation.onDelete,
+                display: ast.entityMap[field.relation.to]?.display ?? "id",
+              }
+            : undefined,
+          defaultValue: field.defaultValue ?? null,
+        })),
+        policies: graphed?.policies ?? entity.policies,
+      };
+    }),
   };
 }

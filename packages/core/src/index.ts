@@ -34,6 +34,14 @@ export { assertIdent, isIdent, quoteChecked, quoteIdent } from "./ident.ts";
 export { interpolateEnv } from "./interpolate.ts";
 export { describePolicy, parsePolicies, parsePolicy, policyRequiresAuth, invalidPolicyMessage } from "./policies.ts";
 export { generateTypes } from "./typegen.ts";
-export { topologicalOrder } from "./topo.ts";
+export { topologicalOrder, topologicalLayers } from "./topo.ts";
+export { buildSchemaGraph, schemaToJson, schemaToMermaid, webhooksForEntity } from "./schema-graph.ts";
+export type {
+  SchemaGraph,
+  SchemaGraphEntity,
+  SchemaGraphField,
+  SchemaGraphRelation,
+  SchemaGraphWebhook,
+} from "./schema-graph.ts";
 export { appYamlSchema, FIELD_TYPES, APP_YAML_TOP_LEVEL_KEYS } from "./yaml-schema.ts";
 export type { AppYaml } from "./yaml-schema.ts";

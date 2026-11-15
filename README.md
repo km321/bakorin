@@ -375,7 +375,7 @@ Point `APP_URL` at that front end so reset, verify, and invite emails use its or
 
 ## CLI
 
-`init`, `dev` (watches `app.yaml` and `hooks.ts` and swaps the schema without restarting the process), `start`, `typegen`, `backup`, `restore`, `export`, `import`.
+`init`, `dev` (watches `app.yaml` and `hooks.ts` and swaps the schema without restarting the process), `start`, `typegen`, `schema` (`--format mermaid|json`), `backup`, `restore`, `export`, `import`. The admin Schema page (under Project) draws the same graph.
 
 ## Tests and CI
 

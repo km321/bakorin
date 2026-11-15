@@ -967,6 +967,246 @@ textarea:focus {
   color: var(--danger);
 }
 
+.schema-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.schema-canvas {
+  position: relative;
+  height: calc(100vh - 190px);
+  min-height: 420px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  cursor: grab;
+  touch-action: none;
+}
+
+.schema-canvas:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.schema-canvas:active {
+  cursor: grabbing;
+}
+
+.schema-world {
+  position: absolute;
+  transform-origin: 0 0;
+}
+
+.schema-edges {
+  position: absolute;
+  inset: 0;
+  color: var(--accent);
+  pointer-events: none;
+}
+
+.schema-edges text {
+  font-size: 10px;
+  fill: var(--muted);
+}
+
+.schema-card {
+  position: absolute;
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+  text-align: left;
+  color: inherit;
+}
+
+.schema-card:hover {
+  border-color: var(--accent);
+}
+
+.schema-card.selected {
+  outline: 2px solid var(--accent);
+  outline-offset: 0;
+}
+
+.schema-card header {
+  padding: 10px 12px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--bg-table-head);
+}
+
+.schema-card header strong {
+  display: block;
+  font-size: var(--text-sm);
+}
+
+.schema-card header span {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.schema-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 6px 0 8px;
+}
+
+.schema-card li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 12px;
+  font-size: 12px;
+}
+
+.schema-card li.rel {
+  background: var(--accent-soft);
+}
+
+.schema-card li.secret em {
+  font-style: normal;
+  letter-spacing: 0.02em;
+}
+
+.schema-card li em {
+  color: var(--muted);
+  font-style: normal;
+  font-size: 11px;
+}
+
+.schema-card abbr {
+  margin-left: 4px;
+  text-decoration: none;
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 10px;
+}
+
+.schema-list {
+  display: none;
+  list-style: none;
+  margin: 0 0 var(--space-4);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.schema-empty {
+  margin: 0 0 var(--space-3);
+}
+
+.schema-list button {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-raised);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  color: inherit;
+}
+
+.schema-list li:last-child button {
+  border-bottom: 0;
+}
+
+.schema-list button.active,
+.schema-list button:focus-visible {
+  background: var(--accent-soft);
+}
+
+.schema-panel {
+  position: fixed;
+  top: 56px;
+  right: 0;
+  width: min(380px, 100%);
+  height: calc(100vh - 56px);
+  background: var(--bg-raised);
+  border-left: 1px solid var(--line);
+  box-shadow: var(--shadow);
+  padding: var(--space-5);
+  overflow: auto;
+  z-index: 28;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.schema-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+}
+
+.schema-panel h2,
+.schema-panel h3 {
+  margin: 0;
+}
+
+.schema-panel h3 {
+  font-size: var(--text-sm);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.schema-panel p {
+  margin: 0;
+  color: var(--text);
+}
+
+.schema-dl {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.schema-dl div {
+  display: grid;
+  grid-template-columns: 72px 1fr;
+  gap: 8px;
+}
+
+.schema-dl dt {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+}
+
+.schema-dl dd {
+  margin: 0;
+}
+
+.schema-indexes,
+.schema-fields {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.schema-fields strong,
+.schema-fields span {
+  display: block;
+}
+
+.schema-fields p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
 @media (max-width: 800px) {
   .app-shell {
     grid-template-columns: 1fr;
@@ -1003,5 +1243,20 @@ textarea:focus {
   .hook-card {
     flex-direction: column;
     align-items: flex-start;
+  }
+  .schema-canvas,
+  .schema-zoom {
+    display: none;
+  }
+  .schema-list {
+    display: block;
+  }
+  .schema-panel {
+    top: auto;
+    bottom: 0;
+    height: min(70vh, 520px);
+    width: 100%;
+    border-left: 0;
+    border-top: 1px solid var(--line);
   }
 }

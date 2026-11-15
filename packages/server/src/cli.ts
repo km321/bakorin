@@ -1,7 +1,16 @@
 #!/usr/bin/env bun
 import { mkdir, watch } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { DEV_JWT_SECRET, formatAppYamlError, generateTypes, isAppYamlValidationError } from "@bakorin/core";
+import {
+  buildSchemaGraph,
+  compileAppYaml,
+  DEV_JWT_SECRET,
+  formatAppYamlError,
+  generateTypes,
+  isAppYamlValidationError,
+  schemaToJson,
+  schemaToMermaid,
+} from "@bakorin/core";
 import { loadProject } from "./app.ts";
 import { createDebounced } from "./dev-watch.ts";
 import { applyProjectEnv } from "./env-files.ts";
@@ -166,6 +175,35 @@ async function serve(mode: "dev" | "start"): Promise<void> {
   });
 }
 
+async function cmdSchema(): Promise<void> {
+  const dir = projectDir();
+  await applyProjectEnv(dir);
+  const yamlPath = join(dir, "app.yaml");
+  if (!(await Bun.file(yamlPath).exists())) {
+    console.error(`no app.yaml in ${dir}`);
+    process.exit(1);
+  }
+  const format = (arg("--format", "mermaid") ?? "mermaid").toLowerCase();
+  try {
+    const ast = compileAppYaml(await Bun.file(yamlPath).text());
+    const graph = buildSchemaGraph(ast);
+    switch (format) {
+      case "mermaid":
+        process.stdout.write(schemaToMermaid(graph));
+        break;
+      case "json":
+        process.stdout.write(schemaToJson(graph));
+        break;
+      default:
+        console.error("usage: bakorin schema --format mermaid|json");
+        process.exit(1);
+    }
+  } catch (error) {
+    reportValidationError(error, "startup");
+    process.exit(1);
+  }
+}
+
 async function cmdTypegen(): Promise<void> {
   const dir = projectDir();
   const runtime = await loadOrExit(dir);
@@ -252,6 +290,7 @@ Commands:
   dev                 Run with hot reload of app.yaml / hooks.ts
   start               Run without watching
   typegen [-o file]   Write bakorin.gen.ts
+  schema [--format mermaid|json]  Print the schema as Mermaid or JSON
   backup [dir]        Consistent snapshot (SQLite VACUUM INTO) plus portable export
   restore <dir>       Restore a snapshot or portable archive
   export [dir]        Portable NDJSON archive for moving SQLite <-> Postgres
@@ -274,6 +313,9 @@ switch (command) {
     break;
   case "typegen":
     await cmdTypegen();
+    break;
+  case "schema":
+    await cmdSchema();
     break;
   case "backup":
     await cmdBackup();

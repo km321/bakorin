@@ -14,15 +14,16 @@ import { Drawer } from "../components/Drawer.tsx";
 import { InviteUser } from "../components/InviteUser.tsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
 import { ThemeToggle } from "../components/ThemeToggle.tsx";
-import { IconAudit, IconBackup, IconDocs, IconMenu, IconSearch, IconWebhook } from "../components/Icons.tsx";
+import { IconAudit, IconBackup, IconDocs, IconMenu, IconSchema, IconSearch, IconWebhook } from "../components/Icons.tsx";
 import { fieldLabel, relatedLabel } from "../lib/label.ts";
 import { emptyLabel, formatDate, formatDateTime, initials } from "../lib/format.ts";
 import { pushToast } from "../lib/toast.ts";
 import { Backups } from "./Backups.tsx";
 import { Audit } from "./Audit.tsx";
 import { Webhooks } from "./Webhooks.tsx";
+import { Schema } from "./Schema.tsx";
 
-type AdminPage = "records" | "backups" | "audit" | "webhooks";
+type AdminPage = "records" | "backups" | "audit" | "webhooks" | "schema";
 
 function pageFromHash(hash: string): AdminPage {
   switch (hash) {
@@ -32,6 +33,8 @@ function pageFromHash(hash: string): AdminPage {
       return "audit";
     case "#webhooks":
       return "webhooks";
+    case "#schema":
+      return "schema";
     default:
       return "records";
   }
@@ -138,6 +141,32 @@ export function AppShell({ onLogout }: Props) {
   }, []);
 
   useEffect(() => {
+    let cancelled = false;
+    async function pollMeta() {
+      try {
+        const next = await getMeta();
+        if (!cancelled) {
+          setMeta((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
+        }
+      } catch {
+        // keep the last good schema
+      }
+    }
+    const timer = window.setInterval(() => void pollMeta(), 2500);
+    function onFocus() {
+      void pollMeta();
+    }
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!entityName || page !== "records") {
       return;
     }
@@ -234,6 +263,21 @@ export function AppShell({ onLogout }: Props) {
             Backups
           </button>
           <button
+            data-nav="schema"
+            class={page === "schema" ? "active" : ""}
+            aria-current={page === "schema" ? "page" : undefined}
+            onClick={() => {
+              setPage("schema");
+              location.hash = "schema";
+              setNavOpen(false);
+            }}
+          >
+            <span class="nav-icon">
+              <IconSchema />
+            </span>
+            Schema
+          </button>
+          <button
             data-nav="webhooks"
             class={page === "webhooks" ? "active" : ""}
             aria-current={page === "webhooks" ? "page" : undefined}
@@ -321,7 +365,7 @@ export function AppShell({ onLogout }: Props) {
       </header>
       <main class="main">
         {page !== "records" ? (
-          <ProjectScreen page={page} />
+          <ProjectScreen page={page} meta={meta} onOpenEntity={openEntity} />
         ) : (
           <>
             <div class="toolbar">
@@ -500,12 +544,22 @@ export function AppShell({ onLogout }: Props) {
   );
 }
 
-function ProjectScreen({ page }: { page: Exclude<AdminPage, "records"> }) {
+function ProjectScreen({
+  page,
+  meta,
+  onOpenEntity,
+}: {
+  page: Exclude<AdminPage, "records">;
+  meta: MetaResponse | null;
+  onOpenEntity: (name: string) => void;
+}) {
   switch (page) {
     case "backups":
       return <Backups />;
     case "webhooks":
       return <Webhooks />;
+    case "schema":
+      return <Schema initial={meta} onOpenEntity={onOpenEntity} />;
     case "audit":
       return <Audit />;
     default: {

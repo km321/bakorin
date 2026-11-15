@@ -1,7 +1,7 @@
 import { SchemaError } from "./errors.ts";
 import type { EntityAST } from "./ast.ts";
 
-export function topologicalOrder(entities: EntityAST[]): string[] {
+export function topologicalLayers(entities: EntityAST[]): string[][] {
   const names = new Set(entities.map((entity) => entity.name));
   const incoming = new Map<string, Set<string>>();
   for (const entity of entities) {
@@ -20,7 +20,7 @@ export function topologicalOrder(entities: EntityAST[]): string[] {
     }
   }
 
-  const ordered: string[] = [];
+  const layers: string[][] = [];
   const remaining = new Set(names);
   while (remaining.size > 0) {
     const ready = [...remaining].filter((name) => (incoming.get(name)?.size ?? 0) === 0);
@@ -28,13 +28,17 @@ export function topologicalOrder(entities: EntityAST[]): string[] {
       throw new SchemaError("circular relation detected among entities", { remaining: [...remaining] });
     }
     ready.sort();
+    layers.push(ready);
     for (const name of ready) {
-      ordered.push(name);
       remaining.delete(name);
       for (const deps of incoming.values()) {
         deps.delete(name);
       }
     }
   }
-  return ordered;
+  return layers;
+}
+
+export function topologicalOrder(entities: EntityAST[]): string[] {
+  return topologicalLayers(entities).flat();
 }
