@@ -76,10 +76,25 @@ function entityWriteSchema(entity: EntityAST, ast: SchemaAST): Record<string, un
     if (field.name === "id" || field.name === "createdAt" || field.name === "updatedAt") {
       continue;
     }
-    properties[field.name] = jsonSchemaForField(field, true);
+    const fieldSchema = jsonSchemaForField(field, true);
+    if (field.writable === "admin") {
+      const extra = "Admin only. Non-admin writes that include this field return 403.";
+      fieldSchema.description = fieldSchema.description ? `${fieldSchema.description} ${extra}` : extra;
+    }
+    if (field.writable === "none") {
+      continue;
+    }
+    properties[field.name] = fieldSchema;
     if (field.required && field.defaultValue === undefined && field.name !== ast.auth.passwordField) {
       required.push(field.name);
     }
+  }
+  if (entity.name === ast.auth.entity) {
+    properties.currentPassword = {
+      type: "string",
+      format: "password",
+      description: "Required when a non-admin changes their own password via CRUD. Admins may omit it. Password changes and role changes revoke refresh tokens.",
+    };
   }
   const schema: Record<string, unknown> = { type: "object", properties, required };
   if (entity.description) {
@@ -268,6 +283,8 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
       post: {
         tags: ["auth"],
         summary: "Create an account",
+        description:
+          "Public signup. The auth role field is ignored and forced to the non-admin default. Prefer this over generic CRUD create on the auth entity. Sends a verification email. If auth.requireVerifiedEmail is true, no session tokens are returned until the address is verified.",
         security: [],
         requestBody: {
           required: true,
@@ -309,6 +326,7 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         responses: {
           200: { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/AuthSession" } } } },
           401: errorResponses[401],
+          403: errorResponses[403],
           429: errorResponses[429],
         },
       },
@@ -383,6 +401,178 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         },
       },
     },
+    "/api/v1/auth/forgot-password": {
+      post: {
+        tags: ["auth"],
+        summary: "Request a password reset",
+        description: "Always returns 200. Does not reveal whether the account exists. Rate limited. Sends a one-hour single-use link.",
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { type: "object", properties: { email: { type: "string", format: "email" } }, required: ["email"] },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: { type: "object", properties: { data: { type: "object", properties: { ok: { type: "boolean" } } } } },
+              },
+            },
+          },
+          429: errorResponses[429],
+        },
+      },
+    },
+    "/api/v1/auth/reset-password": {
+      post: {
+        tags: ["auth"],
+        summary: "Reset password with a token",
+        description: "Consumes a hashed one-hour token and revokes every refresh token for that user.",
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["token", "password"],
+                properties: { token: { type: "string" }, password: { type: "string", format: "password", minLength: 8 } },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: { type: "object", properties: { data: { type: "object", properties: { ok: { type: "boolean" } } } } },
+              },
+            },
+          },
+          400: errorResponses[400],
+        },
+      },
+    },
+    "/api/v1/auth/verify-email": {
+      post: {
+        tags: ["auth"],
+        summary: "Verify email with a token",
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { type: "object", required: ["token"], properties: { token: { type: "string" } } },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: { type: "object", properties: { data: { type: "object", properties: { ok: { type: "boolean" } } } } },
+              },
+            },
+          },
+          400: errorResponses[400],
+        },
+      },
+    },
+    "/api/v1/auth/resend-verification": {
+      post: {
+        tags: ["auth"],
+        summary: "Resend a verification email",
+        description: "Signed-in users resend for themselves. Admins may pass userId. Passing only email does not reveal whether the account exists.",
+        requestBody: {
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                properties: { userId: { type: "string" }, email: { type: "string", format: "email" } },
+              },
+            },
+          },
+        },
+        responses: {
+          200: {
+            description: "OK",
+            content: {
+              "application/json": {
+                schema: { type: "object", properties: { data: { type: "object", properties: { ok: { type: "boolean" } } } } },
+              },
+            },
+          },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          429: errorResponses[429],
+        },
+      },
+    },
+    "/api/v1/auth/invites": {
+      post: {
+        tags: ["auth"],
+        summary: "Invite a user",
+        description: "Admin only. Creates the account with the given role and emails a link to set a password.",
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["email"],
+                properties: {
+                  email: { type: "string", format: "email" },
+                  role: { type: "string" },
+                  name: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          201: { description: "Created", content: { "application/json": { schema: { $ref: "#/components/schemas/AuthSession" } } } },
+          400: errorResponses[400],
+          401: errorResponses[401],
+          403: errorResponses[403],
+          409: errorResponses[409],
+        },
+      },
+    },
+    "/api/v1/auth/accept-invite": {
+      post: {
+        tags: ["auth"],
+        summary: "Accept an invite and set a password",
+        security: [],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: {
+                type: "object",
+                required: ["token", "password"],
+                properties: {
+                  token: { type: "string" },
+                  password: { type: "string", format: "password", minLength: 8 },
+                  name: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          200: { description: "OK", content: { "application/json": { schema: { $ref: "#/components/schemas/AuthSession" } } } },
+          400: errorResponses[400],
+        },
+      },
+    },
     "/api/v1/files": {
       post: {
         tags: ["files"],
@@ -454,8 +644,9 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
           accessToken: { type: "string" },
           refreshToken: { type: "string" },
           expiresIn: { type: "integer" },
+          needsVerification: { type: "boolean" },
         },
-        required: ["accessToken", "refreshToken", "expiresIn"],
+        required: ["user"],
       },
     },
   };
@@ -628,7 +819,10 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
 export function metaPayload(ast: SchemaAST): Record<string, unknown> {
   return {
     app: { name: ast.appName, version: ast.appVersion },
-    auth: ast.auth,
+    auth: {
+      ...ast.auth,
+      roles: ast.entityMap[ast.auth.entity]?.fieldMap[ast.auth.roleField]?.enumValues ?? [],
+    },
     entities: ast.entities.map((entity) => ({
       name: entity.name,
       label: entity.label,
@@ -641,6 +835,7 @@ export function metaPayload(ast: SchemaAST): Record<string, unknown> {
         required: field.required,
         unique: field.unique,
         secret: field.secret,
+        writable: field.writable,
         enumValues: field.enumValues,
         relation: field.relation
           ? {

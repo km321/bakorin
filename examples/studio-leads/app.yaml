@@ -30,6 +30,7 @@ auth:
   password: password
   role: role
   adminRole: admin
+  requireVerifiedEmail: false
 
 entities:
   users:
@@ -56,10 +57,11 @@ entities:
         type: enum
         values: [user, admin]
         default: user
-        description: admin can read every record and run backups.
+        writable: admin
+        description: admin can read every record and run backups. Only admins may set this field.
     policies:
       read: authenticated
-      create: public
+      create: admin
       update: owner(id)
       delete: admin
 

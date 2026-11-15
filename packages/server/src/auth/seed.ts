@@ -53,6 +53,10 @@ export async function seedAdminIfRequested(
       insert[field.name] = encodeValue(ast.runtime.dialect, field, ast.auth.adminRole);
       continue;
     }
+    if (field.name === "emailVerified") {
+      insert[field.name] = encodeValue(ast.runtime.dialect, field, true);
+      continue;
+    }
     if (field.name === "name") {
       insert[field.name] = encodeValue(ast.runtime.dialect, field, name);
       continue;

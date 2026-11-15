@@ -27,7 +27,9 @@ export function Drawer({ entity, record, onClose, onSaved }: Props) {
     setError(null);
   }, [record, entity.name]);
 
-  const fields = entity.fields.filter((field) => field.name !== "id" && field.name !== "createdAt" && field.name !== "updatedAt");
+  const fields = entity.fields.filter(
+    (field) => field.name !== "id" && field.name !== "createdAt" && field.name !== "updatedAt" && field.writable !== "none",
+  );
 
   async function submit(event: Event) {
     event.preventDefault();

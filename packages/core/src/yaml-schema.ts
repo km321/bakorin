@@ -36,6 +36,9 @@ const fieldObject = z
     renameFrom: ident.optional(),
     secret: z.boolean().optional(),
     description: z.string().optional(),
+    writable: z.enum(["admin", "none"]).optional(),
+    readonly: z.boolean().optional(),
+    adminOnly: z.boolean().optional(),
   })
   .strict();
 
@@ -144,6 +147,7 @@ export const appYamlSchema = z
         password: ident.optional(),
         role: ident.optional(),
         adminRole: z.string().optional(),
+        requireVerifiedEmail: z.boolean().optional(),
       })
       .strict()
       .optional(),

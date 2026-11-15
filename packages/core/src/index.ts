@@ -9,6 +9,7 @@ export type {
   EntityAST,
   FieldAST,
   FieldTypeName,
+  FieldWritable,
   FileDriver,
   FilesRuntimeAST,
   OnDelete,

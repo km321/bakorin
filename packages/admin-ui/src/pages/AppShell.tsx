@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
-import { deleteRecord, getMeta, listRecords, logout, type MetaEntity, type MetaResponse } from "../lib/api.ts";
+import { deleteRecord, getMeta, listRecords, logout, resendVerification, type MetaEntity, type MetaResponse } from "../lib/api.ts";
 import { Drawer } from "../components/Drawer.tsx";
+import { InviteUser } from "../components/InviteUser.tsx";
 import { fieldLabel, relatedLabel } from "../lib/label.ts";
 import { Backups } from "./Backups.tsx";
 
@@ -38,6 +39,7 @@ export function AppShell({ onLogout }: Props) {
   const [offset, setOffset] = useState(0);
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<Record<string, unknown> | null | undefined>(undefined);
+  const [inviting, setInviting] = useState(false);
   const [page, setPage] = useState<"records" | "backups">(location.hash === "#backups" ? "backups" : "records");
   const limit = 20;
 
@@ -159,9 +161,16 @@ export function AppShell({ onLogout }: Props) {
             <h1>{entity?.plural ?? "Records"}</h1>
             <div class="muted">{total} rows</div>
           </div>
-          <button class="btn" id="bakorin-new" onClick={() => setEditing(null)}>
-            New
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {meta && entityName === meta.auth.entity ? (
+              <button class="btn secondary" type="button" onClick={() => setInviting(true)}>
+                Invite user
+              </button>
+            ) : null}
+            <button class="btn" id="bakorin-new" onClick={() => setEditing(null)}>
+              New
+            </button>
+          </div>
         </div>
         {error ? <div class="banner">{error}</div> : null}
         <div class="filters">
@@ -205,6 +214,21 @@ export function AppShell({ onLogout }: Props) {
                       <button class="btn secondary" onClick={() => setEditing(row)}>
                         Edit
                       </button>{" "}
+                      {meta && entityName === meta.auth.entity && row.emailVerified !== true ? (
+                        <>
+                          <button
+                            class="btn secondary"
+                            type="button"
+                            onClick={() => {
+                              void resendVerification(String(row.id))
+                                .then(() => setError(null))
+                                .catch((err: unknown) => setError(err instanceof Error ? err.message : "resend failed"));
+                            }}
+                          >
+                            Resend verification
+                          </button>{" "}
+                        </>
+                      ) : null}
                       <button
                         class="btn danger"
                         onClick={() => {
@@ -251,6 +275,16 @@ export function AppShell({ onLogout }: Props) {
           onClose={() => setEditing(undefined)}
           onSaved={() => {
             setEditing(undefined);
+            void refresh();
+          }}
+        />
+      ) : null}
+      {meta && inviting ? (
+        <InviteUser
+          meta={meta}
+          onClose={() => setInviting(false)}
+          onInvited={() => {
+            setInviting(false);
             void refresh();
           }}
         />

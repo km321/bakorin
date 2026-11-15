@@ -6,6 +6,8 @@ import { issueRefreshToken, revokeAllForUser, revokeToken, rotateRefreshToken } 
 import { rateLimit } from "./rate-limit.ts";
 import { publicRow } from "../crud/validate.ts";
 import { decodeRow } from "../crud/query.ts";
+import { sendVerificationEmail } from "./account.ts";
+import { effectiveWritable, safeDefaultRole } from "../crud/write-guards.ts";
 
 function clientKey(c: { req: { header: (name: string) => string | undefined } }): string {
   return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "local";
@@ -24,7 +26,9 @@ export function createAuthRoutes(): Hono {
       return c.json({ error: { code: "misconfigured", message: "auth entity missing" } }, 500);
     }
     const body = (await c.req.json()) as Record<string, unknown>;
-    const identity = String(body[ctx.ast.auth.identityField] ?? "");
+    const identityField = entity.fieldMap[ctx.ast.auth.identityField];
+    const identityRaw = String(body[ctx.ast.auth.identityField] ?? "").trim();
+    const identity = identityField?.type === "email" ? identityRaw.toLowerCase() : identityRaw;
     const password = String(body[ctx.ast.auth.passwordField] ?? "");
     if (!identity || password.length < 8) {
       return c.json({ error: { code: "invalid_input", message: "identity and a password of at least 8 characters are required" } }, 400);
@@ -53,7 +57,17 @@ export function createAuthRoutes(): Hono {
         continue;
       }
       if (field.name === ctx.ast.auth.roleField) {
-        insert[field.name] = field.defaultValue ?? field.enumValues?.find((value) => value !== ctx.ast.auth.adminRole) ?? "user";
+        insert[field.name] = safeDefaultRole(ctx.ast, field);
+        continue;
+      }
+      if (field.name === "emailVerified") {
+        insert[field.name] = encodeValue(ctx.ast.runtime.dialect, field, false);
+        continue;
+      }
+      if (effectiveWritable(ctx.ast, entity, field) !== "any") {
+        if (field.defaultValue !== undefined) {
+          insert[field.name] = encodeValue(ctx.ast.runtime.dialect, field, field.defaultValue);
+        }
         continue;
       }
       if (field.name in body) {
@@ -68,7 +82,11 @@ export function createAuthRoutes(): Hono {
     const stored = await ctx.db.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
     const after = decodeRow(entity, stored as Record<string, unknown>);
     ctx.bus.emit({ entity: entity.name, op: "create", before: null, after, actor: { id, role: String(after[ctx.ast.auth.roleField]) } });
+    await sendVerificationEmail(ctx, id, identity);
     const role = String(after[ctx.ast.auth.roleField]);
+    if (ctx.ast.auth.requireVerifiedEmail) {
+      return c.json({ data: { user: publicRow(entity, after), needsVerification: true } }, 201);
+    }
     const accessToken = await signAccessToken({ sub: id, role, ent: entity.name }, ctx.ast.runtime.jwtSecret, ctx.ast.runtime.accessTtlSeconds);
     const refreshToken = await issueRefreshToken(ctx.db, id, ctx.ast.runtime.refreshTtlSeconds);
     return c.json({ data: { user: publicRow(entity, after), accessToken, refreshToken, expiresIn: ctx.ast.runtime.accessTtlSeconds } }, 201);
@@ -81,7 +99,9 @@ export function createAuthRoutes(): Hono {
     const ctx = c.get("app");
     const entity = ctx.ast.entityMap[ctx.ast.auth.entity]!;
     const body = (await c.req.json()) as Record<string, unknown>;
-    const identity = String(body[ctx.ast.auth.identityField] ?? "");
+    const identityField = entity.fieldMap[ctx.ast.auth.identityField];
+    const identityRaw = String(body[ctx.ast.auth.identityField] ?? "").trim();
+    const identity = identityField?.type === "email" ? identityRaw.toLowerCase() : identityRaw;
     const password = String(body[ctx.ast.auth.passwordField] ?? "");
     const row = await ctx.db.selectFrom(entity.name).selectAll().where(ctx.ast.auth.identityField, "=", identity).executeTakeFirst();
     if (!row) {
@@ -92,6 +112,9 @@ export function createAuthRoutes(): Hono {
       return c.json({ error: { code: "unauthenticated", message: "invalid credentials" } }, 401);
     }
     const user = decodeRow(entity, row as Record<string, unknown>);
+    if (ctx.ast.auth.requireVerifiedEmail && user.emailVerified !== true) {
+      return c.json({ error: { code: "email_unverified", message: "verify your email before signing in" } }, 403);
+    }
     const role = String(user[ctx.ast.auth.roleField]);
     const accessToken = await signAccessToken(
       { sub: String(user.id), role, ent: entity.name },

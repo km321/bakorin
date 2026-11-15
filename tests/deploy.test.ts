@@ -109,6 +109,60 @@ describe("production deploy env", () => {
     await second.close();
   });
 
+  test("refuses CORS * in production unless BAKORIN_ALLOW_ANY_ORIGIN", async () => {
+    const dir = await tempProject();
+    const yamlSource = await Bun.file(join(dir, "app.yaml")).text();
+    await expect(
+      createRuntime({
+        projectDir: dir,
+        yamlSource,
+        env: { NODE_ENV: "production", JWT_SECRET: PROD_SECRET },
+      }),
+    ).rejects.toThrow(/CORS origin/);
+
+    const allowed = await createRuntime({
+      projectDir: dir,
+      yamlSource,
+      env: {
+        NODE_ENV: "production",
+        JWT_SECRET: PROD_SECRET,
+        CORS_ORIGINS: "https://app.test",
+      },
+    });
+    const preflight = await allowed.app.request("/api/v1/auth/login", {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://app.test",
+        "access-control-request-method": "POST",
+        "access-control-request-headers": "authorization,content-type",
+      },
+    });
+    expect(preflight.headers.get("access-control-allow-origin")).toBe("https://app.test");
+    expect(preflight.headers.get("access-control-allow-credentials")).toBe("true");
+    expect(preflight.headers.get("access-control-allow-headers")?.toLowerCase()).toContain("authorization");
+    const denied = await allowed.app.request("/api/v1/auth/login", {
+      method: "OPTIONS",
+      headers: {
+        origin: "https://evil.test",
+        "access-control-request-method": "POST",
+      },
+    });
+    expect(denied.headers.get("access-control-allow-origin")).not.toBe("https://evil.test");
+    await allowed.close();
+
+    const wildcard = await createRuntime({
+      projectDir: await tempProject(),
+      yamlSource: MINI_YAML,
+      env: {
+        NODE_ENV: "production",
+        JWT_SECRET: PROD_SECRET,
+        BAKORIN_ALLOW_ANY_ORIGIN: "true",
+      },
+    });
+    expect(wildcard.ast.runtime.corsOrigins).toEqual(["*"]);
+    await wildcard.close();
+  });
+
   test("does not seed when admin env is unset", async () => {
     const dir = await tempProject();
     const runtime = await createRuntime({

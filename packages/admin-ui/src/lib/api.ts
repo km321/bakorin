@@ -11,6 +11,7 @@ export interface MetaEntity {
     type: string;
     required: boolean;
     secret: boolean;
+    writable?: "any" | "admin" | "none";
     enumValues?: string[];
     relation?: { to: string; display?: string };
     defaultValue?: unknown;
@@ -19,7 +20,15 @@ export interface MetaEntity {
 
 export interface MetaResponse {
   app: { name: string; version: string };
-  auth: { entity: string; identityField: string; passwordField: string; adminRole: string };
+  auth: {
+    entity: string;
+    identityField: string;
+    passwordField: string;
+    adminRole: string;
+    roleField: string;
+    requireVerifiedEmail: boolean;
+    roles?: string[];
+  };
   entities: MetaEntity[];
 }
 
@@ -147,6 +156,25 @@ export async function createBackup(): Promise<BackupRecord> {
     throw new Error(json.error?.message ?? "backup failed");
   }
   return json.data;
+}
+
+export async function inviteUser(body: { email: string; role?: string; name?: string }): Promise<void> {
+  const response = await request("/api/v1/auth/invites", { method: "POST", body: JSON.stringify(body) });
+  const json = (await response.json()) as { error?: { message: string } };
+  if (!response.ok) {
+    throw new Error(json.error?.message ?? "invite failed");
+  }
+}
+
+export async function resendVerification(userId: string): Promise<void> {
+  const response = await request("/api/v1/auth/resend-verification", {
+    method: "POST",
+    body: JSON.stringify({ userId }),
+  });
+  const json = (await response.json()) as { error?: { message: string } };
+  if (!response.ok) {
+    throw new Error(json.error?.message ?? "resend failed");
+  }
 }
 
 export async function listRelated(entity: string): Promise<Array<Record<string, unknown>>> {

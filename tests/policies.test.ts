@@ -19,13 +19,27 @@ describe("policies to SQL", () => {
     const aliceApi = client(runtime, alice.accessToken);
     const bobApi = client(runtime, bob.accessToken);
 
-    const created = await aliceApi.fetch("/api/v1/items", {
+    const spoof = await aliceApi.fetch("/api/v1/items", {
       method: "POST",
       body: JSON.stringify({ title: "secret", ownerId: bob.user.id }),
+    });
+    expect(spoof.status).toBe(403);
+
+    const created = await aliceApi.fetch("/api/v1/items", {
+      method: "POST",
+      body: JSON.stringify({ title: "secret" }),
     });
     expect(created.status).toBe(201);
     const createdJson = await created.json();
     expect(createdJson.data.ownerId).toBe(alice.user.id);
+
+    const takeover = await aliceApi.fetch(`/api/v1/items/${createdJson.data.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ ownerId: bob.user.id }),
+    });
+    expect(takeover.status).toBe(403);
+    const stillAlice = await aliceApi.fetch(`/api/v1/items/${createdJson.data.id}`);
+    expect((await stillAlice.json()).data.ownerId).toBe(alice.user.id);
 
     const bobList = await bobApi.fetch("/api/v1/items");
     const bobJson = await bobList.json();

@@ -17,6 +17,9 @@ export type FieldTypeName =
 
 export type PolicyKind = "public" | "authenticated" | "admin" | "owner" | "role";
 
+/** Who may set this field on generic CRUD create/update. Auth roleField is always "admin". */
+export type FieldWritable = "any" | "admin" | "none";
+
 export type PolicyAST =
   | { kind: "public" }
   | { kind: "authenticated" }
@@ -43,6 +46,7 @@ export interface FieldAST {
   renameFrom?: string;
   secret: boolean;
   description?: string;
+  writable: FieldWritable;
 }
 
 export interface EntityAST {
@@ -97,6 +101,7 @@ export interface RuntimeAST {
   backups: BackupRuntimeAST;
   corsOrigins: string[];
   hooksPath?: string;
+  appUrl: string;
 }
 
 export interface AuthAST {
@@ -105,6 +110,7 @@ export interface AuthAST {
   passwordField: string;
   roleField: string;
   adminRole: string;
+  requireVerifiedEmail: boolean;
 }
 
 export interface SchemaAST {

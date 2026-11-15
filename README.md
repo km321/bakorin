@@ -78,12 +78,15 @@ runtime:
     retain: 14
     destination: ./data/backups   # or s3://bucket/prefix
   hooks: ./hooks.ts
+  cors:
+    origins: ["http://localhost:4321"]
 auth:
   entity: users
   identity: email
   password: password
   role: role
   adminRole: admin
+  requireVerifiedEmail: false
 entities:
   users:
     display: name            # label shown for relations in the admin UI
@@ -92,7 +95,7 @@ entities:
       email: { type: email, unique: true, required: true }
       password: { type: password, required: true }
       name: { type: text, required: true }
-      role: { type: enum, values: [user, admin], default: user }
+      role: { type: enum, values: [user, admin], default: user, writable: admin }
   leads:
     display: company
     fields:
@@ -112,9 +115,17 @@ webhooks:
 
 Field types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`.
 
+Field write locks (optional on any field):
+
+- `writable: admin` or `adminOnly: true` — only an admin may set the field on create or update. Non-admin writes that include it return **403**.
+- `writable: none` or `readonly: true` — nobody may set the field through generic CRUD. Including it returns **403**.
+- The auth `role` field is always `writable: admin`, even if you omit the flag. Public signup belongs on `POST /auth/signup`, which ignores a client-supplied role. The default policy for auth-entity **create** is `admin`; do not make `users.create` public.
+
+`auth.requireVerifiedEmail: true` blocks login until `POST /auth/verify-email` succeeds. Bakorin adds an `emailVerified` boolean on the auth entity when the schema does not already define one.
+
 `display` on an entity picks the field used as a human label for that row. The admin table and relation selects use it instead of raw ids. If omitted, Bakorin tries `name`, `title`, `email`, then `company`, then `id`.
 
-Policies (OR together in a list): `public`, `authenticated`, `admin`, `owner(field)`, `role(name)`. Admins bypass row filters so the admin UI can see every row. Owner fields on create/update are taken from the session, never from the client.
+Policies (OR together in a list): `public`, `authenticated`, `admin`, `owner(field)`, `role(name)`. Admins bypass row filters so the admin UI can see every row. Owner fields on create/update are taken from the session. A non-admin who sends `ownerId` (or another ownership field) in the body gets **403**; omitting it still stamps the session user.
 
 Schema changes are planned in three tiers:
 
@@ -203,7 +214,7 @@ Mount a volume at `/data` (or whatever you set as `BAKORIN_DATA_DIR`). To run a 
 2. Add a volume and mount it at `/data`. Set `BAKORIN_DATA_DIR=/data`.
 3. Create a Railway S3-compatible bucket and attach it (or copy its credentials into the service).
 4. Set `S3_ADDRESSING_STYLE=path`. Railway buckets deny virtual-hosted requests; Bun's S3Client returns Access Denied unless path-style is used.
-5. Set the variables below. Railway sets `PORT`. Railway mounts the volume at `/data`; the image does not declare a Docker `VOLUME`.
+5. Set the variables below. Railway sets `PORT`. Railway mounts the volume at `/data`; the image does not declare a Docker `VOLUME`. Set `CORS_ORIGINS` to your admin or front-end origin. Production refuses CORS `*`.
 6. Health check path: `/health`.
 7. Optional first-boot admin: set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD`. Bakorin creates that admin only when the users table is empty; later restarts skip it.
 
@@ -232,6 +243,17 @@ Railway volume snapshots are a second copy, not a substitute for `bakorin backup
 | `BAKORIN_ADMIN_PASSWORD` | optional | First-boot admin password (min 8 chars). Ignored if any user already exists |
 | `BAKORIN_ADMIN_NAME` | optional | Defaults to `Admin` |
 | `DATABASE_URL` | Postgres only | Used when `runtime.dialect` is `postgres` |
+| `CORS_ORIGINS` | production | Comma-separated allowed origins. Overrides `runtime.cors.origins`. Credentials and `Authorization` are allowed. |
+| `BAKORIN_ALLOW_ANY_ORIGIN` | optional | Must be `true` to start in production with CORS `*`. Logs a warning. |
+| `APP_URL` or `BAKORIN_APP_URL` | recommended | Front-end base URL for links in emails. Defaults to `http://127.0.0.1:$PORT` |
+| `MAIL_DRIVER` | optional | `log` (default), `smtp`, or `resend`. `log` prints the link and sends nothing |
+| `MAIL_FROM` | optional | From header. Defaults to `$appName <noreply@localhost>` |
+| `RESEND_API_KEY` | if `MAIL_DRIVER=resend` | Resend API key |
+| `SMTP_HOST` | if `MAIL_DRIVER=smtp` | SMTP hostname |
+| `SMTP_PORT` | optional | Defaults to 587 |
+| `SMTP_USER` | optional | SMTP username |
+| `SMTP_PASS` | optional | SMTP password |
+| `SMTP_SECURE` | optional | `true` for implicit TLS (port 465). STARTTLS is tried on 587 |
 
 Path-style is the default (Bun `virtualHostedStyle: false`). **For Railway buckets set `S3_ADDRESSING_STYLE=path`.** Virtual-hosted style gets Access Denied from Bun's S3Client against those endpoints. You can also set `S3_FORCE_PATH_STYLE=true`, `S3_VIRTUAL_HOSTED_STYLE=false`, or `runtime.files.pathStyle` / `runtime.files.virtualHostedStyle` in `app.yaml`.
 
@@ -265,19 +287,52 @@ const api = createClient<BakorinEntities>({
   },
 });
 
+await api.signup({ email: "you@studio.test", password: "password123", name: "You" });
 await api.login({ email: "you@studio.test", password: "password123" });
+await api.forgotPassword({ email: "you@studio.test" });
+await api.resetPassword({ token, password: "new-password-1" });
+await api.verifyEmail({ token });
+await api.acceptInvite({ token, password: "password123", name: "You" });
 const leads = await api.entity("leads").list({ filter: { status: "new" } });
 ```
 
-Next.js and Astro helpers live at `@bakorin/sdk/next` and `@bakorin/sdk/astro`. They read `bakorin_access` / `bakorin_refresh` cookies. Refresh is mutexed so parallel 401s share one rotation.
+### Connect a front end
+
+`@bakorin/sdk/next` and `@bakorin/sdk/astro` wrap the same client and keep tokens in `bakorin_access` / `bakorin_refresh` cookies. Refresh is mutexed so parallel 401s share one rotation.
+
+```ts
+// Next.js Route Handler or Server Action
+import { createNextClient } from "@bakorin/sdk/next";
+import { cookies } from "next/headers";
+
+const api = createNextClient({
+  baseUrl: process.env.BAKORIN_URL ?? "http://127.0.0.1:4371",
+  cookies: await cookies(),
+});
+```
+
+```ts
+// Astro page, endpoint, or middleware
+import { createAstroClient } from "@bakorin/sdk/astro";
+
+const api = createAstroClient({
+  baseUrl: import.meta.env.BAKORIN_URL ?? "http://127.0.0.1:4371",
+  cookies: Astro.cookies,
+});
+```
+
+Point `APP_URL` at that front end so reset, verify, and invite emails use its origin (`/reset-password?token=`, `/verify-email?token=`, `/accept-invite?token=`). The admin UI at `/admin/` can invite users and resend verification without those pages.
 
 ## Security
 
 - SQL is parameterized. Table and column names come from the AST and are identifier-checked.
-- Owner ids on writes are overwritten from the session unless the actor is an admin.
+- The auth role field is admin-only on every write path. Non-admin create/update that includes it returns 403. `/auth/signup` strips it instead and always assigns the non-admin default.
+- Owner ids cannot be taken over: sending `ownerId` (or another ownership field) as a non-admin returns 403. Omitting it still stamps the session user. `owner()` row filters keep another user's row at 404.
+- Password updates through CRUD require an admin, or the current password for self-service, and are always hashed. Role changes and password resets revoke that user's refresh tokens.
 - Passwords are argon2id. Access JWTs last 15 minutes. Refresh tokens are stored as SHA-256 hashes, rotated on use, and reuse of a revoked token revokes every token for that user.
-- Auth routes are rate limited.
+- Auth routes are rate limited. Forgot-password always returns 200 so accounts cannot be enumerated.
 - `JWT_SECRET` is required when `NODE_ENV=production` or `BAKORIN_ENV=production`.
+- Production refuses CORS origin `*` unless `BAKORIN_ALLOW_ANY_ORIGIN=true`.
 - File downloads require the uploader or an admin.
 
 ## CLI
@@ -309,7 +364,7 @@ bun run release    # linux-x64, linux-arm64, darwin-arm64 in ./release
 
 ## Status of this v0.1
 
-Works: schema compiler, 3-tier diff, SQLite and Postgres migrators, CRUD with filters/sort/expand, policies, auth, local and S3/R2 files (list, copy, delete), webhooks, admin UI with relation labels, SDK, backup/restore/export/import including S3 retention, hooks, generated OpenAPI, compiled binary, Docker.
+Works: schema compiler, 3-tier diff, SQLite and Postgres migrators, CRUD with filters/sort/expand, policies, auth (signup, login, forgot/reset, verify, invites), field-level writable locks, local and S3/R2 files (list, copy, delete), webhooks, admin UI with relation labels, SDK, backup/restore/export/import including S3 retention, hooks, generated OpenAPI, compiled binary, Docker.
 
 ## Roadmap
 

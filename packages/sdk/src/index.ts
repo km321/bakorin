@@ -115,10 +115,16 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
 
   return {
     async signup(body: Record<string, unknown>) {
-      const json = await parse<{ data: { user: S[string]; accessToken: string; refreshToken: string; expiresIn: number } }>(
-        await request("/api/v1/auth/signup", { method: "POST", body: JSON.stringify(body) }),
-      );
-      await options.setTokens?.(json.data);
+      const json = await parse<{
+        data: { user: S[string]; accessToken?: string; refreshToken?: string; expiresIn?: number; needsVerification?: boolean };
+      }>(await request("/api/v1/auth/signup", { method: "POST", body: JSON.stringify(body) }));
+      if (json.data.accessToken && json.data.refreshToken && json.data.expiresIn !== undefined) {
+        await options.setTokens?.({
+          accessToken: json.data.accessToken,
+          refreshToken: json.data.refreshToken,
+          expiresIn: json.data.expiresIn,
+        });
+      }
       return json.data;
     },
     async login(body: Record<string, unknown>) {
@@ -133,6 +139,43 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
     },
     async me() {
       const json = await parse<{ data: S[string] }>(await request("/api/v1/auth/me"));
+      return json.data;
+    },
+    async forgotPassword(body: { email: string }) {
+      const json = await parse<{ data: { ok: boolean } }>(
+        await request("/api/v1/auth/forgot-password", { method: "POST", body: JSON.stringify(body) }),
+      );
+      return json.data;
+    },
+    async resetPassword(body: { token: string; password: string }) {
+      const json = await parse<{ data: { ok: boolean } }>(
+        await request("/api/v1/auth/reset-password", { method: "POST", body: JSON.stringify(body) }),
+      );
+      return json.data;
+    },
+    async verifyEmail(body: { token: string }) {
+      const json = await parse<{ data: { ok: boolean } }>(
+        await request("/api/v1/auth/verify-email", { method: "POST", body: JSON.stringify(body) }),
+      );
+      return json.data;
+    },
+    async acceptInvite(body: { token: string; password: string; name?: string }) {
+      const json = await parse<{ data: { user: S[string]; accessToken: string; refreshToken: string; expiresIn: number } }>(
+        await request("/api/v1/auth/accept-invite", { method: "POST", body: JSON.stringify(body) }),
+      );
+      await options.setTokens?.(json.data);
+      return json.data;
+    },
+    async invite(body: { email: string; role?: string; name?: string }) {
+      const json = await parse<{ data: { user: S[string]; email: string; role: string } }>(
+        await request("/api/v1/auth/invites", { method: "POST", body: JSON.stringify(body) }),
+      );
+      return json.data;
+    },
+    async resendVerification(body: { userId?: string; email?: string } = {}) {
+      const json = await parse<{ data: { ok: boolean } }>(
+        await request("/api/v1/auth/resend-verification", { method: "POST", body: JSON.stringify(body) }),
+      );
       return json.data;
     },
     entity<K extends keyof S & string>(name: K) {

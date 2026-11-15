@@ -2,11 +2,13 @@ import { join, resolve } from "node:path";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sql } from "kysely";
-import { compileAppYaml, type SchemaAST } from "@bakorin/core";
+import { compileAppYaml, SchemaError, type SchemaAST } from "@bakorin/core";
 import { createChangeBus } from "./bus.ts";
 import { openPostgres, openSqlite, type BakorinDb } from "./db/dialects.ts";
 import { migrateToSchema } from "./db/migrator.ts";
 import { createAuthRoutes, verifyAccessToken } from "./auth/routes.ts";
+import { createAccountRoutes } from "./auth/account.ts";
+import { createMailer, mailFrom } from "./mail/create.ts";
 import { seedAdminIfRequested } from "./auth/seed.ts";
 import { createCrudRouter } from "./crud/router.ts";
 import { createFileRoutes } from "./files/routes.ts";
@@ -77,25 +79,21 @@ export async function createRuntime(options: {
   const projectDir = resolve(options.projectDir);
   const env = options.env ?? process.env;
   let ast = compileAppYaml(options.yamlSource, { env });
+  assertProductionCors(ast, env);
   let opened = openDb(ast, projectDir);
   await migrateToSchema(opened.db, ast);
   await seedAdminIfRequested(ast, opened.db, env);
   const bus = createChangeBus();
   let hooks = await loadHooks(projectDir, ast.runtime.hooksPath);
   let files = createFiles(ast, projectDir);
-  const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir };
+  const mailer = createMailer(env, mailFrom(env, ast.appName));
+  const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir, mailer };
   subscribeWebhooks(ast, (handler) => bus.subscribe(handler));
   subscribeAfterHooks(hooks, opened.db, (handler) => bus.subscribe(handler));
   const stopBackups = startBackupScheduler({ ast, db: opened.db, files, projectDir });
 
   const app = new Hono();
-  app.use(
-    "*",
-    cors({
-      origin: ast.runtime.corsOrigins.includes("*") ? "*" : ast.runtime.corsOrigins,
-      credentials: true,
-    }),
-  );
+  app.use("*", cors(corsOptions(ast.runtime.corsOrigins)));
   app.use("*", async (c, next) => {
     c.set("app", context);
     c.set("actor", null);
@@ -117,6 +115,7 @@ export async function createRuntime(options: {
   app.route("/docs", createDocsRoutes());
   app.route("/api/v1/docs", createDocsRoutes());
   app.route("/api/v1/auth", createAuthRoutes());
+  app.route("/api/v1/auth", createAccountRoutes());
   app.route("/api/v1/files", createFileRoutes());
   app.route("/api/v1/backups", createBackupRoutes());
   app.route("/api/v1", createMetaRoutes());
@@ -151,4 +150,31 @@ export async function loadProject(projectDir: string): Promise<RuntimeHandles> {
   const yamlPath = join(projectDir, "app.yaml");
   const source = await Bun.file(yamlPath).text();
   return createRuntime({ projectDir, yamlSource: source });
+}
+
+function corsOptions(origins: string[]) {
+  const wildcard = origins.includes("*");
+  return {
+    origin: wildcard
+      ? "*"
+      : (origin: string) => (origins.includes(origin) ? origin : ""),
+    credentials: true,
+    allowHeaders: ["Authorization", "Content-Type", "X-Requested-With"],
+    allowMethods: ["GET", "HEAD", "PUT", "POST", "DELETE", "PATCH", "OPTIONS"],
+    maxAge: 86400,
+  };
+}
+
+function assertProductionCors(ast: SchemaAST, env: Record<string, string | undefined>): void {
+  const production = env.NODE_ENV === "production" || env.BAKORIN_ENV === "production";
+  if (!production || !ast.runtime.corsOrigins.includes("*")) {
+    return;
+  }
+  if (env.BAKORIN_ALLOW_ANY_ORIGIN === "true") {
+    console.warn("[bakorin] BAKORIN_ALLOW_ANY_ORIGIN=true: allowing CORS origin * in production");
+    return;
+  }
+  throw new SchemaError(
+    'CORS origin "*" is not allowed in production. Set CORS_ORIGINS to an explicit comma-separated list, or set BAKORIN_ALLOW_ANY_ORIGIN=true',
+  );
 }

@@ -69,4 +69,30 @@ describe("compiler", () => {
     );
     expect(() => compileAppYaml(yaml, { env: {}, production: true })).toThrow(/JWT_SECRET/);
   });
+
+  test("locks the auth role field and defaults auth create to admin", () => {
+    const ast = compileAppYaml(
+      `app:\n  name: x\nentities:\n  users:\n    auth: true\n    fields:\n      email: { type: email, unique: true, required: true }\n      password: { type: password, required: true }\n      role: { type: enum, values: [user, admin], default: user }\n      notes: { type: text, writable: admin }\n      locked: { type: text, readonly: true, default: sealed }\n`,
+      { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } },
+    );
+    expect(ast.entityMap.users?.policies.create).toEqual([{ kind: "admin" }]);
+    expect(ast.entityMap.users?.fieldMap.role?.writable).toBe("admin");
+    expect(ast.entityMap.users?.fieldMap.notes?.writable).toBe("admin");
+    expect(ast.entityMap.users?.fieldMap.locked?.writable).toBe("none");
+    expect(ast.entityMap.users?.fieldMap.emailVerified?.type).toBe("boolean");
+    expect(ast.entityMap.users?.fieldMap.emailVerified?.writable).toBe("admin");
+    expect(ast.auth.requireVerifiedEmail).toBe(false);
+  });
+
+  test("CORS_ORIGINS overrides yaml and APP_URL is compiled", () => {
+    const ast = compileAppYaml(MINI_YAML, {
+      env: {
+        JWT_SECRET: "test-secret-test-secret-test-secret-32",
+        CORS_ORIGINS: "https://app.test, https://admin.test",
+        APP_URL: "https://app.test/",
+      },
+    });
+    expect(ast.runtime.corsOrigins).toEqual(["https://app.test", "https://admin.test"]);
+    expect(ast.runtime.appUrl).toBe("https://app.test");
+  });
 });

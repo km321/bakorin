@@ -4,6 +4,7 @@ import type { BakorinDb } from "./dialects.ts";
 
 export const META_TABLE = "_bakorin_meta";
 export const REFRESH_TABLE = "_bakorin_refresh_tokens";
+export const AUTH_TOKENS_TABLE = "_bakorin_auth_tokens";
 export const FILES_TABLE = "_bakorin_files";
 export const DEPRECATED_TABLE = "_bakorin_deprecated";
 
@@ -33,6 +34,24 @@ export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): P
     .execute(db);
   await sql
     .raw(`create index if not exists _bakorin_refresh_user_idx on ${REFRESH_TABLE} (user_id)`)
+    .execute(db);
+  await sql
+    .raw(
+      `create table if not exists ${AUTH_TOKENS_TABLE} (
+        id ${text} primary key,
+        user_id ${text},
+        email ${text} not null,
+        purpose ${text} not null,
+        token_hash ${text} not null unique,
+        payload ${text},
+        expires_at ${text} not null,
+        used_at ${text},
+        created_at ${text} not null
+      )`,
+    )
+    .execute(db);
+  await sql
+    .raw(`create index if not exists _bakorin_auth_tokens_email_idx on ${AUTH_TOKENS_TABLE} (email)`)
     .execute(db);
   await sql
     .raw(

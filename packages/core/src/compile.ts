@@ -12,6 +12,7 @@ import {
   type EntityAST,
   type FieldAST,
   type FieldTypeName,
+  type FieldWritable,
   type PolicyAST,
   type RuntimeAST,
   type SchemaAST,
@@ -77,7 +78,19 @@ function compileField(entityName: string, name: string, raw: RawField): FieldAST
     renameFrom: raw.renameFrom,
     secret: raw.secret === true || type === "password",
     description: raw.description,
+    writable: compileWritable(entityName, name, raw),
   };
+}
+
+function compileWritable(entityName: string, name: string, raw: RawField): FieldWritable {
+  const flags = [raw.writable, raw.readonly === true ? "none" : undefined, raw.adminOnly === true ? "admin" : undefined].filter(
+    (value): value is "admin" | "none" => value === "admin" || value === "none",
+  );
+  const unique = [...new Set(flags)];
+  if (unique.length > 1) {
+    throw new SchemaError(`${entityName}.${name} has conflicting writable/readonly/adminOnly flags`);
+  }
+  return unique[0] ?? "any";
 }
 
 function systemFields(): FieldAST[] {
@@ -90,6 +103,7 @@ function systemFields(): FieldAST[] {
       indexed: true,
       defaultValue: undefined,
       secret: false,
+      writable: "none",
     },
     {
       name: "createdAt",
@@ -99,6 +113,7 @@ function systemFields(): FieldAST[] {
       indexed: true,
       defaultValue: undefined,
       secret: false,
+      writable: "none",
     },
     {
       name: "updatedAt",
@@ -108,6 +123,7 @@ function systemFields(): FieldAST[] {
       indexed: true,
       defaultValue: undefined,
       secret: false,
+      writable: "none",
     },
   ];
 }
@@ -116,7 +132,7 @@ function defaultPolicies(auth: boolean): Record<ActionName, PolicyAST[]> {
   if (auth) {
     return {
       read: [{ kind: "authenticated" }],
-      create: [{ kind: "public" }],
+      create: [{ kind: "admin" }],
       update: [{ kind: "owner", field: "id" }],
       delete: [{ kind: "admin" }],
     };
@@ -285,9 +301,30 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
       retain: runtime.backups?.retain ?? 14,
       destination,
     },
-    corsOrigins: runtime.cors?.origins ?? ["*"],
+    corsOrigins: parseCorsOrigins(runtime.cors?.origins, env),
     hooksPath: runtime.hooks,
+    appUrl: parseAppUrl(env, parsePort(runtime.port, env)),
   };
+}
+
+function parseCorsOrigins(
+  yamlOrigins: string[] | undefined,
+  env: Record<string, string | undefined>,
+): string[] {
+  const fromEnv = firstEnv(env, ["CORS_ORIGINS"]);
+  if (fromEnv !== undefined) {
+    const list = fromEnv.split(",").map((item) => item.trim()).filter(Boolean);
+    if (list.length === 0) {
+      throw new SchemaError("CORS_ORIGINS is empty");
+    }
+    return list;
+  }
+  return yamlOrigins ?? ["*"];
+}
+
+function parseAppUrl(env: Record<string, string | undefined>, port: number): string {
+  const raw = firstEnv(env, ["APP_URL", "BAKORIN_APP_URL"]) ?? `http://127.0.0.1:${port}`;
+  return raw.replace(/\/+$/, "");
 }
 
 function findAuthEntity(yaml: AppYaml, entities: EntityAST[]): AuthAST {
@@ -330,13 +367,42 @@ function findAuthEntity(yaml: AppYaml, entities: EntityAST[]): AuthAST {
   entity.fieldMap[identityField]!.required = true;
   entity.fieldMap[passwordField]!.required = true;
   entity.fieldMap[passwordField]!.secret = true;
+  entity.fieldMap[roleField]!.writable = "admin";
+  ensureEmailVerifiedField(entity);
   return {
     entity: entity.name,
     identityField,
     passwordField,
     roleField,
     adminRole,
+    requireVerifiedEmail: yaml.auth?.requireVerifiedEmail === true,
   };
+}
+
+function ensureEmailVerifiedField(entity: EntityAST): void {
+  const existing = entity.fieldMap.emailVerified;
+  if (existing) {
+    if (existing.type !== "boolean") {
+      throw new SchemaError(`${entity.name}.emailVerified must be boolean`);
+    }
+    if (existing.writable === "any") {
+      existing.writable = "admin";
+    }
+    return;
+  }
+  const field: FieldAST = {
+    name: "emailVerified",
+    type: "boolean",
+    required: false,
+    unique: false,
+    indexed: false,
+    defaultValue: false,
+    secret: false,
+    writable: "admin",
+    description: "True after the user confirms their email, or when an admin marks them verified.",
+  };
+  entity.fields.push(field);
+  entity.fieldMap.emailVerified = field;
 }
 
 export interface CompileOptions {
@@ -457,6 +523,17 @@ export function deserializeAst(raw: string): SchemaAST {
     if (!entity.display) {
       entity.display = "id";
     }
+    for (const field of entity.fields) {
+      if (!field.writable) {
+        field.writable = SYSTEM_FIELDS.has(field.name) ? "none" : "any";
+      }
+    }
+  }
+  if (!parsed.auth.requireVerifiedEmail) {
+    parsed.auth.requireVerifiedEmail = false;
+  }
+  if (!parsed.runtime.appUrl) {
+    parsed.runtime.appUrl = `http://127.0.0.1:${parsed.runtime.port}`;
   }
   return parsed;
 }

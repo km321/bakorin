@@ -43,6 +43,11 @@ describe("api docs", () => {
     expect(spec.paths["/api/v1/auth/refresh"]?.post).toBeTruthy();
     expect(spec.paths["/api/v1/auth/logout"]?.post).toBeTruthy();
     expect(spec.paths["/api/v1/auth/me"]?.get).toBeTruthy();
+    expect(spec.paths["/api/v1/auth/forgot-password"]?.post).toBeTruthy();
+    expect(spec.paths["/api/v1/auth/reset-password"]?.post).toBeTruthy();
+    expect(spec.paths["/api/v1/auth/verify-email"]?.post).toBeTruthy();
+    expect(spec.paths["/api/v1/auth/invites"]?.post).toBeTruthy();
+    expect(spec.paths["/api/v1/auth/accept-invite"]?.post).toBeTruthy();
     expect(spec.paths["/api/v1/files"]?.post).toBeTruthy();
     expect(spec.paths["/api/v1/files/{id}"]?.get).toBeTruthy();
     expect(spec.paths["/api/v1/items"]?.get).toBeTruthy();

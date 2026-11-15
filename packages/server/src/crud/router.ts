@@ -3,9 +3,17 @@ import type { EntityAST, SchemaAST } from "@bakorin/core";
 import type { Actor, AppContext } from "../context.ts";
 import { encodeValue } from "../db/types.ts";
 import { hashPassword } from "../auth/password.ts";
+import { revokeAllForUser } from "../auth/refresh.ts";
 import { decideAccess, ownedByFields } from "./policies-sql.ts";
 import { applyAccess, applyFilters, decodeRow, expandRows, parseListQuery } from "./query.ts";
 import { InputError, parseBody, publicRow } from "./validate.ts";
+import {
+  applyAuthCreateDefaults,
+  assertClientFieldWrites,
+  assertPasswordWrite,
+  ForbiddenError,
+  stripDisallowedWrites,
+} from "./write-guards.ts";
 
 function jsonError(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
@@ -154,15 +162,25 @@ export function createCrudRouter(): Hono {
       return jsonError(decision.status === 401 ? "unauthenticated" : "forbidden", "not allowed", decision.status);
     }
     const forced = ownedByFields(entity, ctx.ast.auth.entity);
+    let raw: Record<string, unknown>;
     let body: Record<string, unknown>;
     try {
-      body = parseBody(entity, (await c.req.json()) as Record<string, unknown>, "create", forced);
+      raw = (await c.req.json()) as Record<string, unknown>;
+      assertClientFieldWrites(ctx.ast, entity, raw, actor, forced, "create");
+      body = parseBody(entity, raw, "create", forced);
+      applyAuthCreateDefaults(ctx.ast, entity, body, actor);
+      await assertPasswordWrite(ctx.ast, entity, body, raw, actor, null);
     } catch (error) {
+      if (error instanceof ForbiddenError) {
+        return jsonError("forbidden", error.message, 403);
+      }
       const message = error instanceof InputError ? error.message : "invalid body";
       return jsonError("invalid_input", message, 400);
     }
     body = stripClientOwnership(entity, ctx.ast.auth.entity, body, actor, decision.bypass, "create");
     body = await runBefore(ctx, entity.name, "beforeCreate", body, actor);
+    body = stripDisallowedWrites(ctx.ast, entity, body, actor);
+    body = stripClientOwnership(entity, ctx.ast.auth.entity, body, actor, decision.bypass, "create");
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
     const insert: Record<string, unknown> = { id, createdAt: now, updatedAt: now };
@@ -198,16 +216,27 @@ export function createCrudRouter(): Hono {
     if (!existing) {
       return jsonError("not_found", "not found", 404);
     }
+    const forced = ownedByFields(entity, ctx.ast.auth.entity);
+    let raw: Record<string, unknown>;
     let body: Record<string, unknown>;
+    let passwordChanged = false;
+    const before = decodeRow(entity, existing as Record<string, unknown>);
     try {
-      body = parseBody(entity, (await c.req.json()) as Record<string, unknown>, "update");
+      raw = (await c.req.json()) as Record<string, unknown>;
+      assertClientFieldWrites(ctx.ast, entity, raw, actor, forced, "update");
+      body = parseBody(entity, raw, "update");
+      passwordChanged = await assertPasswordWrite(ctx.ast, entity, body, raw, actor, before);
     } catch (error) {
+      if (error instanceof ForbiddenError) {
+        return jsonError("forbidden", error.message, 403);
+      }
       const message = error instanceof InputError ? error.message : "invalid body";
       return jsonError("invalid_input", message, 400);
     }
     body = stripClientOwnership(entity, ctx.ast.auth.entity, body, actor, decision.bypass, "update");
-    const before = decodeRow(entity, existing as Record<string, unknown>);
     body = await runBefore(ctx, entity.name, "beforeUpdate", body, actor, before);
+    body = stripDisallowedWrites(ctx.ast, entity, body, actor);
+    body = stripClientOwnership(entity, ctx.ast.auth.entity, body, actor, decision.bypass, "update");
     const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
     for (const [key, value] of Object.entries(body)) {
       const field = entity.fieldMap[key];
@@ -220,6 +249,13 @@ export function createCrudRouter(): Hono {
     await ctx.db.updateTable(entity.name).set(patch).where("id", "=", c.req.param("id")).execute();
     const stored = await ctx.db.selectFrom(entity.name).selectAll().where("id", "=", c.req.param("id")).executeTakeFirstOrThrow();
     const after = decodeRow(entity, stored as Record<string, unknown>);
+    const roleChanged =
+      entity.name === ctx.ast.auth.entity &&
+      ctx.ast.auth.roleField in body &&
+      String(before[ctx.ast.auth.roleField]) !== String(after[ctx.ast.auth.roleField]);
+    if (passwordChanged || roleChanged) {
+      await revokeAllForUser(ctx.db, String(after.id));
+    }
     ctx.bus.emit({ entity: entity.name, op: "update", before, after, actor: actor ? { id: actor.id, role: actor.role } : null });
     return c.json({ data: publicRow(entity, after) });
   });
