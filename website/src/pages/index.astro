@@ -135,6 +135,10 @@ const faqs = [
     a: "Not yet. Realtime over WebSocket or SSE is planned and will build on the existing change bus. Webhooks cover most integration needs today.",
   },
   {
+    q: "How is it licensed?",
+    a: "Open source with a split license: the server (server, core, and admin UI) is AGPL-3.0, and the SDK, create-bakorin, and the starters are MIT. Commercial licenses for the server are available from Melton Studios.",
+  },
+  {
     q: "Many to many relations?",
     a: "There is no built in many to many type. Model it with a join entity that has two relation fields.",
   },
@@ -162,7 +166,7 @@ const faqs = [
         <ul class="hero-points" aria-label="Highlights">
           <li>SQLite or Postgres</li>
           <li>Typed SDK</li>
-          <li>MIT licensed</li>
+          <li>AGPL-3.0 server, MIT SDK</li>
         </ul>
       </div>
       <div class="hero-code">

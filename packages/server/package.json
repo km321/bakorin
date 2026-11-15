@@ -2,7 +2,7 @@
   "name": "@bakorin/server",
   "version": "0.0.1",
   "description": "Self-hosted Bakorin API: auth, CRUD, files, admin UI, and the bakorin CLI",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "author": "Melton Studios",
   "type": "module",
   "bin": {

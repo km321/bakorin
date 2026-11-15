@@ -7,6 +7,7 @@ import schemaLight from "../../../assets/screens/schema-light.png";
 import listDark from "../../../assets/screens/admin-list-dark.png";
 import editLight from "../../../assets/screens/admin-edit-light.png";
 import signin from "../../../assets/screens/admin-signin-light.png";
+import adminsOnly from "../../../assets/screens/admin-admins-only.png";
 import { Image } from "astro:assets";
 
 Every project serves an admin UI at `/admin/`. It is built from your `app.yaml`, embedded in the binary, and needs no extra setup.
@@ -15,9 +16,27 @@ Every project serves an admin UI at `/admin/`. It is built from your `app.yaml`,
 
 ## Sign in and first admin
 
-On a fresh project the admin shows **Create your first admin**. After that it is a normal sign in screen. Use an admin account from the project's auth entity. The API still applies your policies, and the Backups, Audit, and Webhooks endpoints are admin only.
+On a fresh project the admin shows **Create your first admin**. After that it is a normal sign in screen.
 
 <Image src={signin} alt="Bakorin admin sign in screen in light mode" />
+
+## Admins only
+
+The admin UI is only for users whose role matches `auth.adminRole` (default `admin`).
+
+After sign in, the admin UI asks the server whether the session is an admin before it shows anything. A user without the admin role sees an **Admins only** screen with their email and a **Sign out** button. The sidebar, tables, and project pages are not rendered for them. If an admin loses the role while signed in, the next schema refresh sends them to the same screen.
+
+<Image src={adminsOnly} alt="Admins only screen telling sam@studio.test the account is not an admin, with a Sign out button" />
+
+The real enforcement is on the server. These endpoints return 401 when signed out and 403 for non-admins:
+
+- `GET /api/v1/_meta`
+- `GET` and `POST /api/v1/backups`
+- `GET /api/v1/audit`
+- `GET /api/v1/webhooks`, `GET /api/v1/webhooks/deliveries`, and the retry and test routes
+- `POST /api/v1/auth/invites`
+
+Regular users still use your front end and the entity API, where your [policies](/docs/permissions/) decide what they can read and write.
 
 ## Themes
 

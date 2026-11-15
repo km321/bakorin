@@ -372,6 +372,7 @@ Point `APP_URL` at that front end so reset, verify, and invite emails use its or
 - File downloads require a short-lived signed URL. Upload size and MIME types are set in `app.yaml`.
 - Admin and docs send CSP, nosniff, frame-ancestors, Referrer-Policy, and HSTS on HTTPS.
 - Audit log: `GET /api/v1/audit` (admin) and the admin Audit page.
+- The admin UI is admins only. After sign in it checks `GET /api/v1/_meta` (403 for non-admins) and shows an **Admins only** screen with Sign out instead of the dashboard. Admin endpoints (`_meta`, backups, audit, webhooks, invites) return 403 to non-admins on the server.
 
 ## CLI
 
@@ -414,4 +415,11 @@ Realtime (WebSocket or SSE with per-subscriber read-policy filtering, and Postgr
 
 ## License
 
-MIT. Copyright 2026 Melton Studios.
+Bakorin uses two licenses.
+
+- **The server is AGPL-3.0-only.** That covers `packages/server`, `packages/core`, and `packages/admin-ui` (and the root `LICENSE`). You can use, change, and self-host it freely. If you modify it and let people use your modified version over a network, you must make your changes available to those users under the same license.
+- **The client side is MIT.** That covers `packages/sdk`, `packages/create-bakorin` (including its templates), and everything in `examples/`, including the Astro and Next.js starters. MIT lets you use that code in your own projects, open or closed source, as long as you keep the copyright and license notice. Copyright (c) 2026 Melton Studios.
+
+If the AGPL does not fit how you want to use the server, commercial licenses are available from Melton Studios.
+
+Contributions: see [CONTRIBUTING.md](CONTRIBUTING.md).

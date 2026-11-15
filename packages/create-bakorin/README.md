@@ -37,3 +37,7 @@ Flags:
 From a checkout, the generated `web/package.json` points `@bakorin/sdk` at this repo's `packages/sdk` via a `file:` path, and the Dockerfile vendors `.bakorin/` so the image can start without npm. After publish, `--sdk npm` (the default outside a checkout) uses `@bakorin/sdk@^0.0.1` and `bunx bakorin`.
 
 This package is publish-ready on the npm `beta` tag. Do not `npm publish` until you intend a public beta. See `PUBLISHING.md`.
+
+## License
+
+MIT. Copyright (c) 2026 Melton Studios. See `LICENSE`.

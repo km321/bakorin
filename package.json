@@ -32,7 +32,7 @@
   "engines": {
     "bun": ">=1.1.0"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "author": "Melton Studios",
   "devDependencies": {
     "bun-types": "^1.2.5",

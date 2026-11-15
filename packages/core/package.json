@@ -2,7 +2,7 @@
   "name": "@bakorin/core",
   "version": "0.0.1",
   "description": "app.yaml compiler, schema AST, and migrator diff for Bakorin",
-  "license": "MIT",
+  "license": "AGPL-3.0-only",
   "author": "Melton Studios",
   "type": "module",
   "main": "./dist/index.js",

@@ -1,6 +1,7 @@
 {
   "name": "bakorin-next-starter",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "next dev --port 3000",

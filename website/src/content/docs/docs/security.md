@@ -13,6 +13,7 @@ description: What Bakorin does to keep a client backend safe by default.
 - Production refuses CORS origin `*` unless `BAKORIN_ALLOW_ANY_ORIGIN=true`.
 - File downloads need a short lived signed URL. Upload size and MIME types are set in `app.yaml`.
 - The admin UI and API docs send `Content-Security-Policy` (including `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and HSTS on HTTPS.
+- The admin UI shows non-admins an Admins only screen instead of the dashboard, and the admin endpoints (`_meta`, backups, audit, webhooks, invites) return 403 to them.
 - An append only audit log records signup, login, failed login, reset, invite, role change, admin writes, and backups. `GET /api/v1/audit` is admin only.
 - Webhook payloads strip secret fields, including password hashes, and signatures cover the timestamp to block replays.
 - Webhook delivery and scheduled backups take a database lease so a second instance does not double run.

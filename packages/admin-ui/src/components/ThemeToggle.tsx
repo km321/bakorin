@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import { applyTheme, parseThemeMode, readStoredThemeMode, type ThemeMode } from "../lib/theme.ts";
 import { useState } from "preact/hooks";
 

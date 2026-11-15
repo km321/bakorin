@@ -42,6 +42,8 @@ function pageFromHash(hash: string): AdminPage {
 
 interface Props {
   onLogout: () => void;
+  /** Called when the server says this session is no longer an admin (403). */
+  onForbidden?: () => void;
 }
 
 function relationCell(row: Record<string, unknown>, fieldName: string, display?: string): string {
@@ -75,7 +77,7 @@ function cell(row: Record<string, unknown>, field: MetaEntity["fields"][number])
   }
 }
 
-export function AppShell({ onLogout }: Props) {
+export function AppShell({ onLogout, onForbidden }: Props) {
   const [meta, setMeta] = useState<MetaResponse | null>(null);
   const [me, setMe] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -134,8 +136,12 @@ export function AppShell({ onLogout }: Props) {
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "failed to load");
         if (String(err).includes("forbidden") || String(err).includes("admin")) {
-          logout();
-          onLogout();
+          if (onForbidden) {
+            onForbidden();
+          } else {
+            logout();
+            onLogout();
+          }
         }
       });
   }, []);
@@ -148,8 +154,12 @@ export function AppShell({ onLogout }: Props) {
         if (!cancelled) {
           setMeta((current) => (JSON.stringify(current) === JSON.stringify(next) ? current : next));
         }
-      } catch {
-        // keep the last good schema
+      } catch (err) {
+        // A 403 means this session lost the admin role: hand back to the gate.
+        if (!cancelled && err instanceof Error && err.message === "admin only" && onForbidden) {
+          onForbidden();
+        }
+        // Otherwise keep the last good schema.
       }
     }
     const timer = window.setInterval(() => void pollMeta(), 2500);

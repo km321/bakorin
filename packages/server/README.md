@@ -22,3 +22,7 @@ const runtime = await createRuntime({
 ```
 
 This package is published on the npm `beta` tag. See `PUBLISHING.md` in the repo root. Do not `npm publish` until you intend a public beta.
+
+## License
+
+AGPL-3.0-only. See `LICENSE`. Commercial licenses are available from Melton Studios.

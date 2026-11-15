@@ -1,3 +1,4 @@
+/** @jsxImportSource preact */
 import type { ComponentChildren } from "preact";
 import { ThemeToggle } from "./ThemeToggle.tsx";
 

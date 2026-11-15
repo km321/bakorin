@@ -103,6 +103,24 @@ export function logout(): void {
   localStorage.removeItem(REFRESH_KEY);
 }
 
+/** Revoke the refresh token on the server (best effort), then clear the local session. */
+export async function signOut(): Promise<void> {
+  const refreshToken = localStorage.getItem(REFRESH_KEY);
+  if (refreshToken) {
+    try {
+      await request("/api/v1/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken }) });
+    } catch {
+      // Clearing the local session below is what signs this browser out.
+    }
+  }
+  logout();
+}
+
+/** Authenticated fetch for the admin access check. */
+export function authedFetch(path: string): Promise<Response> {
+  return request(path);
+}
+
 export function hasToken(): boolean {
   return Boolean(localStorage.getItem(TOKEN_KEY));
 }
