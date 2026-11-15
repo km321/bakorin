@@ -6,10 +6,18 @@ import { shortError } from "../webhooks/dispatcher.ts";
 import { compileTemplate } from "./engine.ts";
 import { renderMail, type RenderedMail } from "./files.ts";
 import { buildRuleData, matchingRules } from "./rules.ts";
-import type { Mailer } from "./types.ts";
+import type { Mailer, MailMessage } from "./types.ts";
+import { isAuthKind, unsealMail, type AuthEmailKind } from "./auth.ts";
+
+/** Lifetime of the one time links in system emails (matches auth/account.ts). */
+export const AUTH_LINK_TTL_MS: Record<AuthEmailKind, number> = {
+  verify: 24 * 60 * 60 * 1000,
+  reset: 60 * 60 * 1000,
+  invite: 7 * 24 * 60 * 60 * 1000,
+};
 
 export type MailDeliveryStatus = "pending" | "sending" | "sent" | "failed";
-export type MailSource = "rule" | "hook" | "test";
+export type MailSource = "rule" | "hook" | "test" | "auth";
 
 const CLAIM_MS = 60_000;
 
@@ -82,6 +90,10 @@ export interface EnqueueMailInput {
   literalAddresses?: boolean;
   data: Record<string, unknown>;
   maxAttempts?: number;
+  /** System emails: verify, reset, or invite. */
+  purpose?: string | null;
+  /** Encrypted real body (see mail/auth.ts). html/text from render are then the redacted copy. */
+  sealed?: string | null;
   /** Produces subject, html, and text. Errors mark the delivery failed instead of throwing. */
   render: () => RenderedMail;
 }
@@ -154,6 +166,8 @@ export async function enqueueMail(db: BakorinDb, input: EnqueueMailInput): Promi
         next_attempt_at: now,
         sent_at: null,
         created_at: now,
+        purpose: input.purpose ?? null,
+        sealed: error ? null : (input.sealed ?? null),
       })
       .execute();
   } catch (cause) {
@@ -352,6 +366,11 @@ export async function recoverStuckSends(db: BakorinDb, mailer: Mailer): Promise<
   return Number(result?.numUpdatedRows ?? 0);
 }
 
+export interface DeliverOptions {
+  /** JWT secrets (current, previous) used to open sealed system emails. */
+  secrets?: Array<string | undefined>;
+}
+
 export async function drainMailOutbox(
   db: BakorinDb,
   getAst: () => SchemaAST,
@@ -385,7 +404,9 @@ export async function drainMailOutbox(
       if (stopped()) {
         return;
       }
-      await deliverMailById(db, mailer, String(row.id));
+      await deliverMailById(db, mailer, String(row.id), {
+        secrets: [ast.runtime.jwtSecret, ast.runtime.jwtSecretPrevious],
+      });
     }
   } catch {
     // Database already closed during shutdown.
@@ -393,7 +414,12 @@ export async function drainMailOutbox(
 }
 
 /** Claims one pending row and sends it. A row that is not pending is never sent. */
-export async function deliverMailById(db: BakorinDb, mailer: Mailer, id: string): Promise<MailDeliveryStatus | null> {
+export async function deliverMailById(
+  db: BakorinDb,
+  mailer: Mailer,
+  id: string,
+  options: DeliverOptions = {},
+): Promise<MailDeliveryStatus | null> {
   const now = new Date().toISOString();
   const claimed = await db
     .updateTable(MAIL_OUTBOX_TABLE)
@@ -412,6 +438,28 @@ export async function deliverMailById(db: BakorinDb, mailer: Mailer, id: string)
     return null;
   }
   const attempts = Number(row.attempts) + 1;
+  let html = String(row.html);
+  let text = String(row.body_text);
+  let meta: MailMessage["meta"] = { purpose: "mail" };
+  if (row.sealed) {
+    const opened = unsealMail(options.secrets ?? [], String(row.sealed));
+    if (!opened) {
+      await db
+        .updateTable(MAIL_OUTBOX_TABLE)
+        .set({
+          attempts,
+          status: "failed",
+          locked_until: null,
+          last_error: "cannot open this system email (the JWT secret changed). Ask the user to request a new one.",
+        })
+        .where("id", "=", id)
+        .execute();
+      return "failed";
+    }
+    html = opened.html;
+    text = opened.text;
+    meta = opened.meta ?? meta;
+  }
   try {
     await mailer.send({
       to: parseList(row.to_addrs),
@@ -419,10 +467,10 @@ export async function deliverMailById(db: BakorinDb, mailer: Mailer, id: string)
       bcc: parseList(row.bcc_addrs),
       replyTo: row.reply_to ? String(row.reply_to) : undefined,
       subject: String(row.subject),
-      html: String(row.html),
-      text: String(row.body_text),
+      html,
+      text,
       idempotencyKey: id,
-      meta: { purpose: "mail" },
+      meta,
     });
   } catch (error) {
     const maxAttempts = Number(row.max_attempts) || MAIL_DEFAULT_MAX_ATTEMPTS;
@@ -445,7 +493,14 @@ export async function deliverMailById(db: BakorinDb, mailer: Mailer, id: string)
   }
   await db
     .updateTable(MAIL_OUTBOX_TABLE)
-    .set({ attempts, status: "sent", sent_at: new Date().toISOString(), last_error: null, locked_until: null })
+    .set({
+      attempts,
+      status: "sent",
+      sent_at: new Date().toISOString(),
+      last_error: null,
+      locked_until: null,
+      sealed: null,
+    })
     .where("id", "=", id)
     .execute();
   return "sent";
@@ -465,8 +520,12 @@ export async function cleanupSentMail(db: BakorinDb, retainDays: number): Promis
 export async function retryMailDelivery(
   db: BakorinDb,
   id: string,
-): Promise<"ok" | "missing" | "not_failed" | "not_retryable"> {
-  const row = await db.selectFrom(MAIL_OUTBOX_TABLE).select(["status", "to_addrs", "subject"]).where("id", "=", id).executeTakeFirst();
+): Promise<"ok" | "missing" | "not_failed" | "not_retryable" | "expired"> {
+  const row = await db
+    .selectFrom(MAIL_OUTBOX_TABLE)
+    .select(["status", "to_addrs", "subject", "purpose", "sealed", "created_at"])
+    .where("id", "=", id)
+    .executeTakeFirst();
   if (!row) {
     return "missing";
   }
@@ -475,6 +534,12 @@ export async function retryMailDelivery(
   }
   if (parseList(row.to_addrs).length === 0 || !String(row.subject ?? "")) {
     return "not_retryable";
+  }
+  if (row.purpose && isAuthKind(row.purpose)) {
+    const age = Date.now() - new Date(String(row.created_at)).getTime();
+    if (!row.sealed || age > AUTH_LINK_TTL_MS[row.purpose]) {
+      return "expired";
+    }
   }
   await db
     .updateTable(MAIL_OUTBOX_TABLE)
@@ -489,6 +554,7 @@ export function viewMailDelivery(row: Record<string, unknown>) {
   return {
     id: String(row.id),
     source: String(row.source),
+    purpose: row.purpose == null ? null : String(row.purpose),
     ruleId: row.rule_id == null ? null : String(row.rule_id),
     template: row.template == null ? null : String(row.template),
     entity: row.entity == null ? null : String(row.entity),

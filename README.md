@@ -161,7 +161,7 @@ mail:
     expand: [customer]
 ```
 
-See [docs/mail.md](docs/mail.md).
+The built in verify, reset, and invite emails use the same outbox (links redacted in the delivery log) and can be restyled with `mail/_auth/<kind>.html`. See [docs/mail.md](docs/mail.md).
 
 Field types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`.
 

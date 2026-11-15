@@ -26,6 +26,22 @@ const STATUS_LABELS: Record<MailDeliveryStatus, string> = {
   failed: "Failed",
 };
 
+const SYSTEM_LABELS: Record<string, string> = {
+  verify: "Verify email",
+  reset: "Password reset",
+  invite: "Invite",
+};
+
+export function sourceLabel(row: Pick<MailDelivery, "source" | "ruleId" | "purpose">): string {
+  if (row.source === "rule") {
+    return row.ruleId ?? "rule";
+  }
+  if (row.source === "auth") {
+    return `system: ${row.purpose ?? "auth"}`;
+  }
+  return row.source;
+}
+
 function message(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
@@ -202,6 +218,8 @@ export function Mail({ meta }: { meta: MetaResponse | null }) {
 
   const rules = overview?.rules ?? [];
   const templates = overview?.templates ?? [];
+  const system = overview?.system ?? [];
+  const isSystem = selection?.template.startsWith("_auth/") ?? false;
   const entityNames = meta?.entities.map((entity) => entity.name) ?? [];
   const activeRule = rules.find((rule) => rule.id === selection?.ruleId) ?? null;
   const filters: StatusFilter[] = ["all", "pending", "sending", "sent", "failed"];
@@ -296,6 +314,32 @@ export function Mail({ meta }: { meta: MetaResponse | null }) {
             </ul>
           )}
           {overview?.layout ? <p class="muted mail-empty">Shared layout: mail/_layout.html</p> : null}
+          {system.length > 0 ? (
+            <>
+              <h2 class="mail-heading">System emails</h2>
+              <ul class="mail-list">
+                {system.map((item) => {
+                  const custom = item.html || item.text || item.subject;
+                  const active = selection?.template === item.template;
+                  return (
+                    <li key={item.kind}>
+                      <button
+                        type="button"
+                        class={active ? "mail-item active" : "mail-item"}
+                        aria-pressed={active}
+                        onClick={() => choose({ template: item.template, ruleId: null, entity: "", recordId: "" })}
+                      >
+                        <strong>{SYSTEM_LABELS[item.kind] ?? item.kind}</strong>
+                        <span class="muted">
+                          {custom ? `custom: mail/${item.template}` : "built in default"} · links hidden in the log
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          ) : null}
         </aside>
 
         <section class="mail-preview" aria-label="Preview">
@@ -307,7 +351,7 @@ export function Mail({ meta }: { meta: MetaResponse | null }) {
                   <select
                     id="mail-entity"
                     value={selection.entity}
-                    disabled={Boolean(activeRule)}
+                    disabled={Boolean(activeRule) || isSystem}
                     onChange={(event) =>
                       choose({ ...selection, entity: (event.target as HTMLSelectElement).value, recordId: "" })
                     }
@@ -362,7 +406,13 @@ export function Mail({ meta }: { meta: MetaResponse | null }) {
                     ) : null}
                     <div>
                       <dt>Data</dt>
-                      <dd>{preview.sample ? "Sample values" : `Record ${preview.recordId ?? ""}`}</dd>
+                      <dd>
+                        {isSystem
+                          ? "Placeholder link. Real links are never shown here"
+                          : preview.sample
+                            ? "Sample values"
+                            : `Record ${preview.recordId ?? ""}`}
+                      </dd>
                     </div>
                   </dl>
                   <div class="filters" role="tablist" aria-label="Preview format">
@@ -447,7 +497,7 @@ export function Mail({ meta }: { meta: MetaResponse | null }) {
                   <td>{formatDateTime(row.createdAt)}</td>
                   <td class="mono">{row.to.join(", ")}</td>
                   <td>{row.subject}</td>
-                  <td class="mono">{row.source === "rule" ? (row.ruleId ?? "rule") : row.source}</td>
+                  <td class="mono">{sourceLabel(row)}</td>
                   <td>
                     <span class={`badge status-${row.status}`}>{STATUS_LABELS[row.status]}</span>
                   </td>

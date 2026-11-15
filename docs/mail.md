@@ -225,9 +225,46 @@ A message is never sent twice once a send has succeeded:
 
 Statuses: `pending`, `sending`, `sent`, `failed`.
 
+## System emails (verify, reset, invite)
+
+The built in account emails use the same outbox as mail rules: signup verification, admin **Resend verification**, password reset, and admin invites. They are queued during the request and sent in the background, so they get the same lease, retries with backoff, idempotency, and a row in the admin delivery log, labeled `system: verify`, `system: reset`, or `system: invite`.
+
+API responses do not change. `forgot-password` still returns the same `200` body whether or not the email belongs to an account, and the request never waits on the mail provider, so delivery speed or failures cannot reveal which addresses exist.
+
+The one time links stay private:
+
+- The `html` and `body_text` columns of a system email only hold a redacted copy, for example `/reset-password?token=[redacted]`. That is what the delivery log, the database, and backups contain.
+- The real message is stored encrypted (AES-256-GCM, key derived from `JWT_SECRET`) until it is sent, then the encrypted copy is deleted.
+- The admin delivery log never returns message bodies or tokens, and previews of system emails use a placeholder link (`?token=preview-token-not-valid`).
+- **Retry** on a failed system email is refused once its link has expired (verify 24 hours, reset 1 hour, invite 7 days). Ask the person to request a new email instead.
+- If `JWT_SECRET` changes while a system email is still waiting (and the old value is not in `JWT_SECRET_PREVIOUS`), the email is marked failed instead of sent.
+
+With `MAIL_DRIVER=log` the server log still prints the link, because that is how you test locally. Do not use the log driver in production.
+
+### Custom system templates
+
+The defaults are plain and work everywhere. To brand them, add any of these files. Each file overrides only its own part, so a custom `reset.html` keeps the default subject unless you also add `reset.subject`.
+
+```
+mail/_auth/verify.html    mail/_auth/verify.txt    mail/_auth/verify.subject
+mail/_auth/reset.html     mail/_auth/reset.txt     mail/_auth/reset.subject
+mail/_auth/invite.html    mail/_auth/invite.txt    mail/_auth/invite.subject
+```
+
+Available values: `{{ link }}`, `{{ email }}`, `{{ expires }}` (for example `1 hour`), `{{ purpose }}`, `{{ app.name }}`, and `{{ app.url }}`. A custom HTML body is wrapped in `mail/_layout.html` when you have one, and a missing `.txt` is generated from the HTML.
+
+```html title="mail/_auth/reset.html"
+<h1>Reset your password</h1>
+<p>Hi {{ email }}, use this link within {{ expires }}:</p>
+<p><a href="{{ link }}">Choose a new password</a></p>
+<p>If you did not ask for this, ignore this email.</p>
+```
+
+Bakorin checks these files at startup: every `.html` and `.txt` override must contain `{{ link }}`, and a `.subject` must not. The admin Mail page lists the three system emails under **System emails** with a preview and **Send test to me**.
+
 ## Drivers
 
-Mail rules and hook sends use the same driver as the account emails. Set `MAIL_DRIVER` to `log` (default, prints and sends nothing), `resend`, or `smtp`, and `MAIL_FROM` for the From header. All three support lists, `cc`, `bcc`, and `replyTo`.
+Mail rules, hook sends, and system emails all use one driver. Set `MAIL_DRIVER` to `log` (default, prints and sends nothing), `resend`, or `smtp`, and `MAIL_FROM` for the From header. All three support lists, `cc`, `bcc`, and `replyTo`.
 
 ## Admin Mail page
 

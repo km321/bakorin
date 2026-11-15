@@ -182,10 +182,18 @@ export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): P
         locked_until ${text},
         next_attempt_at ${text} not null,
         sent_at ${text},
-        created_at ${text} not null
+        created_at ${text} not null,
+        purpose ${text},
+        sealed ${text}
       )`,
     )
     .execute(db);
+  const mailColumns = await tableColumns(db, dialect, MAIL_OUTBOX_TABLE);
+  for (const column of ["purpose", "sealed"]) {
+    if (!mailColumns.has(column)) {
+      await sql.raw(`alter table ${MAIL_OUTBOX_TABLE} add column ${column} ${text}`).execute(db);
+    }
+  }
   await sql
     .raw(`create unique index if not exists _bakorin_mail_outbox_key_idx on ${MAIL_OUTBOX_TABLE} (idempotency_key)`)
     .execute(db);

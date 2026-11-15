@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { createClient } from "@bakorin/sdk";
-import { boot } from "./helpers.ts";
-import { clearLoggedMail, getLoggedMail, resetRateLimit } from "@bakorin/server";
+import { boot, waitForLoggedToken } from "./helpers.ts";
+import { clearLoggedMail, resetRateLimit } from "@bakorin/server";
 
 describe("sdk account methods", () => {
   test("signup forgot reset verify and accept invite", async () => {
@@ -19,7 +19,7 @@ describe("sdk account methods", () => {
     expect(session.user.role).toBe("user");
     expect(session.accessToken).toBeTruthy();
     await api.forgotPassword({ email: "sdk@example.com" });
-    const resetToken = getLoggedMail().filter((item) => item.meta?.purpose === "reset").at(-1)?.meta?.token;
+    const resetToken = await waitForLoggedToken("reset");
     expect(resetToken).toBeTruthy();
     await api.resetPassword({ token: resetToken!, password: "sdk-reset-99" });
     const login = await api.login({ email: "sdk@example.com", password: "sdk-reset-99" });
@@ -36,7 +36,7 @@ describe("sdk account methods", () => {
       },
     });
     await admin.invite({ email: "invited@example.com", name: "Invited", role: "user" });
-    const inviteToken = getLoggedMail().filter((item) => item.meta?.purpose === "invite").at(-1)?.meta?.token;
+    const inviteToken = await waitForLoggedToken("invite");
     const accepted = await api.acceptInvite({ token: inviteToken!, password: "invite-pass-1" });
     expect(accepted.user.email).toBe("invited@example.com");
     await runtime.close();

@@ -101,3 +101,23 @@ export function client(runtime: RuntimeHandles & { dir?: string }, token?: strin
     },
   };
 }
+
+/**
+ * Account emails go through the mail outbox and are delivered in the background,
+ * so tests wait for the log driver to record them.
+ */
+export async function waitForLoggedToken(
+  purpose: "reset" | "verify" | "invite",
+  timeoutMs = 4000,
+): Promise<string> {
+  const { getLoggedMail } = await import("@bakorin/server");
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const token = getLoggedMail().filter((item) => item.meta?.purpose === purpose).at(-1)?.meta?.token;
+    if (token) {
+      return token;
+    }
+    await Bun.sleep(10);
+  }
+  throw new Error(`no ${purpose} mail`);
+}

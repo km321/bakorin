@@ -16,6 +16,7 @@ import {
   type MailDeliveryStatus,
 } from "./outbox.ts";
 import { appInfo, buildRuleData, sampleRuleData } from "./rules.ts";
+import { authKindFromTemplate, listAuthTemplates, mailSecrets, renderAuthEmail, sampleAuthLink } from "./auth.ts";
 
 const PREVIEW_TTL_MS = 5 * 60 * 1000;
 
@@ -76,6 +77,34 @@ export async function buildPreview(
   request: PreviewRequest,
 ): Promise<PreviewResult> {
   const { ast, db, projectDir } = ctx;
+  const authKind = authKindFromTemplate(request.template);
+  if (authKind) {
+    // System emails preview with a placeholder link. A real token is never rendered here.
+    const data = {
+      appName: ast.appName,
+      appUrl: ast.runtime.appUrl,
+      link: sampleAuthLink(ast.runtime.appUrl, authKind),
+      email: "person@example.com",
+    };
+    let rendered: RenderedMail;
+    try {
+      rendered = renderAuthEmail(projectDir, authKind, data);
+    } catch (error) {
+      throw new PreviewError(error instanceof Error ? error.message : String(error), 422);
+    }
+    return {
+      template: `_auth/${authKind}`,
+      ruleId: null,
+      entity: null,
+      recordId: null,
+      sample: true,
+      to: [],
+      cc: [],
+      bcc: [],
+      rendered,
+      data: { app: appInfo(ast), link: data.link, email: data.email },
+    };
+  }
   let rule: MailRuleAST | undefined;
   if (request.ruleId) {
     rule = (ast.mail ?? []).find((item) => item.id === request.ruleId);
@@ -243,6 +272,7 @@ export function createMailRoutes(): Hono {
         driver: ctx.mailer.driver,
         layout: hasLayout(ctx.projectDir),
         templates,
+        system: listAuthTemplates(ctx.projectDir),
         rules: rules.map((rule) => ({
           id: rule.id,
           entity: rule.entity,
@@ -345,7 +375,7 @@ export function createMailRoutes(): Hono {
       maxAttempts: 1,
       render: () => ({ ...preview.rendered, subject: `[Test] ${preview.rendered.subject}` }),
     });
-    await deliverMailById(ctx.db, ctx.mailer, result.id);
+    await deliverMailById(ctx.db, ctx.mailer, result.id, { secrets: mailSecrets(ctx.ast) });
     const row = await ctx.db.selectFrom(MAIL_OUTBOX_TABLE).selectAll().where("id", "=", result.id).executeTakeFirst();
     return c.json({ data: row ? viewMailDelivery(row as Record<string, unknown>) : null }, 201);
   });
@@ -392,8 +422,18 @@ export function createMailRoutes(): Hono {
           { error: { code: "conflict", message: "this delivery never rendered; fix the template or rule instead" } },
           409,
         );
+      case "expired":
+        return c.json(
+          {
+            error: {
+              code: "conflict",
+              message: "the link in this email has expired; ask the person to request a new one",
+            },
+          },
+          409,
+        );
       case "ok":
-        await deliverMailById(ctx.db, ctx.mailer, id);
+        await deliverMailById(ctx.db, ctx.mailer, id, { secrets: mailSecrets(ctx.ast) });
         break;
       default: {
         const exhaustive: never = result;

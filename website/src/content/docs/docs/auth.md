@@ -49,7 +49,7 @@ Reset, verify, and invite emails link to your front end, using `APP_URL`:
 - `/verify-email?token=`
 - `/accept-invite?token=`
 
-The Astro and Next.js starters include these pages. Mail delivery is covered in [Email](/docs/email/).
+The Astro and Next.js starters include these pages. These emails go through the mail outbox: they are sent in the background with retries, show up in the admin Mail page delivery log with the link redacted, and can be restyled with `mail/_auth/reset.html` and friends. See [System emails](/docs/email/#system-emails-verify-reset-invite).
 
 ## Lockout and rate limits
 

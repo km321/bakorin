@@ -35,4 +35,6 @@ Set `JWT_SECRET` to the new key and `JWT_SECRET_PREVIOUS` to the old key. Verify
 - `/verify-email?token=`
 - `/accept-invite?token=`
 
+These emails are queued in the mail outbox and sent in the background with retries. The admin Mail page shows them as `system: verify`, `system: reset`, and `system: invite`, with the link redacted. Override them with `mail/_auth/<kind>.html|.txt|.subject`: see [System emails](mail.md#system-emails-verify-reset-invite).
+
 Resend setup (API key, verified domain, `MAIL_FROM`, and how to test the three emails): [Email with Resend](resend.md). Missing `RESEND_API_KEY` with `MAIL_DRIVER=resend` fails at startup. In production the message starts with `[bakorin] production startup failed`.

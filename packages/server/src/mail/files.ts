@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { compileTemplate, escapeHtml, htmlToText, TemplateError } from "./engine.ts";
+import { validateAuthTemplates } from "./auth.ts";
 
 export const MAIL_TEMPLATE_NAME = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const MAX_TEMPLATE_BYTES = 512 * 1024;
@@ -186,6 +187,7 @@ export function validateMailTemplates(
     checkSyntax(`${template.name}.subject`);
   }
   checkSyntax("_layout.html", ["body"]);
+  problems.push(...validateAuthTemplates(projectDir));
   if (problems.length > 0) {
     throw new TemplateError(problems.join("\n"));
   }

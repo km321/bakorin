@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { boot, client, MINI_YAML } from "./helpers.ts";
+import { boot, client, MINI_YAML, waitForLoggedToken } from "./helpers.ts";
 import { clearLoggedMail, getLoggedMail, resetRateLimit } from "@bakorin/server";
 
 async function signup(runtime: Awaited<ReturnType<typeof boot>>, email: string) {
@@ -20,13 +20,8 @@ async function promoteAdmin(runtime: Awaited<ReturnType<typeof boot>>, email: st
   return (await login.json()).data as { accessToken: string };
 }
 
-function lastToken(purpose: "reset" | "verify" | "invite"): string {
-  const mail = getLoggedMail().filter((item) => item.meta?.purpose === purpose).at(-1);
-  const token = mail?.meta?.token;
-  if (!token) {
-    throw new Error(`no ${purpose} mail`);
-  }
-  return token;
+function lastToken(purpose: "reset" | "verify" | "invite"): Promise<string> {
+  return waitForLoggedToken(purpose);
 }
 
 describe("account email flows", () => {
@@ -60,7 +55,7 @@ describe("account email flows", () => {
       body: JSON.stringify({ email: "resetme@example.com" }),
     });
     expect(forgot.status).toBe(200);
-    const token = lastToken("reset");
+    const token = await lastToken("reset");
     expect(getLoggedMail().at(-1)?.meta?.link).toContain("/reset-password?token=");
     const reset = await client(runtime).fetch("/api/v1/auth/reset-password", {
       method: "POST",
@@ -94,7 +89,7 @@ describe("account email flows", () => {
       method: "POST",
       body: JSON.stringify({ email: "expire@example.com" }),
     });
-    const token = lastToken("reset");
+    const token = await lastToken("reset");
     await runtime.db.updateTable("_bakorin_auth_tokens").set({ expires_at: new Date(0).toISOString() }).execute();
     const reset = await client(runtime).fetch("/api/v1/auth/reset-password", {
       method: "POST",
@@ -122,7 +117,7 @@ describe("account email flows", () => {
       body: JSON.stringify({ email: "verify@example.com", password: "password123" }),
     });
     expect(blocked.status).toBe(403);
-    const token = lastToken("verify");
+    const token = await lastToken("verify");
     const verify = await client(runtime).fetch("/api/v1/auth/verify-email", {
       method: "POST",
       body: JSON.stringify({ token }),
@@ -157,7 +152,7 @@ describe("account email flows", () => {
     });
     expect(invited.status).toBe(201);
     expect((await invited.json()).data.role).toBe("admin");
-    const token = lastToken("invite");
+    const token = await lastToken("invite");
     const accepted = await client(runtime).fetch("/api/v1/auth/accept-invite", {
       method: "POST",
       body: JSON.stringify({ token, password: "invite-pass-1" }),

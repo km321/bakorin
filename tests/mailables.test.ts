@@ -166,10 +166,14 @@ async function waitFor<T>(label: string, fn: () => Promise<T | undefined | null>
   throw new Error(`timed out waiting for ${label}`);
 }
 
+/** Outbox rows from rules, hooks, and tests. Signup verify emails (source "auth") are covered in auth-mail.test.ts. */
 async function outboxRows(runtime: Runtime) {
-  return (await runtime.db.selectFrom(MAIL_OUTBOX_TABLE).selectAll().orderBy("created_at", "asc").execute()) as Array<
-    Record<string, unknown>
-  >;
+  return (await runtime.db
+    .selectFrom(MAIL_OUTBOX_TABLE)
+    .selectAll()
+    .where("source", "!=", "auth")
+    .orderBy("created_at", "asc")
+    .execute()) as Array<Record<string, unknown>>;
 }
 
 async function tokens(runtime: Runtime) {
@@ -723,12 +727,14 @@ describe("admin mail endpoints", () => {
       data: Array<{ status: string }>;
       meta: { total: number };
     };
-    expect(all.meta.total).toBe(2);
+    const authRows = await runtime.db.selectFrom(MAIL_OUTBOX_TABLE).select("id").where("source", "=", "auth").execute();
+    expect(authRows.length).toBeGreaterThan(0);
+    expect(all.meta.total).toBe(2 + authRows.length);
     expect(all.data).toHaveLength(1);
     const sent = (await (await admin.fetch("/api/v1/mail/deliveries?status=sent")).json()) as {
       data: Array<{ status: string; source: string }>;
     };
-    expect(sent.data.map((row) => row.source)).toEqual(["test"]);
+    expect(sent.data.map((row) => row.source).filter((source) => source !== "auth")).toEqual(["test"]);
     const pending = (await (await admin.fetch("/api/v1/mail/deliveries?status=pending")).json()) as {
       data: Array<{ ruleId: string }>;
     };

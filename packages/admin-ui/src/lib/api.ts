@@ -388,10 +388,19 @@ export interface MailRuleInfo {
   maxAttempts: number;
 }
 
+export interface MailSystemTemplate {
+  kind: "verify" | "reset" | "invite";
+  template: string;
+  html: boolean;
+  text: boolean;
+  subject: boolean;
+}
+
 export interface MailOverview {
   driver: string;
   layout: boolean;
   templates: MailTemplateInfo[];
+  system?: MailSystemTemplate[];
   rules: MailRuleInfo[];
 }
 
@@ -422,6 +431,7 @@ export type MailDeliveryStatus = "pending" | "sending" | "sent" | "failed";
 export interface MailDelivery {
   id: string;
   source: string;
+  purpose?: string | null;
   ruleId: string | null;
   template: string | null;
   entity: string | null;

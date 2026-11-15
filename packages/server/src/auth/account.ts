@@ -8,8 +8,8 @@ import { issueRefreshToken, newToken, revokeAllForUser } from "./refresh.ts";
 import { rateLimit } from "./rate-limit.ts";
 import { writeAudit } from "../audit/log.ts";
 import { accountLink, consumeAuthToken, issueAuthToken } from "./tokens.ts";
-import { renderAccountEmail } from "../mail/templates.ts";
-import type { Mailer, MailMessage } from "../mail/types.ts";
+import type { Mailer } from "../mail/types.ts";
+import { queueAuthEmail } from "../mail/auth-outbox.ts";
 import { publicRow } from "../crud/validate.ts";
 import { decodeRow } from "../crud/query.ts";
 import { requireAdmin } from "./guard.ts";
@@ -19,13 +19,6 @@ function clientKey(c: { req: { header: (name: string) => string | undefined } })
   return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "local";
 }
 
-async function sendQuietly(mailer: Mailer, message: MailMessage): Promise<void> {
-  try {
-    await mailer.send(message);
-  } catch (error) {
-    console.error("[bakorin] mail send failed", error instanceof Error ? error.message : error);
-  }
-}
 
 export function createAccountRoutes(): Hono {
   const app = new Hono();
@@ -54,8 +47,7 @@ export function createAccountRoutes(): Hono {
       ttlSeconds: 60 * 60,
     });
     const link = accountLink(ctx.ast.runtime.appUrl, "/reset-password", token);
-    const rendered = renderAccountEmail("reset", { appName: ctx.ast.appName, link });
-    await sendQuietly(ctx.mailer, { to: email, ...rendered, meta: { purpose: "reset", token, link } });
+    await queueAuthEmail(ctx, "reset", { to: email, token, link });
     return c.json(ok);
   });
 
@@ -152,8 +144,7 @@ export function createAccountRoutes(): Hono {
     const email = String(row[ctx.ast.auth.identityField] ?? "");
     const token = await issueAuthToken(ctx.db, { userId, email, purpose: "verify", ttlSeconds: 60 * 60 * 24 });
     const link = accountLink(ctx.ast.runtime.appUrl, "/verify-email", token);
-    const rendered = renderAccountEmail("verify", { appName: ctx.ast.appName, link });
-    await sendQuietly(ctx.mailer, { to: email, ...rendered, meta: { purpose: "verify", token, link } });
+    await queueAuthEmail(ctx, "verify", { to: email, token, link });
     return c.json(ok);
   });
 
@@ -226,8 +217,7 @@ export function createAccountRoutes(): Hono {
       payload: { role, name },
     });
     const link = accountLink(ctx.ast.runtime.appUrl, "/accept-invite", token);
-    const rendered = renderAccountEmail("invite", { appName: ctx.ast.appName, link });
-    await sendQuietly(ctx.mailer, { to: email, ...rendered, meta: { purpose: "invite", token, link } });
+    await queueAuthEmail(ctx, "invite", { to: email, token, link });
     const actor = c.get("actor");
     await writeAudit(ctx.db, {
       action: "invite",
@@ -284,12 +274,11 @@ export function createAccountRoutes(): Hono {
 }
 
 export async function sendVerificationEmail(
-  ctx: { ast: SchemaAST; db: BakorinDb; mailer: Mailer },
+  ctx: { ast: SchemaAST; db: BakorinDb; mailer: Mailer; projectDir: string },
   userId: string,
   email: string,
 ): Promise<void> {
   const token = await issueAuthToken(ctx.db, { userId, email, purpose: "verify", ttlSeconds: 60 * 60 * 24 });
   const link = accountLink(ctx.ast.runtime.appUrl, "/verify-email", token);
-  const rendered = renderAccountEmail("verify", { appName: ctx.ast.appName, link });
-  await sendQuietly(ctx.mailer, { to: email, ...rendered, meta: { purpose: "verify", token, link } });
+  await queueAuthEmail(ctx, "verify", { to: email, token, link });
 }
