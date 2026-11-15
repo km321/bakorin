@@ -603,3 +603,21 @@ html[data-theme="dark"] .swagger-ui .opblock-body .opblock-loading-animation {
   border-color: var(--docs-line);
   border-top-color: var(--docs-accent);
 }
+
+/* Branded header (only rendered when app.yaml has a branding section). */
+.docs-banner .docs-brand {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.docs-brand-logo {
+  display: block;
+  max-height: 28px;
+  max-width: 160px;
+  width: auto;
+}
+.docs-brand span {
+  color: var(--docs-muted);
+}

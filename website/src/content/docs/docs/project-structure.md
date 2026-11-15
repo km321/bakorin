@@ -10,6 +10,7 @@ client/
   app.yaml          schema, policies, runtime
   hooks.ts          optional TypeScript escape hatch
   mail/             optional email templates (receipt.html, _layout.html)
+  branding/         optional logo and favicon for the branding section
   .env              JWT_SECRET and DATABASE_URL
   data/app.db       SQLite (local)
   data/uploads/     local files

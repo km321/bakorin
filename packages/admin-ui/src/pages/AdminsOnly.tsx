@@ -1,5 +1,6 @@
 /** @jsxImportSource preact */
 import { AuthLayout } from "../components/AuthLayout.tsx";
+import { Brand } from "../components/Brand.tsx";
 
 interface Props {
   identity: string | null;
@@ -10,10 +11,7 @@ export function AdminsOnly({ identity, onSignOut }: Props) {
   return (
     <AuthLayout>
       <section class="auth-card" role="alert" aria-labelledby="admins-only-title">
-        <div class="brand">
-          <strong>Bakorin</strong>
-          <span>Admin</span>
-        </div>
+        <Brand sub="Admin" />
         <h1 id="admins-only-title">Admins only</h1>
         <p>
           {identity ? `You are signed in as ${identity}, but this account is not an admin.` : "This account is not an admin."} The admin
@@ -37,10 +35,7 @@ export function AccessError({ onRetry, onSignOut }: ErrorProps) {
   return (
     <AuthLayout>
       <section class="auth-card" role="alert" aria-labelledby="access-error-title">
-        <div class="brand">
-          <strong>Bakorin</strong>
-          <span>Admin</span>
-        </div>
+        <Brand sub="Admin" />
         <h1 id="access-error-title">Could not check your access</h1>
         <p class="muted">The server did not answer as expected. Try again, or sign out.</p>
         <div class="row-actions">

@@ -16,6 +16,7 @@ import {
   type MailDeliveryStatus,
 } from "./outbox.ts";
 import { appInfo, buildRuleData, sampleRuleData } from "./rules.ts";
+import { emailBrand } from "../branding/assets.ts";
 import { authKindFromTemplate, listAuthTemplates, mailSecrets, renderAuthEmail, sampleAuthLink } from "./auth.ts";
 
 const PREVIEW_TTL_MS = 5 * 60 * 1000;
@@ -85,6 +86,7 @@ export async function buildPreview(
       appUrl: ast.runtime.appUrl,
       link: sampleAuthLink(ast.runtime.appUrl, authKind),
       email: "person@example.com",
+      brand: emailBrand(ast),
     };
     let rendered: RenderedMail;
     try {

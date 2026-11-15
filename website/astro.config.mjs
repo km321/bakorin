@@ -60,6 +60,7 @@ export default defineConfig({
             { label: "Auth", slug: "docs/auth" },
             { label: "Email", slug: "docs/email" },
             { label: "Files", slug: "docs/files" },
+            { label: "Branding", slug: "docs/branding" },
             { label: "Webhooks", slug: "docs/webhooks" },
             { label: "Admin UI", slug: "docs/admin-ui" },
             { label: "Schema visualizer", slug: "docs/schema" },

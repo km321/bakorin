@@ -1,5 +1,6 @@
 import { parse as parseYaml } from "yaml";
 import { SchemaError } from "./errors.ts";
+import { compileBranding } from "./branding.ts";
 import { assertIdent } from "./ident.ts";
 import { interpolateEnv } from "./interpolate.ts";
 import { parsePolicies } from "./policies.ts";
@@ -698,6 +699,7 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
     appName: yaml.app.name,
     appVersion: yaml.app.version ?? "0.1.0",
     appDescription: yaml.app.description,
+    ...(yaml.branding ? { branding: compileBranding(yaml.branding) } : {}),
     runtime,
     entities,
     entityMap,
@@ -714,6 +716,7 @@ export function serializeAst(ast: SchemaAST): string {
     appName: ast.appName,
     appVersion: ast.appVersion,
     appDescription: ast.appDescription,
+    branding: ast.branding,
     runtime: ast.runtime,
     entities: ast.entities,
     order: ast.order,

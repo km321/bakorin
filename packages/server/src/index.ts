@@ -11,7 +11,7 @@ export { migrateToSchema } from "./db/migrator.ts";
 export { runBackup } from "./backup/schedule.ts";
 export { listBackups } from "./backup/list.ts";
 export type { BackupInfo } from "./backup/list.ts";
-export { exportPortable, importPortable } from "./backup/archive.ts";
+export { exportPortable, importPortable, restoreProjectAssets } from "./backup/archive.ts";
 export { restoreSqliteSnapshot } from "./backup/sqlite.ts";
 export { hashPassword, verifyPassword } from "./auth/password.ts";
 export { issueRefreshToken, rotateRefreshToken, revokeAllForUser } from "./auth/refresh.ts";

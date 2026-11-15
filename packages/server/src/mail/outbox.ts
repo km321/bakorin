@@ -5,7 +5,7 @@ import { acquireLease, instanceHolder } from "../db/leases.ts";
 import { shortError } from "../webhooks/dispatcher.ts";
 import { compileTemplate } from "./engine.ts";
 import { renderMail, type RenderedMail } from "./files.ts";
-import { buildRuleData, matchingRules } from "./rules.ts";
+import { brandData, buildRuleData, matchingRules } from "./rules.ts";
 import type { Mailer, MailMessage } from "./types.ts";
 import { isAuthKind, unsealMail, type AuthEmailKind } from "./auth.ts";
 
@@ -276,7 +276,7 @@ export function createMailApi(db: BakorinDb, getAst: () => SchemaAST, projectDir
         throw new Error("ctx.mail.send needs an object like { to, subject, template, data }");
       }
       const ast = getAst();
-      const data = { app: { name: ast.appName, url: ast.runtime.appUrl }, ...(input.data ?? {}) };
+      const data = { app: { name: ast.appName, url: ast.runtime.appUrl }, ...brandData(ast), ...(input.data ?? {}) };
       const result = await enqueueMail(db, {
         source: "hook",
         idempotencyKey: input.idempotencyKey ? `hook:${input.idempotencyKey}` : undefined,

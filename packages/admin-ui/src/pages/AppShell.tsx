@@ -23,6 +23,7 @@ import { Audit } from "./Audit.tsx";
 import { Webhooks } from "./Webhooks.tsx";
 import { Mail } from "./Mail.tsx";
 import { Schema } from "./Schema.tsx";
+import { Brand } from "../components/Brand.tsx";
 
 type AdminPage = "records" | "backups" | "audit" | "webhooks" | "mail" | "schema";
 
@@ -241,10 +242,7 @@ export function AppShell({ onLogout, onForbidden }: Props) {
     <div class="app-shell">
       {navOpen ? <div class="sidebar-backdrop" onClick={() => setNavOpen(false)} /> : null}
       <aside class={navOpen ? "sidebar open" : "sidebar"} id="app-sidebar">
-        <div class="brand">
-          <strong>Bakorin</strong>
-          <span>{meta?.app.name ?? "loading"}</span>
-        </div>
+        <Brand sub={meta?.app.name ?? "loading"} />
         <nav class="nav" aria-label="Entities">
           <div class="nav-section">Data</div>
           {(meta?.entities ?? []).map((item) => (

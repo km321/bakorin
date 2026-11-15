@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { login } from "../lib/api.ts";
 import { AuthLayout } from "../components/AuthLayout.tsx";
+import { Brand } from "../components/Brand.tsx";
 
 interface Props {
   onLoggedIn: () => void;
@@ -29,10 +30,7 @@ export function Login({ onLoggedIn }: Props) {
   return (
     <AuthLayout>
       <form class="auth-card" onSubmit={submit}>
-        <div class="brand">
-          <strong>Bakorin</strong>
-          <span>Admin</span>
-        </div>
+        <Brand sub="Admin" />
         <h1>Sign in</h1>
         <p class="muted">Use an admin account from this project's auth entity.</p>
         {error ? <div class="banner">{error}</div> : null}

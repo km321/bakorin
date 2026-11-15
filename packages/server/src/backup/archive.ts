@@ -1,7 +1,7 @@
-import { cp, mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { sql } from "kysely";
-import { serializeAst, type SchemaAST } from "@bakorin/core";
+import { BRANDING_DIR, serializeAst, type SchemaAST } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
 import { FILES_TABLE, META_TABLE, REFRESH_TABLE } from "../db/system.ts";
 import type { FileStore } from "../files/store.ts";
@@ -34,6 +34,34 @@ export async function copyProjectFiles(projectDir: string, dest: string): Promis
       await cp(from, join(dest, name));
     }
   }
+  const branding = join(projectDir, BRANDING_DIR);
+  if (await isDir(branding)) {
+    await cp(branding, join(dest, BRANDING_DIR), { recursive: true });
+  }
+}
+
+async function isDir(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Puts the backup's branding/ folder (logo, favicon) back into the project so
+ * the restored project looks the same. Files with the same name are replaced.
+ * Returns the restored file names.
+ */
+export async function restoreProjectAssets(src: string, projectDir: string): Promise<string[]> {
+  const from = join(resolve(src), BRANDING_DIR);
+  if (!(await isDir(from))) {
+    return [];
+  }
+  const names = (await readdir(from)).filter((name) => !name.startsWith("."));
+  await mkdir(join(projectDir, BRANDING_DIR), { recursive: true });
+  await cp(from, join(projectDir, BRANDING_DIR), { recursive: true });
+  return names;
 }
 
 export async function exportPortable(options: {

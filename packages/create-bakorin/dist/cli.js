@@ -162,6 +162,7 @@ COPY .bakorin/packages ./packages
 RUN bun install
 WORKDIR /project
 COPY app.yaml hooks.ts ./
+COPY branding ./branding
 ENV NODE_ENV=production
 ENV BAKORIN_ENV=production
 ENV BAKORIN_DATA_DIR=/data
@@ -173,6 +174,7 @@ CMD ["bun", "/bakorin/packages/server/src/cli.ts", "start", "--dir", "/project"]
   return `FROM oven/bun:1.4
 WORKDIR /project
 COPY app.yaml hooks.ts ./
+COPY branding ./branding
 ENV NODE_ENV=production
 ENV BAKORIN_ENV=production
 ENV BAKORIN_DATA_DIR=/data
@@ -200,6 +202,9 @@ async function prompt(question, fallback) {
   rl.close();
   return answer.trim() || fallback;
 }
+function isLicenseFile(name) {
+  return /^(licen[cs]e|copying)(\.(md|txt))?$/i.test(name);
+}
 async function copyDir(from, to) {
   await mkdir(to, { recursive: true });
   const entries = await readdir(from, { withFileTypes: true });
@@ -211,7 +216,7 @@ async function copyDir(from, to) {
         continue;
       }
       await copyDir(src, dest);
-    } else if (entry.name === "README.md") {
+    } else if (entry.name === "README.md" || isLicenseFile(entry.name)) {
       continue;
     } else {
       await cp(src, dest);
@@ -296,11 +301,30 @@ async function rewriteSdkDependency(webDir, sdk, checkoutSdk) {
     return;
   }
   const pkg = JSON.parse(await readFile(pkgPath, "utf8"));
+  delete pkg.license;
   const spec = sdk === "local" && checkoutSdk ? toFileRef(webDir, checkoutSdk) : NPM_SDK;
   pkg.dependencies = { ...pkg.dependencies, "@bakorin/sdk": spec };
   await writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}
 `);
 }
+var BRANDING_NOTES = `# branding/
+
+Optional white label. Put a logo and favicon here and add a branding section to app.yaml:
+
+\`\`\`yaml
+branding:
+  name: Client Name
+  primaryColor: "#0f766e"
+  accentColor: "#f59e0b"
+  logo: branding/logo.svg
+  favicon: branding/favicon.png
+\`\`\`
+
+Without that section the admin, /docs, and system emails keep the default Bakorin look.
+Colors are adjusted automatically if they would fail WCAG AA contrast, and boot logs a warning.
+Use a png logo if your emails matter; many email clients do not show svg.
+Backups include this folder. See docs/branding in the Bakorin docs.
+`;
 function projectReadme(appName, options, sdk) {
   const apiStart = sdk === "local" ? `From the Bakorin checkout that generated this project:
 
@@ -336,6 +360,10 @@ ${options.frontend === "none" ? "" : `
    \`BAKORIN_URL\` defaults to http://127.0.0.1:4371.
 `}
 
+## Branding (optional)
+
+Add a \`branding:\` section to \`app.yaml\` with your client's name, colors, logo, and favicon. The files go in \`branding/\`. See \`branding/README.md\`.
+
 Railway: mount a volume at \`/data\`, set \`BAKORIN_DATA_DIR=/data\` and \`JWT_SECRET\`. See the Bakorin checkout file \`docs/deploy-railway.md\`.
 `;
 }
@@ -367,6 +395,8 @@ async function run(options) {
   await cp(join(TEMPLATES, "railway.toml"), join(dest, "railway.toml"));
   await cp(join(TEMPLATES, "docker-compose.yml"), join(dest, "docker-compose.yml"));
   await writeFile(join(dest, "README.md"), projectReadme(appName, options, sdk));
+  await mkdir(join(dest, "branding"), { recursive: true });
+  await writeFile(join(dest, "branding", "README.md"), BRANDING_NOTES);
   if (sdk === "local") {
     await vendorRuntime(dest);
   }
@@ -389,6 +419,7 @@ npm run dev
   console.log(`Created ${dest}`);
   console.log(`Schema: ${options.schema}   Frontend: ${options.frontend}   Mail: ${options.mail}   SDK: ${sdk}`);
   console.log("Next: copy .env.example to .env, then start Bakorin with bun run dev -- --dir <folder>");
+  console.log("Optional: white label the admin with a branding section in app.yaml (see branding/README.md).");
 }
 async function main() {
   if (hasFlag("--help") || hasFlag("-h")) {

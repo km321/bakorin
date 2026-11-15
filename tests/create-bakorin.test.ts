@@ -54,6 +54,9 @@ describe("create-bakorin", () => {
     const dockerfile = await Bun.file(join(dir, "Dockerfile")).text();
     expect(dockerfile).toContain("/bakorin/packages/server/src/cli.ts");
     expect(dockerfile).not.toContain("bunx");
+    expect(dockerfile).toContain("COPY branding ./branding");
+    const brandingNotes = await Bun.file(join(dir, "branding/README.md")).text();
+    expect(brandingNotes).toContain('primaryColor: "#0f766e"');
     expect(await Bun.file(join(dir, ".bakorin/packages/server/src/cli.ts")).exists()).toBe(true);
     expect(await Bun.file(join(dir, ".dockerignore")).exists()).toBe(true);
     const readme = await Bun.file(join(dir, "README.md")).text();
@@ -221,6 +224,7 @@ describe("create-bakorin", () => {
     expect(pkg.dependencies["@bakorin/sdk"]).toBe("^0.0.1");
     const dockerfile = await Bun.file(join(dir, "Dockerfile")).text();
     expect(dockerfile).toContain("bunx");
+    expect(dockerfile).toContain("COPY branding ./branding");
     expect(await Bun.file(join(dir, ".bakorin/package.json")).exists()).toBe(false);
   });
 

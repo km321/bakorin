@@ -15,7 +15,7 @@ import { loadProject } from "./app.ts";
 import { createDebounced } from "./dev-watch.ts";
 import { applyProjectEnv } from "./env-files.ts";
 import { runBackup } from "./backup/schedule.ts";
-import { exportPortable, importPortable, readManifest } from "./backup/archive.ts";
+import { exportPortable, importPortable, readManifest, restoreProjectAssets } from "./backup/archive.ts";
 import { restoreSqliteSnapshot } from "./backup/sqlite.ts";
 import { migrateToSchema } from "./db/migrator.ts";
 import { resolveRuntimePath } from "./paths.ts";
@@ -254,6 +254,10 @@ async function cmdRestore(): Promise<void> {
   }
   const source = resolve(src);
   const manifest = await readManifest(source);
+  const assets = await restoreProjectAssets(source, dir);
+  if (assets.length > 0) {
+    console.log(`restored branding/: ${assets.join(", ")}`);
+  }
   const runtime = await loadOrExit(dir);
   if (manifest.kind === "sqlite-snapshot") {
     await runtime.close();
@@ -347,7 +351,7 @@ Commands:
   mail preview <template|rule> [--record <id>] [--entity name] [--format html|text|json]
                       Render a mail template against a sample or real record
 
-A project is one folder: app.yaml, optional hooks.ts, mail/, data/, uploads.
+A project is one folder: app.yaml, optional hooks.ts, mail/, branding/, data/, uploads.
 `);
 }
 

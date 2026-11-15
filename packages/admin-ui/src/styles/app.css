@@ -1430,3 +1430,33 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 }
+
+/* White-label brand mark (only rendered when app.yaml has a branding section). */
+.brand.brand-custom {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brand-custom .brand-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.brand-custom strong {
+  letter-spacing: 0.02em;
+  text-transform: none;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.brand-logo {
+  display: block;
+  max-height: 32px;
+  max-width: 120px;
+  width: auto;
+  height: auto;
+  flex: 0 0 auto;
+}

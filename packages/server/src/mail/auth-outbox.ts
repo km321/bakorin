@@ -3,6 +3,7 @@ import { shortError } from "../webhooks/dispatcher.ts";
 import { redactToken, renderAuthEmail, sealMail, type AuthEmailKind, type AuthMailContext } from "./auth.ts";
 import { deliverMailById, enqueueMail } from "./outbox.ts";
 import { renderAccountEmail } from "./templates.ts";
+import { emailBrand } from "../branding/assets.ts";
 
 export interface QueueAuthEmailInput {
   to: string;
@@ -22,13 +23,19 @@ export async function queueAuthEmail(
   input: QueueAuthEmailInput,
 ): Promise<string | null> {
   try {
-    const data = { appName: ctx.ast.appName, appUrl: ctx.ast.runtime.appUrl, link: input.link, email: input.to };
+    const data = {
+      appName: ctx.ast.appName,
+      appUrl: ctx.ast.runtime.appUrl,
+      link: input.link,
+      email: input.to,
+      brand: emailBrand(ctx.ast),
+    };
     let rendered: { subject: string; html: string; text: string };
     try {
       rendered = renderAuthEmail(ctx.projectDir, kind, data);
     } catch (error) {
       console.error(`[bakorin:mail] mail/_auth/${kind} failed to render, using the default`, shortError(String(error)));
-      rendered = renderAccountEmail(kind, { appName: data.appName, link: data.link });
+      rendered = renderAccountEmail(kind, { appName: data.appName, link: data.link, brand: data.brand });
     }
     const sealed = sealMail(ctx.ast.runtime.jwtSecret, {
       html: rendered.html,

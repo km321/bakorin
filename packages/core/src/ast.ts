@@ -1,3 +1,5 @@
+import type { BrandingAST } from "./branding.ts";
+
 export const SCHEMA_AST_VERSION = 1 as const;
 
 export type DialectName = "sqlite" | "postgres";
@@ -160,6 +162,8 @@ export interface SchemaAST {
   appName: string;
   appVersion: string;
   appDescription?: string;
+  /** Present only when app.yaml has a branding section. */
+  branding?: BrandingAST;
   runtime: RuntimeAST;
   entities: EntityAST[];
   entityMap: Record<string, EntityAST>;

@@ -13,8 +13,10 @@ bakorin import ./portable       # load that archive into the current dialect
 
 ## What a backup contains
 
-- **SQLite:** a consistent `VACUUM INTO` copy of `app.db`, plus `app.yaml`, `hooks.ts`, and uploads, plus a portable export.
+- **SQLite:** a consistent `VACUUM INTO` copy of `app.db`, plus `app.yaml`, `hooks.ts`, the `branding/` folder, and uploads, plus a portable export.
 - **Postgres:** the portable NDJSON format (all entities, file metadata, schema, uploads).
+
+`bakorin restore` copies the backup's `branding/` folder back into the project before it boots.
 
 Refresh tokens are not part of the portable export. Users sign in again after an import.
 

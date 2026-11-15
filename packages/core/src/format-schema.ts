@@ -119,6 +119,9 @@ function formatIssue(issue: ZodIssue): string[] {
         }
         return [`app.yaml: missing "${path}"`];
       }
+      if (issue.path[0] === "branding" && /Color$/.test(String(issue.path[1] ?? ""))) {
+        return [`app.yaml: ${path} ${issue.message}`];
+      }
       return [`app.yaml: ${path || "root"} should be ${issue.expected}, not ${issue.received}`];
     }
     case "too_small":

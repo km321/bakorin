@@ -11,6 +11,7 @@ import { AuthLayout } from "./components/AuthLayout.tsx";
 import { ToastHost } from "./components/ToastHost.tsx";
 import { syncSystemTheme } from "./components/ThemeToggle.tsx";
 import "./styles/app.css";
+import { Brand } from "./components/Brand.tsx";
 
 type Gate = "loading" | "checking" | "first-admin" | "login" | "app" | "admins-only" | "access-error";
 
@@ -67,10 +68,7 @@ function Root() {
       screen = (
         <AuthLayout>
           <div class="auth-card">
-            <div class="brand">
-              <strong>Bakorin</strong>
-              <span>Admin</span>
-            </div>
+            <Brand sub="Admin" />
             <p class="muted">Loading...</p>
           </div>
         </AuthLayout>

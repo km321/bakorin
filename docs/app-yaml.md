@@ -61,6 +61,10 @@ webhooks:
 
 Set `runtime.webhooks.retainDays` (default 30) to control how long delivered outbox rows are kept. See [Webhooks](webhooks.md).
 
+## Branding
+
+Optional. `branding:` takes `name`, `primaryColor`, `accentColor`, `logo`, and `favicon`. Logo and favicon are files in `branding/`. Colors are quoted hex (`"#0f766e"`). See [branding.md](branding.md).
+
 ## Mail
 
 A top-level `mail:` list declares transactional email. Each rule names an entity, events, recipients (templates like `"{{ record.email }}"`), and a template file in `mail/`:

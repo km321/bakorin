@@ -30,6 +30,7 @@ import type { AppContext } from "./context.ts";
 import { startBackupScheduler } from "./backup/schedule.ts";
 import { resolveRuntimePath } from "./paths.ts";
 import { securityHeaders } from "./http/headers.ts";
+import { createBrandingRoutes, logBrandingWarnings, validateBrandingFiles } from "./branding/assets.ts";
 
 export interface RuntimeHandles {
   app: Hono;
@@ -90,6 +91,8 @@ export async function createRuntime(options: {
   let ast = compileAppYaml(options.yamlSource, { env });
   assertProductionCors(ast, env);
   validateMailTemplates(projectDir, ast.mail);
+  validateBrandingFiles(projectDir, ast.branding);
+  logBrandingWarnings(ast.branding);
   let opened = openDb(ast, projectDir);
   await migrateToSchema(opened.db, ast);
   await seedAdminOrLog(ast, opened.db, env);
@@ -129,7 +132,7 @@ export async function createRuntime(options: {
   });
   app.get("/health", (c) => c.json({ ok: true, app: context.ast.appName }));
   app.get("/healthz", (c) => c.json({ ok: true, app: context.ast.appName }));
-  app.get("/docs", () => docsIndex());
+  app.get("/docs", () => docsIndex(context.ast));
   app.route("/docs", createDocsRoutes());
   app.route("/api/v1/docs", createDocsRoutes());
   app.route("/api/v1/auth", createAuthRoutes());
@@ -141,6 +144,7 @@ export async function createRuntime(options: {
   app.route("/api/v1/mail", createMailRoutes());
   app.route("/api/v1", createMetaRoutes());
   app.route("/api/v1", createCrudRouter());
+  app.route("/branding", createBrandingRoutes());
   app.route("/admin", createAdminRoutes());
   hooks.routes?.(app);
 
@@ -156,6 +160,8 @@ export async function createRuntime(options: {
     async reload(source: string) {
       const next = compileAppYaml(source, { env });
       validateMailTemplates(projectDir, next.mail);
+      validateBrandingFiles(projectDir, next.branding);
+      logBrandingWarnings(next.branding);
       await migrateToSchema(context.db, next);
       context.ast = next;
       context.hooks = await loadHooks(projectDir, next.runtime.hooksPath);

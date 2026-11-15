@@ -219,3 +219,51 @@ describe("config builder", () => {
     }
   });
 });
+
+describe("config builder: branding", () => {
+  const branded = `app:
+  name: shop
+
+branding:
+  name: Acme Shop
+  primaryColor: "#ffcc00"
+  logo: branding/logo.png
+
+runtime:
+  jwt:
+    secret: test-secret-test-secret-test-secret-32
+
+entities:
+  users:
+    auth: true
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      role: { type: enum, values: [user, admin], default: user }
+`;
+
+  test("branding round-trips and its files and contrast notes are reported", () => {
+    const { config, warnings } = importAppYaml(branded);
+    expect(warnings).toEqual([]);
+    expect(config.branding).toEqual({ name: "Acme Shop", primaryColor: "#ffcc00", accentColor: "", logo: "branding/logo.png", favicon: "" });
+    const result = validateConfig(config);
+    expect(result.issues.filter((issue) => issue.severity === "error")).toEqual([]);
+    expect(result.yaml).toContain('branding:\n  name: Acme Shop\n  primaryColor: "#ffcc00"\n  logo: branding/logo.png');
+    expect(result.brandingFiles).toEqual(["branding/logo.png"]);
+    const contrast = result.issues.find((issue) => issue.target === "branding.primaryColor");
+    expect(contrast?.severity).toBe("warning");
+    expect(contrast?.message).toContain("adjusts it automatically");
+    expect(serializeAst(compileAppYaml(result.yaml, ENV))).toBe(serializeAst(compileAppYaml(branded, ENV)));
+  });
+
+  test("empty branding writes no section, bad values point at the field", () => {
+    const { config } = importAppYaml(branded);
+    config.branding = { name: "", primaryColor: "", accentColor: "", logo: "", favicon: "" };
+    expect(validateConfig(config).yaml).not.toContain("branding");
+
+    config.branding.primaryColor = "teal";
+    config.branding.logo = "logo.png";
+    const issues = validateConfig(config).issues.filter((issue) => issue.severity === "error");
+    expect(issues.map((issue) => issue.target).sort()).toEqual(["branding.logo", "branding.primaryColor"]);
+  });
+});

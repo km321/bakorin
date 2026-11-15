@@ -14,7 +14,10 @@ export function securityHeaders(): MiddlewareHandler {
     const docs = path === "/docs" || path.startsWith("/docs/") || path.startsWith("/api/v1/docs");
     const styleSrc = docs ? "'self' 'unsafe-inline'" : "'self'";
     const csp = `default-src 'self'; script-src 'self'; style-src ${styleSrc}; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`;
-    c.res.headers.set("Content-Security-Policy", mailFrame ? MAIL_FRAME_CSP : csp);
+    const brandingSvg = path.startsWith("/branding/") && c.res.headers.has("Content-Security-Policy");
+    if (!brandingSvg) {
+      c.res.headers.set("Content-Security-Policy", mailFrame ? MAIL_FRAME_CSP : csp);
+    }
     const proto = c.req.header("x-forwarded-proto") ?? new URL(c.req.url).protocol.replace(":", "");
     if (proto === "https") {
       c.res.headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains");

@@ -5,6 +5,7 @@ COPY .bakorin/packages ./packages
 RUN bun install
 WORKDIR /project
 COPY app.yaml hooks.ts ./
+COPY branding ./branding
 ENV NODE_ENV=production
 ENV BAKORIN_ENV=production
 ENV BAKORIN_DATA_DIR=/data

@@ -7,6 +7,7 @@ Markdown sources for a future bakorin.dev.
 - [Auth](auth.md)
 - [Email with Resend](resend.md)
 - [Transactional email (mail rules)](mail.md)
+- [Branding and white label](branding.md)
 - [Connecting Astro](connecting-astro.md)
 - [Connecting Next.js](connecting-next.md)
 - [Deploy on Railway](deploy-railway.md)

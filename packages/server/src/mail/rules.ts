@@ -1,3 +1,4 @@
+import { emailBrand, type EmailBrand } from "../branding/assets.ts";
 import type { ChangeEvent, EntityAST, MailConditionAST, MailRuleAST, MailScalar, SchemaAST } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
 import { decodeRow } from "../crud/query.ts";
@@ -113,6 +114,12 @@ export function appInfo(ast: SchemaAST): MailAppInfo {
   return { name: ast.appName, url: ast.runtime.appUrl };
 }
 
+/** {{ brand.name }}, {{ brand.primary }}, {{ brand.logoUrl }} for templates, only when app.yaml has branding. */
+export function brandData(ast: SchemaAST): { brand?: EmailBrand } {
+  const brand = emailBrand(ast);
+  return brand ? { brand } : {};
+}
+
 export async function buildRuleData(
   db: BakorinDb,
   ast: SchemaAST,
@@ -130,6 +137,7 @@ export async function buildRuleData(
     expand,
     event: { entity: event.entity, op: event.op },
     app: appInfo(ast),
+    ...brandData(ast),
   };
 }
 
@@ -208,6 +216,7 @@ export function sampleRuleData(ast: SchemaAST, entityName: string, expandFields:
     expand,
     event: { entity: entityName, op: "create" },
     app: appInfo(ast),
+    ...brandData(ast),
     sample: true,
   };
 }

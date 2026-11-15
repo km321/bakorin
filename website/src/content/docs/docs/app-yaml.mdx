@@ -89,6 +89,18 @@ jwt:
 | `version` | string | Optional |
 | `description` | string | Optional |
 
+## branding
+
+Optional white label for the admin, `/docs`, and system emails. Leave it out to keep the default look. See [Branding and white label](/docs/branding/).
+
+| Key | Type | Notes |
+|---|---|---|
+| `name` | string | Display name instead of "Bakorin". Defaults to `app.name` |
+| `primaryColor` | hex color | Quoted, like `"#0f766e"`. Adjusted automatically if it fails WCAG AA contrast |
+| `accentColor` | hex color | Focus rings. Defaults to `primaryColor` |
+| `logo` | path | File in `branding/`: svg, png, jpg, jpeg, webp |
+| `favicon` | path | File in `branding/`: svg, png, ico |
+
 ## runtime
 
 | Key | Default | Notes |

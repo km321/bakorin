@@ -50,3 +50,18 @@ export type {
 } from "./schema-graph.ts";
 export { appYamlSchema, FIELD_TYPES, APP_YAML_TOP_LEVEL_KEYS } from "./yaml-schema.ts";
 export type { AppYaml } from "./yaml-schema.ts";
+export {
+  BRANDING_DIR,
+  BRANDING_FAVICON_EXTENSIONS,
+  BRANDING_LOGO_EXTENSIONS,
+  BRANDING_MAX_FILE_BYTES,
+  BRANDING_SURFACES,
+  brandingCss,
+  brandName,
+  compileBranding,
+  contrastRatio,
+  ensureContrast,
+  isHexColor,
+  normalizeHex,
+} from "./branding.ts";
+export type { BrandingAST, BrandingPalette, RawBranding } from "./branding.ts";

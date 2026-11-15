@@ -1,0 +1,99 @@
+# Branding and white label
+
+Branding is optional. Without a `branding:` section, the admin, `/docs`, and system emails look exactly as they always have. Add the section when you hand a project to a client and want it to carry their name instead of Bakorin.
+
+## Add it to app.yaml
+
+```yaml
+app:
+  name: northwind-leads
+
+branding:
+  name: Northwind Studio          # shown instead of "Bakorin"
+  primaryColor: "#0f766e"         # buttons, links, selected items
+  accentColor: "#f59e0b"          # focus rings (optional, defaults to primaryColor)
+  logo: branding/logo.svg         # optional
+  favicon: branding/favicon.png   # optional
+```
+
+Every key is optional, but the section needs at least one. You can also set it with forms in the [app.yaml builder](https://bakorin-preview.pages.dev/builder/).
+
+> **Quote the colors.** In YAML an unquoted `#` starts a comment, so write `"#0f766e"` with quotes. Bakorin tells you when the quotes are missing.
+
+## Keys
+
+| Key | Type | Notes |
+|---|---|---|
+| `name` | string | Up to 60 characters. Replaces "Bakorin" in the admin header and sign in, the page titles, the `/docs` header, and system email subjects and bodies. Defaults to `app.name` |
+| `primaryColor` | hex color | `#rgb` or `#rrggbb`. Primary buttons, links, active navigation, and the email button |
+| `accentColor` | hex color | Focus rings. Defaults to the primary color |
+| `logo` | path | A file in `branding/`: svg, png, jpg, jpeg, or webp |
+| `favicon` | path | A file in `branding/`: svg, png, or ico |
+
+## The branding folder
+
+Logo and favicon files live in a `branding/` folder next to `app.yaml`, so the project stays one folder you can zip, copy, or deploy:
+
+```
+client/
+  app.yaml
+  branding/
+    logo.svg
+    favicon.png
+  mail/
+  data/
+```
+
+Rules the server checks at boot:
+
+- Paths must be directly inside `branding/` (no subfolders, no `..`).
+- The file must exist. A missing file stops boot with a message such as `branding.logo: branding/logo.svg does not exist`, the same way a missing mail template does.
+- Files must be under 1 MB.
+
+The server only serves the two files you reference, at `/branding/<file name>`. Nothing else in the folder is reachable. SVG files are served with a sandbox policy so they cannot run scripts.
+
+## Contrast is checked for you
+
+Every color the admin and docs use has to stay readable in light and dark mode. Bakorin checks your colors against WCAG 2.2 AA:
+
+- The primary color needs 4.5:1 against every admin and docs background, because it is used for link text.
+- Text on primary buttons uses white or near black, whichever reads better.
+- Selected rows and nav items get a soft tint that keeps body text, muted text, and links at 4.5:1.
+- The accent color needs 3:1 for focus rings.
+
+When a color falls short, Bakorin keeps its hue and saturation and darkens it for light mode, or lightens it for dark mode, until it passes. Boot logs a warning for each change:
+
+```
+[bakorin] branding.primaryColor #ffcc00 is 1.21:1 against the light theme, below the 4.5:1 WCAG AA minimum for text. Using #7d6400 (4.57:1) in light mode.
+```
+
+Brand colors that are already dark often need a lighter shade in dark mode, so a dark mode warning is normal. The config builder shows the same warnings next to the color field.
+
+## Where it shows up
+
+- **Admin:** the sidebar header and sign-in screens show the logo and name. Primary buttons, links, selected items, and focus rings use your colors in light and dark mode. The page title and favicon change too.
+- **API docs** (`/docs`): the header shows the logo and name, links and focus rings use your colors, and the page title becomes "Northwind Studio API docs".
+- **System emails** (verify, reset, invite): the default emails get your logo, name, and a primary color button. Subjects use the branded name, for example "You are invited to Northwind Studio".
+
+> **Logos in email.** Many email clients do not show SVG images. If your emails matter, point `logo` at a png. Email images load from `APP_URL`, so set it to the public address of the server.
+
+### In your own templates
+
+When branding is set, mail templates and `_layout.html` get a `brand` object next to `app`:
+
+| Variable | Value |
+|---|---|
+| `{{ brand.name }}` | The branded name |
+| `{{ brand.primary }}` | The primary color, adjusted to 4.5:1 on white |
+| `{{ brand.primaryFg }}` | Text color for a button in `brand.primary` |
+| `{{ brand.logoUrl }}` | Absolute logo URL, when `logo` is set |
+
+Use `{{#if brand}}` to keep a template working with and without branding.
+
+## Backups and restore
+
+Backups copy the `branding/` folder along with `app.yaml` and `hooks.ts`. `bakorin restore <dir>` puts the backup's `branding/` files back into the project before it boots, so a restored project looks the same.
+
+## Removing branding
+
+Delete the `branding:` section and restart. The admin, docs, and emails go back to the default look. The `branding/` folder can stay; nothing reads it without the section.

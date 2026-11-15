@@ -1,6 +1,7 @@
 import { useState } from "preact/hooks";
 import { createFirstAdmin } from "../lib/api.ts";
 import { AuthLayout } from "../components/AuthLayout.tsx";
+import { Brand } from "../components/Brand.tsx";
 
 interface Props {
   onCreated: () => void;
@@ -33,10 +34,7 @@ export function FirstAdmin({ onCreated }: Props) {
   return (
     <AuthLayout>
       <form class="auth-card" onSubmit={submit}>
-        <div class="brand">
-          <strong>Bakorin</strong>
-          <span>Admin</span>
-        </div>
+        <Brand sub="Admin" />
         <h1>Create your first admin</h1>
         <p class="muted">No admin exists yet. This form is available only until the first admin is created.</p>
         {error ? <div class="banner">{error}</div> : null}

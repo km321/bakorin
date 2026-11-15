@@ -81,8 +81,24 @@ export interface AuthDraft {
   requireVerifiedEmail: boolean;
 }
 
+/** Optional white-label settings. Empty strings mean "not set"; all empty means no branding section. */
+export interface BrandingDraft {
+  name: string;
+  primaryColor: string;
+  accentColor: string;
+  logo: string;
+  favicon: string;
+}
+
+export const BRANDING_KEYS = ["name", "primaryColor", "accentColor", "logo", "favicon"] as const;
+
+export function emptyBranding(): BrandingDraft {
+  return { name: "", primaryColor: "", accentColor: "", logo: "", favicon: "" };
+}
+
 export interface BuilderConfig {
   app: { name: string; version: string; description: string };
+  branding: BrandingDraft;
   /** Edited via a few fields (dialect, port, CORS); everything else is kept exactly as imported. */
   runtime: Record<string, unknown>;
   auth: AuthDraft;
@@ -107,6 +123,8 @@ export interface BuilderResult {
   mailFiles: string[];
   /** Environment variables referenced with no fallback. The server needs them at boot. */
   envVars: string[];
+  /** Logo and favicon files the server will look for in branding/ at boot. */
+  brandingFiles: string[];
 }
 
 const IDENT = /^[A-Za-z_][A-Za-z0-9_]*$/;
@@ -238,14 +256,21 @@ export function importAppYaml(source: string): ImportResult {
     throw new BakorinError("yaml_invalid", `This is not valid YAML: ${error instanceof Error ? error.message : String(error)}`);
   }
   const root = record(parsed);
-  const known = new Set(["app", "runtime", "auth", "entities", "webhooks", "mail"]);
+  const known = new Set(["app", "branding", "runtime", "auth", "entities", "webhooks", "mail"]);
   for (const key of Object.keys(root)) {
     if (!known.has(key)) warnings.push(`Top-level key "${key}" is not part of app.yaml and was dropped.`);
   }
   const app = record(root.app);
   const authRaw = record(root.auth);
+  const brandingRaw = record(root.branding);
+  const branding = emptyBranding();
+  for (const key of BRANDING_KEYS) branding[key] = str(brandingRaw[key]);
+  for (const key of Object.keys(brandingRaw)) {
+    if (!(BRANDING_KEYS as readonly string[]).includes(key)) warnings.push(`branding.${key} is not a branding option and was dropped.`);
+  }
   const config: BuilderConfig = {
     app: { name: str(app.name), version: str(app.version), description: str(app.description) },
+    branding,
     runtime: record(root.runtime),
     auth: {
       entity: str(authRaw.entity),
@@ -418,6 +443,12 @@ export function toAppObject(config: BuilderConfig): Record<string, unknown> {
   if (config.app.version) app.version = config.app.version;
   if (config.app.description) app.description = config.app.description;
   const out: Record<string, unknown> = { app };
+  const branding: Record<string, unknown> = {};
+  for (const key of BRANDING_KEYS) {
+    const value = (config.branding?.[key] ?? "").trim();
+    if (value) branding[key] = value;
+  }
+  if (Object.keys(branding).length > 0) out.branding = branding;
   if (Object.keys(config.runtime).length > 0) out.runtime = config.runtime;
   const auth: Record<string, unknown> = {};
   const a = config.auth;
@@ -600,6 +631,7 @@ function zodTarget(config: BuilderConfig, path: Array<string | number>): string 
   }
   if (head === "app" || head === "auth") return a !== undefined ? `${head}.${String(a)}` : String(head);
   if (head === "runtime") return "runtime";
+  if (head === "branding") return a !== undefined ? `branding.${String(a)}` : "branding.name";
   return "";
 }
 
@@ -629,6 +661,8 @@ function compileTarget(config: BuilderConfig, message: string): string {
     return "auth.entity";
   }
   if (/^webhook/.test(text)) return "webhooks";
+  const brandingKey = /^branding\.(\w+)/.exec(text);
+  if (brandingKey) return `branding.${brandingKey[1]}`;
   if (/^runtime|JWT_SECRET|backup interval|CORS/.test(text)) return "runtime";
   const policy = /^entities\.([A-Za-z_]\w*)\.policies\.(\w+)/.exec(/on (entities\.\S+)/.exec(text)?.[1] ?? "") ??
     /^([A-Za-z_]\w*) policy (\w+):/.exec(text);
@@ -675,8 +709,11 @@ export function validateConfig(config: BuilderConfig): BuilderResult {
   const mailFiles = [...new Set(config.mail.map((rule) => rule.template.trim()).filter(Boolean))].map(
     (name) => `mail/${name}.html`,
   );
+  const brandingFiles = [config.branding?.logo, config.branding?.favicon]
+    .map((value) => (value ?? "").trim().replace(/^\.\//, ""))
+    .filter(Boolean);
   const issues: BuilderIssue[] = builderIssues(config);
-  if (issues.length > 0) return { yaml, issues, mailFiles, envVars };
+  if (issues.length > 0) return { yaml, issues, mailFiles, envVars, brandingFiles };
 
   const parsed = appYamlSchema.safeParse(parseYaml(yaml));
   if (!parsed.success) {
@@ -688,7 +725,7 @@ export function validateConfig(config: BuilderConfig): BuilderResult {
         severity: "error",
       });
     }
-    return { yaml, issues, mailFiles, envVars };
+    return { yaml, issues, mailFiles, envVars, brandingFiles };
   }
 
   let ast: SchemaAST | undefined;
@@ -700,7 +737,7 @@ export function validateConfig(config: BuilderConfig): BuilderResult {
     for (const line of message.split("\n").filter((item) => item.trim())) {
       issues.push({ target: compileTarget(config, line), message: line.replace(/^app\.yaml:\s*/, ""), severity: "error" });
     }
-    return { yaml, issues, mailFiles, envVars };
+    return { yaml, issues, mailFiles, envVars, brandingFiles };
   }
 
   config.mail.forEach((rule, i) => {
@@ -712,7 +749,14 @@ export function validateConfig(config: BuilderConfig): BuilderResult {
       });
     }
   });
-  return { yaml, issues, ast, mailFiles, envVars };
+  for (const warning of ast.branding?.warnings ?? []) {
+    issues.push({
+      target: warning.startsWith("branding.accentColor") ? "branding.accentColor" : "branding.primaryColor",
+      message: `This color ${warning.replace(/^branding\.\w+ /, "")} The server adjusts it automatically.`,
+      severity: "warning",
+    });
+  }
+  return { yaml, issues, ast, mailFiles, envVars, brandingFiles };
 }
 
 /** Rough "is this name usable as an identifier" check for the form. */

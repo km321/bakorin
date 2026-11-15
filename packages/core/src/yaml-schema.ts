@@ -23,7 +23,7 @@ export const FIELD_TYPES = [
   "relation",
 ] as const;
 
-export const APP_YAML_TOP_LEVEL_KEYS = ["app", "runtime", "auth", "entities", "webhooks", "mail"] as const;
+export const APP_YAML_TOP_LEVEL_KEYS = ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail"] as const;
 
 const fieldType = z.enum(FIELD_TYPES);
 
@@ -121,6 +121,32 @@ const mailRuleObject = z
   })
   .strict();
 
+const hexColor = z
+  .string({
+    invalid_type_error: 'must be a quoted hex color like "#0f766e" (without quotes, # starts a YAML comment)',
+  })
+  .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "must be a hex color like #0f766e or #0a7");
+
+function brandingFile(kind: string, extensions: readonly string[]) {
+  const pattern = new RegExp(`^(?:\\./)?branding/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.(?:${extensions.join("|")})$`, "i");
+  return z
+    .string()
+    .regex(pattern, `must be a file in the branding/ folder, like branding/${kind}.${extensions[0]} (${extensions.join(", ")})`);
+}
+
+const brandingObject = z
+  .object({
+    name: z.string().trim().min(1).max(60).optional(),
+    primaryColor: hexColor.optional(),
+    accentColor: hexColor.optional(),
+    logo: brandingFile("logo", ["svg", "png", "jpg", "jpeg", "webp"]).optional(),
+    favicon: brandingFile("favicon", ["svg", "png", "ico"]).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, {
+    message: "add at least one of name, primaryColor, accentColor, logo, or favicon, or remove branding",
+  });
+
 export const appYamlSchema = z
   .object({
     app: z
@@ -130,6 +156,7 @@ export const appYamlSchema = z
         description: z.string().optional(),
       })
       .strict(),
+    branding: brandingObject.optional(),
     runtime: z
       .object({
         dialect: z.enum(["sqlite", "postgres"]).optional(),
@@ -225,3 +252,4 @@ export const appYamlSchema = z
 export type AppYaml = z.infer<typeof appYamlSchema>;
 export type RawEntity = z.infer<typeof entityObject>;
 export type RawField = z.infer<typeof fieldObject>;
+export type RawBrandingYaml = z.infer<typeof brandingObject>;

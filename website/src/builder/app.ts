@@ -12,9 +12,11 @@ import {
   defaultAuth,
   emptyEntity,
   emptyField,
+  emptyBranding,
   emptyMailRule,
   importAppYaml,
   validateConfig,
+  type BrandingDraft,
   type BuilderConfig,
   type BuilderFieldType,
   type BuilderIssue,
@@ -89,6 +91,7 @@ function loadInitial(): void {
       const saved = JSON.parse(raw) as { config: BuilderConfig; starterId: string };
       if (saved?.config?.entities) {
         config = saved.config;
+        config.branding = { ...emptyBranding(), ...(config.branding ?? {}) };
         starterId = saved.starterId ?? "custom";
         return;
       }
@@ -290,6 +293,83 @@ function appSection(): HTMLElement {
       "Other runtime settings (files, JWT, backups, hooks) are kept from the starter or your import. See the ",
       h("a", { href: "/docs/configuration/" }, "configuration docs"),
       ".",
+    ),
+  );
+}
+
+const HEX_COLOR = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+
+function fullHex(value: string): string {
+  const v = value.trim().toLowerCase();
+  if (!HEX_COLOR.test(v)) return "";
+  return v.length === 4 ? `#${v[1]}${v[1]}${v[2]}${v[2]}${v[3]}${v[3]}` : v;
+}
+
+function colorControl(key: "primaryColor" | "accentColor", label: string, hint: string): HTMLElement {
+  const branding = config.branding;
+  const text = textInput(branding[key], (v) => {
+    branding[key] = v.trim();
+    const hex = fullHex(v);
+    if (hex) picker.value = hex;
+  }, { placeholder: key === "primaryColor" ? "#0f766e" : "Same as primary", inputmode: "text" });
+  const picker = h("input", {
+    type: "color",
+    class: "color-pick",
+    value: fullHex(branding[key]) || fullHex(branding.primaryColor) || "#0f766e",
+    "aria-label": `${label} picker`,
+    onInput: (event: Event) => {
+      branding[key] = (event.target as HTMLInputElement).value;
+      text.value = branding[key];
+      changed();
+    },
+  }) as HTMLInputElement;
+  const wrap = control(`branding.${key}`, label, text, { hint });
+  wrap.querySelector("label")?.after(h("div", { class: "color-row" }, picker, text));
+  return wrap;
+}
+
+let brandingOpen = false;
+
+function brandingSection(): HTMLElement {
+  const branding: BrandingDraft = config.branding;
+  const used = Object.values(branding).some((value) => value.trim() !== "");
+  return h(
+    "section",
+    { class: "panel", "aria-labelledby": "bk-brand-h" },
+    h(
+      "details",
+      {
+        class: "brand-details",
+        open: used || brandingOpen ? true : undefined,
+        onToggle: (event: Event) => (brandingOpen = (event.target as HTMLDetailsElement).open),
+      },
+      h("summary", {}, h("h2", { id: "bk-brand-h" }, "Branding"), h("span", { class: "hint" }, " Optional white label for the admin, API docs, and system emails")),
+      h(
+        "p",
+        { class: "hint" },
+        "Leave everything empty to keep the default Bakorin look. Colors that would fail WCAG AA contrast are adjusted by the server, and the change is shown here. ",
+        h("a", { href: "/docs/branding/" }, "Branding docs"),
+        ".",
+      ),
+      h(
+        "div",
+        { class: "grid3" },
+        control("branding.name", "Product name", textInput(branding.name, (v) => (branding.name = v), { placeholder: config.app.name || "Acme" }), {
+          hint: "Shown in the admin header, sign in, docs, and emails.",
+        }),
+        colorControl("primaryColor", "Primary color", "Buttons, links, and selected items."),
+        colorControl("accentColor", "Accent color", "Focus rings. Optional."),
+      ),
+      h(
+        "div",
+        { class: "grid2" },
+        control("branding.logo", "Logo file", textInput(branding.logo, (v) => (branding.logo = v.trim()), { placeholder: "branding/logo.svg" }), {
+          hint: "In the branding/ folder next to app.yaml. svg, png, jpg, or webp. Use png for email clients.",
+        }),
+        control("branding.favicon", "Favicon file", textInput(branding.favicon, (v) => (branding.favicon = v.trim()), { placeholder: "branding/favicon.png" }), {
+          hint: "svg, png, or ico in branding/.",
+        }),
+      ),
     ),
   );
 }
@@ -954,7 +1034,7 @@ function render(focusTarget?: string): void {
   const active = document.activeElement as HTMLElement | null;
   const activeId = focusTarget ? idFor(focusTarget) : active?.id;
   const scroll = window.scrollY;
-  root.replaceChildren(appSection(), authSection(), entitiesSection(), mailSection());
+  root.replaceChildren(appSection(), brandingSection(), authSection(), entitiesSection(), mailSection());
   const starterSelect = document.getElementById("bk-starter") as HTMLSelectElement | null;
   if (starterSelect) starterSelect.value = STARTERS.some((item) => item.id === starterId) ? starterId : "custom";
   if (activeId) {
@@ -1090,6 +1170,17 @@ function refresh(): void {
         {},
         "Add these template files next to app.yaml: ",
         ...result.mailFiles.flatMap((file, k) => [k > 0 ? ", " : "", h("code", {}, file)]),
+        ".",
+      ),
+    );
+  }
+  if (result.brandingFiles.length > 0) {
+    notes.push(
+      h(
+        "li",
+        {},
+        "Add these branding files next to app.yaml: ",
+        ...result.brandingFiles.flatMap((file, k) => [k > 0 ? ", " : "", h("code", {}, file)]),
         ".",
       ),
     );

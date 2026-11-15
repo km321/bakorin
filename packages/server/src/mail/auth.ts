@@ -5,7 +5,7 @@ import type { SchemaAST } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
 import { compileTemplate, htmlToText, TemplateError } from "./engine.ts";
 import { cleanSubject, mailDir } from "./files.ts";
-import { renderAccountEmail, type AccountEmailKind } from "./templates.ts";
+import { renderAccountEmail, type AccountEmailBrand, type AccountEmailKind } from "./templates.ts";
 import type { Mailer, MailMessage } from "./types.ts";
 
 export const AUTH_EMAIL_KINDS = ["verify", "reset", "invite"] as const;
@@ -67,6 +67,8 @@ export interface AuthEmailData {
   appUrl: string;
   link: string;
   email: string;
+  /** From app.yaml branding. Omitted when there is none. */
+  brand?: AccountEmailBrand;
 }
 
 /**
@@ -78,7 +80,11 @@ export function renderAuthEmail(
   kind: AuthEmailKind,
   input: AuthEmailData,
 ): { subject: string; html: string; text: string } {
-  const fallback = renderAccountEmail(kind as AccountEmailKind, { appName: input.appName, link: input.link });
+  const fallback = renderAccountEmail(kind as AccountEmailKind, {
+    appName: input.appName,
+    link: input.link,
+    brand: input.brand,
+  });
   const htmlSource = readIf(authFile(projectDir, kind, "html"));
   const textSource = readIf(authFile(projectDir, kind, "txt"));
   const subjectSource = readIf(authFile(projectDir, kind, "subject"));
@@ -87,6 +93,7 @@ export function renderAuthEmail(
   }
   const data = {
     app: { name: input.appName, url: input.appUrl },
+    ...(input.brand ? { brand: input.brand } : {}),
     link: input.link,
     email: input.email,
     expires: EXPIRES[kind],

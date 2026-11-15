@@ -70,6 +70,8 @@ Keep each client in one directory you can zip and move:
 client/
   app.yaml          schema, policies, runtime
   hooks.ts          optional TypeScript escape hatch
+  mail/             optional email templates
+  branding/         optional logo and favicon (white label)
   .env              JWT_SECRET and DATABASE_URL
   data/app.db       SQLite (local)
   data/uploads/     local files
@@ -183,6 +185,19 @@ Schema changes are planned in three tiers:
 - **safe**: `renameFrom` on a field
 - **deprecate**: dropped fields and entities stay in the database and disappear from the API
 - **abort**: type changes, required without default, unique on an existing column
+
+### Branding (optional white label)
+
+```yaml
+branding:
+  name: Northwind Studio
+  primaryColor: "#0f766e"   # quoted: an unquoted # starts a YAML comment
+  accentColor: "#f59e0b"    # focus rings, optional
+  logo: branding/logo.svg   # files live in branding/ next to app.yaml
+  favicon: branding/favicon.png
+```
+
+Applies to the admin (header, sign in, colors in light and dark), `/docs`, and the verify, reset, and invite emails. Leave it out and nothing changes. Colors that would fail WCAG AA contrast are adjusted per theme and boot logs a warning. Missing logo or favicon files stop boot. Backups include `branding/`, and `bakorin restore` puts it back. Details: `docs/branding.md`.
 
 ## Hooks and custom routes
 
