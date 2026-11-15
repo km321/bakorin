@@ -22,19 +22,34 @@ export function parsePolicy(expr: string): PolicyAST {
       if (role?.[1]) {
         return { kind: "role", role: role[1] };
       }
-      throw new SchemaError(
-        `invalid policy ${JSON.stringify(expr)}; expected public, authenticated, admin, owner(field), or role(name)`,
-      );
+      throw new SchemaError(invalidPolicyMessage(expr));
     }
   }
 }
 
-export function parsePolicies(value: string | string[] | undefined, fallback: PolicyAST[]): PolicyAST[] {
+export function invalidPolicyMessage(expr: string, where?: string): string {
+  const expected = "Expected public, authenticated, admin, owner(field), or role(name).";
+  if (where) {
+    return `app.yaml: invalid policy ${JSON.stringify(expr)} on ${where}. ${expected}`;
+  }
+  return `app.yaml: invalid policy ${JSON.stringify(expr)}. ${expected}`;
+}
+
+export function parsePolicies(value: string | string[] | undefined, fallback: PolicyAST[], where?: string): PolicyAST[] {
   if (value === undefined) {
     return fallback;
   }
   const list = Array.isArray(value) ? value : [value];
-  return list.map(parsePolicy);
+  return list.map((item) => {
+    try {
+      return parsePolicy(item);
+    } catch (error) {
+      if (where && error instanceof SchemaError) {
+        throw new SchemaError(invalidPolicyMessage(item, where));
+      }
+      throw error;
+    }
+  });
 }
 
 export function policyRequiresAuth(policies: PolicyAST[]): boolean {

@@ -4,6 +4,7 @@ import { assertIdent } from "./ident.ts";
 import { interpolateEnv } from "./interpolate.ts";
 import { parsePolicies } from "./policies.ts";
 import { topologicalOrder } from "./topo.ts";
+import { formatZodError } from "./format-schema.ts";
 import { appYamlSchema, type AppYaml, type RawField } from "./yaml-schema.ts";
 import {
   SCHEMA_AST_VERSION,
@@ -457,7 +458,11 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
   } catch (error) {
     throw new SchemaError(`app.yaml is not valid YAML: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const yaml = appYamlSchema.parse(parsed);
+  const parsedYaml = appYamlSchema.safeParse(parsed);
+  if (!parsedYaml.success) {
+    throw new SchemaError(formatZodError(parsedYaml.error));
+  }
+  const yaml = parsedYaml.data;
   const production =
     options.production ?? (env.NODE_ENV === "production" || env.BAKORIN_ENV === "production");
   const runtime = compileRuntime(yaml, production, env);
@@ -471,10 +476,10 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
     const fieldMap = Object.fromEntries(fields.map((field) => [field.name, field]));
     const fallback = defaultPolicies(raw.auth === true || name === yaml.auth?.entity);
     const policies: Record<ActionName, PolicyAST[]> = {
-      read: parsePolicies(raw.policies?.read, fallback.read),
-      create: parsePolicies(raw.policies?.create, fallback.create),
-      update: parsePolicies(raw.policies?.update, fallback.update),
-      delete: parsePolicies(raw.policies?.delete, fallback.delete),
+      read: parsePolicies(raw.policies?.read, fallback.read, `entities.${name}.policies.read`),
+      create: parsePolicies(raw.policies?.create, fallback.create, `entities.${name}.policies.create`),
+      update: parsePolicies(raw.policies?.update, fallback.update, `entities.${name}.policies.update`),
+      delete: parsePolicies(raw.policies?.delete, fallback.delete, `entities.${name}.policies.delete`),
     };
     for (const action of ["read", "create", "update", "delete"] as const) {
       for (const policy of policies[action]) {

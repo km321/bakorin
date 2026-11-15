@@ -1,4 +1,5 @@
 export { createRuntime, loadProject } from "./app.ts";
+export { createDebounced } from "./dev-watch.ts";
 export type { RuntimeHandles } from "./app.ts";
 export { createChangeBus } from "./bus.ts";
 export type { ChangeBus, ChangeHandler } from "./bus.ts";

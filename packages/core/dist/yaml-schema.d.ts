@@ -1,4 +1,6 @@
 import { z } from "zod";
+export declare const FIELD_TYPES: readonly ["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"];
+export declare const APP_YAML_TOP_LEVEL_KEYS: readonly ["app", "runtime", "auth", "entities", "webhooks"];
 declare const fieldObject: z.ZodObject<{
     type: z.ZodEnum<["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"]>;
     required: z.ZodOptional<z.ZodBoolean>;
@@ -131,11 +133,11 @@ declare const entityObject: z.ZodObject<{
         readonly?: boolean | undefined;
         adminOnly?: boolean | undefined;
     }>;
+    auth?: boolean | undefined;
     description?: string | undefined;
     label?: string | undefined;
     plural?: string | undefined;
     display?: string | undefined;
-    auth?: boolean | undefined;
     indexes?: (string | string[])[] | undefined;
     policies?: {
         read?: string | string[] | undefined;
@@ -160,11 +162,11 @@ declare const entityObject: z.ZodObject<{
         readonly?: boolean | undefined;
         adminOnly?: boolean | undefined;
     }>;
+    auth?: boolean | undefined;
     description?: string | undefined;
     label?: string | undefined;
     plural?: string | undefined;
     display?: string | undefined;
-    auth?: boolean | undefined;
     indexes?: (string | string[])[] | undefined;
     policies?: {
         read?: string | string[] | undefined;
@@ -469,11 +471,11 @@ export declare const appYamlSchema: z.ZodObject<{
             readonly?: boolean | undefined;
             adminOnly?: boolean | undefined;
         }>;
+        auth?: boolean | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
         display?: string | undefined;
-        auth?: boolean | undefined;
         indexes?: (string | string[])[] | undefined;
         policies?: {
             read?: string | string[] | undefined;
@@ -498,11 +500,11 @@ export declare const appYamlSchema: z.ZodObject<{
             readonly?: boolean | undefined;
             adminOnly?: boolean | undefined;
         }>;
+        auth?: boolean | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
         display?: string | undefined;
-        auth?: boolean | undefined;
         indexes?: (string | string[])[] | undefined;
         policies?: {
             read?: string | string[] | undefined;
@@ -527,11 +529,11 @@ export declare const appYamlSchema: z.ZodObject<{
             readonly?: boolean | undefined;
             adminOnly?: boolean | undefined;
         }>;
+        auth?: boolean | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
         display?: string | undefined;
-        auth?: boolean | undefined;
         indexes?: (string | string[])[] | undefined;
         policies?: {
             read?: string | string[] | undefined;
@@ -556,11 +558,11 @@ export declare const appYamlSchema: z.ZodObject<{
             readonly?: boolean | undefined;
             adminOnly?: boolean | undefined;
         }>;
+        auth?: boolean | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
         display?: string | undefined;
-        auth?: boolean | undefined;
         indexes?: (string | string[])[] | undefined;
         policies?: {
             read?: string | string[] | undefined;
@@ -608,11 +610,11 @@ export declare const appYamlSchema: z.ZodObject<{
             readonly?: boolean | undefined;
             adminOnly?: boolean | undefined;
         }>;
+        auth?: boolean | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
         display?: string | undefined;
-        auth?: boolean | undefined;
         indexes?: (string | string[])[] | undefined;
         policies?: {
             read?: string | string[] | undefined;
@@ -621,14 +623,6 @@ export declare const appYamlSchema: z.ZodObject<{
             delete?: string | string[] | undefined;
         } | undefined;
     }>;
-    auth?: {
-        password?: string | undefined;
-        role?: string | undefined;
-        entity?: string | undefined;
-        identity?: string | undefined;
-        adminRole?: string | undefined;
-        requireVerifiedEmail?: boolean | undefined;
-    } | undefined;
     runtime?: {
         sqlite?: {
             path: string;
@@ -668,6 +662,14 @@ export declare const appYamlSchema: z.ZodObject<{
             origins?: string[] | undefined;
         } | undefined;
         hooks?: string | undefined;
+    } | undefined;
+    auth?: {
+        password?: string | undefined;
+        role?: string | undefined;
+        entity?: string | undefined;
+        identity?: string | undefined;
+        adminRole?: string | undefined;
+        requireVerifiedEmail?: boolean | undefined;
     } | undefined;
     webhooks?: {
         entity: string;
@@ -698,11 +700,11 @@ export declare const appYamlSchema: z.ZodObject<{
             readonly?: boolean | undefined;
             adminOnly?: boolean | undefined;
         }>;
+        auth?: boolean | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
         display?: string | undefined;
-        auth?: boolean | undefined;
         indexes?: (string | string[])[] | undefined;
         policies?: {
             read?: string | string[] | undefined;
@@ -711,14 +713,6 @@ export declare const appYamlSchema: z.ZodObject<{
             delete?: string | string[] | undefined;
         } | undefined;
     }>;
-    auth?: {
-        password?: string | undefined;
-        role?: string | undefined;
-        entity?: string | undefined;
-        identity?: string | undefined;
-        adminRole?: string | undefined;
-        requireVerifiedEmail?: boolean | undefined;
-    } | undefined;
     runtime?: {
         sqlite?: {
             path: string;
@@ -758,6 +752,14 @@ export declare const appYamlSchema: z.ZodObject<{
             origins?: string[] | undefined;
         } | undefined;
         hooks?: string | undefined;
+    } | undefined;
+    auth?: {
+        password?: string | undefined;
+        role?: string | undefined;
+        entity?: string | undefined;
+        identity?: string | undefined;
+        adminRole?: string | undefined;
+        requireVerifiedEmail?: boolean | undefined;
     } | undefined;
     webhooks?: {
         entity: string;

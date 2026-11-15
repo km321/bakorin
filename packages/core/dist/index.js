@@ -120,16 +120,32 @@ function parsePolicy(expr) {
       if (role?.[1]) {
         return { kind: "role", role: role[1] };
       }
-      throw new SchemaError(`invalid policy ${JSON.stringify(expr)}; expected public, authenticated, admin, owner(field), or role(name)`);
+      throw new SchemaError(invalidPolicyMessage(expr));
     }
   }
 }
-function parsePolicies(value, fallback) {
+function invalidPolicyMessage(expr, where) {
+  const expected = "Expected public, authenticated, admin, owner(field), or role(name).";
+  if (where) {
+    return `app.yaml: invalid policy ${JSON.stringify(expr)} on ${where}. ${expected}`;
+  }
+  return `app.yaml: invalid policy ${JSON.stringify(expr)}. ${expected}`;
+}
+function parsePolicies(value, fallback, where) {
   if (value === undefined) {
     return fallback;
   }
   const list = Array.isArray(value) ? value : [value];
-  return list.map(parsePolicy);
+  return list.map((item) => {
+    try {
+      return parsePolicy(item);
+    } catch (error) {
+      if (where && error instanceof SchemaError) {
+        throw new SchemaError(invalidPolicyMessage(item, where));
+      }
+      throw error;
+    }
+  });
 }
 function policyRequiresAuth(policies) {
   return policies.every((policy) => policy.kind !== "public");
@@ -191,12 +207,15 @@ function topologicalOrder(entities) {
   return ordered;
 }
 
+// src/format-schema.ts
+import { ZodError } from "zod";
+
 // src/yaml-schema.ts
 import { z } from "zod";
 var ident = z.string().min(1).max(64).regex(/^[A-Za-z_][A-Za-z0-9_]*$/, "must be a letter/underscore followed by letters, digits, or underscores");
 var policyExpr = z.string().min(1);
 var policyValue = z.union([policyExpr, z.array(policyExpr).min(1)]);
-var fieldType = z.enum([
+var FIELD_TYPES = [
   "text",
   "email",
   "password",
@@ -208,7 +227,9 @@ var fieldType = z.enum([
   "enum",
   "file",
   "relation"
-]);
+];
+var APP_YAML_TOP_LEVEL_KEYS = ["app", "runtime", "auth", "entities", "webhooks"];
+var fieldType = z.enum(FIELD_TYPES);
 var fieldObject = z.object({
   type: fieldType,
   required: z.boolean().optional(),
@@ -306,6 +327,124 @@ var appYamlSchema = z.object({
   }),
   webhooks: z.array(webhookObject).optional()
 }).strict();
+
+// src/format-schema.ts
+var IDENT2 = /^[A-Za-z_][A-Za-z0-9_]*$/;
+var TOP_LEVEL = new Set(APP_YAML_TOP_LEVEL_KEYS);
+var FIELD_TYPE_SET = new Set(FIELD_TYPES);
+function isAppYamlValidationError(error) {
+  return error instanceof SchemaError || error instanceof ZodError;
+}
+function formatAppYamlError(error) {
+  if (error instanceof ZodError) {
+    return formatZodError(error);
+  }
+  if (error instanceof SchemaError) {
+    return prefixLines(error.message);
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
+function formatZodError(error) {
+  const lines = flattenZodIssues(error).map(formatIssue).flat();
+  const unique = [...new Set(lines.filter((line) => line.length > 0))];
+  return unique.length > 0 ? unique.join(`
+`) : "app.yaml: schema is invalid";
+}
+function prefixLines(message) {
+  return message.split(`
+`).map((line) => {
+    const trimmed = line.trimEnd();
+    if (trimmed.length === 0) {
+      return trimmed;
+    }
+    return trimmed.startsWith("app.yaml:") ? trimmed : `app.yaml: ${trimmed}`;
+  }).join(`
+`);
+}
+function flattenZodIssues(error) {
+  const out = [];
+  for (const issue of error.issues) {
+    if (issue.code === "invalid_union") {
+      const children = issue.unionErrors.flatMap((child) => flattenZodIssues(child));
+      out.push(...preferUsefulIssues(children, issue.path));
+      continue;
+    }
+    out.push(issue);
+  }
+  return out;
+}
+function preferUsefulIssues(issues, path) {
+  const ranked = issues.filter((issue) => issue.code === "unrecognized_keys" || issue.code === "invalid_enum_value" || issue.code === "invalid_string" && issue.path.length >= path.length);
+  if (ranked.length > 0) {
+    return ranked;
+  }
+  const first = issues[0];
+  return first ? [first] : [];
+}
+function looksLikeEntityName(key) {
+  return IDENT2.test(key) && !TOP_LEVEL.has(key);
+}
+function pathLabel(path) {
+  return path.map(String).join(".");
+}
+function isFieldTypeIssue(issue) {
+  if (issue.code !== "invalid_enum_value") {
+    return false;
+  }
+  const options = issue.options.map(String);
+  return options.every((option) => FIELD_TYPE_SET.has(option)) && FIELD_TYPES.every((type) => options.includes(type));
+}
+function formatIssue(issue) {
+  const path = pathLabel(issue.path);
+  const at = path.length > 0 ? ` at ${path}` : "";
+  switch (issue.code) {
+    case "unrecognized_keys":
+      return issue.keys.map((key) => {
+        if (issue.path.length === 0 && looksLikeEntityName(key)) {
+          return `app.yaml: unknown top-level key "${key}". Did you mean to put it under "entities:"?`;
+        }
+        if (issue.path[0] === "entities" && issue.path.length === 2) {
+          return `app.yaml: unknown key "${key}" on entity ${String(issue.path[1])}${hintEntityKeys()}`;
+        }
+        return `app.yaml: unknown key "${key}"${at}`;
+      });
+    case "invalid_enum_value": {
+      if (isFieldTypeIssue(issue)) {
+        return [
+          `app.yaml: unknown field type ${JSON.stringify(issue.received)}${at}. Valid types: ${FIELD_TYPES.join(", ")}`
+        ];
+      }
+      return [`app.yaml: invalid value ${JSON.stringify(issue.received)}${at}. Expected ${issue.options.join(", ")}`];
+    }
+    case "invalid_type": {
+      if (issue.received === "undefined") {
+        if (issue.path.length === 1 && issue.path[0] === "entities") {
+          return [`app.yaml: missing "entities". At least one entity is required.`];
+        }
+        if (issue.path.length === 1 && issue.path[0] === "app") {
+          return [`app.yaml: missing "app" (needs app.name).`];
+        }
+        return [`app.yaml: missing "${path}"`];
+      }
+      return [`app.yaml: ${path || "root"} should be ${issue.expected}, not ${issue.received}`];
+    }
+    case "too_small":
+      if (issue.path.length === 1 && issue.path[0] === "entities") {
+        return [`app.yaml: missing "entities". At least one entity is required.`];
+      }
+      return [`app.yaml: ${path || "value"} is too small`];
+    case "custom":
+      return [`app.yaml: ${issue.message}${at}`];
+    default:
+      return [`app.yaml: ${issue.message}${at}`];
+  }
+}
+function hintEntityKeys() {
+  return ". Valid keys are label, plural, display, description, auth, fields, indexes, policies.";
+}
 
 // src/compile.ts
 var SYSTEM_FIELDS = new Set(["id", "createdAt", "updatedAt"]);
@@ -696,7 +835,11 @@ function compileAppYaml(source, options = {}) {
   } catch (error) {
     throw new SchemaError(`app.yaml is not valid YAML: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const yaml = appYamlSchema.parse(parsed);
+  const parsedYaml = appYamlSchema.safeParse(parsed);
+  if (!parsedYaml.success) {
+    throw new SchemaError(formatZodError(parsedYaml.error));
+  }
+  const yaml = parsedYaml.data;
   const production = options.production ?? (env.NODE_ENV === "production" || env.BAKORIN_ENV === "production");
   const runtime = compileRuntime(yaml, production, env);
   const entities = Object.entries(yaml.entities).map(([name, raw]) => {
@@ -706,10 +849,10 @@ function compileAppYaml(source, options = {}) {
     const fieldMap = Object.fromEntries(fields.map((field) => [field.name, field]));
     const fallback = defaultPolicies(raw.auth === true || name === yaml.auth?.entity);
     const policies = {
-      read: parsePolicies(raw.policies?.read, fallback.read),
-      create: parsePolicies(raw.policies?.create, fallback.create),
-      update: parsePolicies(raw.policies?.update, fallback.update),
-      delete: parsePolicies(raw.policies?.delete, fallback.delete)
+      read: parsePolicies(raw.policies?.read, fallback.read, `entities.${name}.policies.read`),
+      create: parsePolicies(raw.policies?.create, fallback.create, `entities.${name}.policies.create`),
+      update: parsePolicies(raw.policies?.update, fallback.update, `entities.${name}.policies.update`),
+      delete: parsePolicies(raw.policies?.delete, fallback.delete, `entities.${name}.policies.delete`)
     };
     for (const action of ["read", "create", "update", "delete"]) {
       for (const policy of policies[action]) {
@@ -1098,9 +1241,11 @@ export type BakorinEntityName = keyof BakorinEntities;
 `;
 }
 export {
+  APP_YAML_TOP_LEVEL_KEYS,
   BakorinError,
   DEFAULT_ALLOWED_MIME_TYPES,
   DiffAbortError,
+  FIELD_TYPES,
   IdentError,
   SCHEMA_AST_VERSION,
   SchemaError,
@@ -1111,8 +1256,12 @@ export {
   describePolicy,
   deserializeAst,
   diffSchemas,
+  formatAppYamlError,
+  formatZodError,
   generateTypes,
   interpolateEnv,
+  invalidPolicyMessage,
+  isAppYamlValidationError,
   isIdent,
   parsePolicies,
   parsePolicy,

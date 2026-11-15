@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
 import { mkdir, watch } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { generateTypes } from "@bakorin/core";
+import { formatAppYamlError, generateTypes, isAppYamlValidationError } from "@bakorin/core";
 import { loadProject } from "./app.ts";
+import { createDebounced } from "./dev-watch.ts";
 import { runBackup } from "./backup/schedule.ts";
 import { exportPortable, importPortable, readManifest } from "./backup/archive.ts";
 import { restoreSqliteSnapshot } from "./backup/sqlite.ts";
@@ -83,9 +84,34 @@ SMTP_SECURE=false
   console.log("Next: cd there, set JWT_SECRET for production, then run bakorin dev");
 }
 
+function reportValidationError(error: unknown, context: "startup" | "reload"): void {
+  if (isAppYamlValidationError(error)) {
+    if (context === "reload") {
+      console.error("[bakorin] reload failed; keeping previous schema");
+    }
+    console.error(formatAppYamlError(error));
+    return;
+  }
+  if (context === "reload") {
+    console.error("[bakorin] reload failed; keeping previous schema");
+    console.error(error instanceof Error ? error.message : error);
+    return;
+  }
+  console.error(error);
+}
+
+async function loadOrExit(dir: string) {
+  try {
+    return await loadProject(dir);
+  } catch (error) {
+    reportValidationError(error, "startup");
+    process.exit(1);
+  }
+}
+
 async function serve(mode: "dev" | "start"): Promise<void> {
   const dir = projectDir();
-  const runtime = await loadProject(dir);
+  const runtime = await loadOrExit(dir);
   const port = Number(arg("--port", String(runtime.ast.runtime.port)));
   const hostname = runtime.ast.runtime.host;
   console.log(`[bakorin] ${runtime.ast.appName} ${mode} on http://${hostname === "0.0.0.0" ? "127.0.0.1" : hostname}:${port}`);
@@ -98,17 +124,20 @@ async function serve(mode: "dev" | "start"): Promise<void> {
   if (mode === "dev") {
     const yamlPath = join(dir, "app.yaml");
     const hooksPath = join(dir, runtime.ast.runtime.hooksPath ?? "hooks.ts");
+    const debounced = createDebounced(150, async () => {
+      try {
+        const source = await Bun.file(yamlPath).text();
+        await runtime.reload(source);
+      } catch (error) {
+        reportValidationError(error, "reload");
+      }
+    });
     const watcher = watch(dir);
     void (async () => {
       for await (const event of watcher) {
         const name = event.filename ?? "";
         if (name === "app.yaml" || name === "hooks.ts" || yamlPath.endsWith(name) || hooksPath.endsWith(name)) {
-          try {
-            const source = await Bun.file(yamlPath).text();
-            await runtime.reload(source);
-          } catch (error) {
-            console.error("[bakorin] reload failed; keeping previous schema", error);
-          }
+          debounced.trigger();
         }
       }
     })();
@@ -122,7 +151,7 @@ async function serve(mode: "dev" | "start"): Promise<void> {
 
 async function cmdTypegen(): Promise<void> {
   const dir = projectDir();
-  const runtime = await loadProject(dir);
+  const runtime = await loadOrExit(dir);
   const out = resolve(arg("-o", arg("--out", join(dir, "bakorin.gen.ts"))) ?? join(dir, "bakorin.gen.ts"));
   await Bun.write(out, generateTypes(runtime.ast));
   console.log(`wrote ${out}`);
@@ -131,7 +160,7 @@ async function cmdTypegen(): Promise<void> {
 
 async function cmdBackup(): Promise<void> {
   const dir = projectDir();
-  const runtime = await loadProject(dir);
+  const runtime = await loadOrExit(dir);
   const dest = process.argv[3] && !process.argv[3].startsWith("-") ? resolve(process.argv[3]) : undefined;
   const path = await runBackup({
     ast: runtime.ast,
@@ -146,7 +175,7 @@ async function cmdBackup(): Promise<void> {
 
 async function cmdExport(): Promise<void> {
   const dir = projectDir();
-  const runtime = await loadProject(dir);
+  const runtime = await loadOrExit(dir);
   const dest = resolve(process.argv[3] && !process.argv[3].startsWith("-") ? process.argv[3] : join(dir, "data/export"));
   const path = await exportPortable({
     dest,
@@ -168,7 +197,7 @@ async function cmdRestore(): Promise<void> {
   }
   const source = resolve(src);
   const manifest = await readManifest(source);
-  const runtime = await loadProject(dir);
+  const runtime = await loadOrExit(dir);
   if (manifest.kind === "sqlite-snapshot") {
     await runtime.close();
     await restoreSqliteSnapshot({
@@ -192,7 +221,7 @@ async function cmdImport(): Promise<void> {
     console.error("usage: bakorin import <export-dir>");
     process.exit(1);
   }
-  const runtime = await loadProject(dir);
+  const runtime = await loadOrExit(dir);
   await importPortable({ src: resolve(src), ast: runtime.ast, db: runtime.db, files: runtime.context.files });
   console.log("portable archive imported");
   await runtime.close();

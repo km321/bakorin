@@ -9,7 +9,7 @@ const ident = z
 const policyExpr = z.string().min(1);
 const policyValue = z.union([policyExpr, z.array(policyExpr).min(1)]);
 
-const fieldType = z.enum([
+export const FIELD_TYPES = [
   "text",
   "email",
   "password",
@@ -21,7 +21,11 @@ const fieldType = z.enum([
   "enum",
   "file",
   "relation",
-]);
+] as const;
+
+export const APP_YAML_TOP_LEVEL_KEYS = ["app", "runtime", "auth", "entities", "webhooks"] as const;
+
+const fieldType = z.enum(FIELD_TYPES);
 
 const fieldObject = z
   .object({
