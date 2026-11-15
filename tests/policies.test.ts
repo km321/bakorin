@@ -81,4 +81,41 @@ describe("policies to SQL", () => {
     expect((await list.json()).data.length).toBe(1);
     await runtime.close();
   });
+
+  test("admin create defaults omitted ownerId to the admin and keeps an explicit ownerId", async () => {
+    const runtime = await boot();
+    const alice = await signup(runtime, "alice@example.com");
+    const seeded = await signup(runtime, "admin@example.com");
+    await runtime.db.updateTable("users").set({ role: "admin" }).where("id", "=", seeded.user.id).execute();
+    const login = await client(runtime).fetch("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: "admin@example.com", password: "password123" }),
+    });
+    const admin = (await login.json()).data as { accessToken: string; user: { id: string } };
+    const api = client(runtime, admin.accessToken);
+
+    const omitted = await api.fetch("/api/v1/items", {
+      method: "POST",
+      body: JSON.stringify({ title: "admin-owned" }),
+    });
+    expect(omitted.status).toBe(201);
+    const omittedJson = await omitted.json();
+    expect(omittedJson.data.ownerId).toBe(admin.user.id);
+
+    const assigned = await api.fetch("/api/v1/items", {
+      method: "POST",
+      body: JSON.stringify({ title: "assigned", ownerId: alice.user.id }),
+    });
+    expect(assigned.status).toBe(201);
+    const assignedJson = await assigned.json();
+    expect(assignedJson.data.ownerId).toBe(alice.user.id);
+
+    const retitle = await api.fetch(`/api/v1/items/${assignedJson.data.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title: "still-alice" }),
+    });
+    expect(retitle.status).toBe(200);
+    expect((await retitle.json()).data.ownerId).toBe(alice.user.id);
+    await runtime.close();
+  });
 });

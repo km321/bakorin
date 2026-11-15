@@ -23,6 +23,10 @@ function entityOr404(ast: SchemaAST, name: string): EntityAST | null {
   return ast.entityMap[name] ?? null;
 }
 
+function ownershipMissing(value: unknown): boolean {
+  return value === undefined || value === null || value === "";
+}
+
 function stripClientOwnership(
   entity: EntityAST,
   authEntity: string,
@@ -32,8 +36,20 @@ function stripClientOwnership(
   action: "create" | "update",
 ): Record<string, unknown> {
   const forced = ownedByFields(entity, authEntity);
-  if (forced.length === 0 || bypass) {
+  if (forced.length === 0) {
     return data;
+  }
+  if (bypass) {
+    if (action !== "create" || !actor) {
+      return data;
+    }
+    const next = { ...data };
+    for (const field of forced) {
+      if (ownershipMissing(next[field])) {
+        next[field] = actor.id;
+      }
+    }
+    return next;
   }
   const next = { ...data };
   for (const field of forced) {
