@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.2.5"
+          bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       - name: SQLite tests
         run: bun test
@@ -39,7 +39,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.2.5"
+          bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       - name: Postgres tests
         run: bun test tests/postgres.test.ts
@@ -55,7 +55,7 @@ jobs:
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "1.2.5"
+          bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       - name: Dependency audit
         run: bun audit
