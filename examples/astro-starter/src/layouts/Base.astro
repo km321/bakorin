@@ -1,0 +1,49 @@
+---
+import "../styles/app.css";
+import { api } from "../lib/bakorin.ts";
+
+interface Props {
+  title: string;
+}
+
+const { title } = Astro.props;
+let signedIn = false;
+try {
+  await api(Astro.cookies).me();
+  signedIn = true;
+} catch {
+  signedIn = false;
+}
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title} · Bakorin</title>
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href={signedIn ? "/app" : "/"}>Bakorin</a>
+      <nav aria-label="Main">
+        {signedIn ? (
+          <>
+            <a href="/app">App</a>
+            <a href="/logout">Sign out</a>
+          </>
+        ) : (
+          <>
+            <a href="/login">Sign in</a>
+            <a href="/signup">Create account</a>
+          </>
+        )}
+      </nav>
+    </header>
+    <main class="wrap">
+      <slot />
+    </main>
+    <footer class="site-footer">
+      <span>Self-hosted backend for your site.</span>
+    </footer>
+  </body>
+</html>

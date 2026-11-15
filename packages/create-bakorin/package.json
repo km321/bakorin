@@ -1,0 +1,31 @@
+{
+  "name": "create-bakorin",
+  "version": "0.1.0",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "create-bakorin": "./dist/cli.js"
+  },
+  "main": "./dist/cli.js",
+  "types": "./dist/cli.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/cli.d.ts",
+      "import": "./dist/cli.js",
+      "bun": "./src/cli.ts",
+      "default": "./dist/cli.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "templates",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun build src/cli.ts --outdir dist --target node --format esm && bun -e \"await Bun.write('dist/cli.d.ts', 'export {};\\n')\""
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

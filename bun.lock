@@ -29,6 +29,13 @@
         "zod": "^3.24.2",
       },
     },
+    "packages/create-bakorin": {
+      "name": "create-bakorin",
+      "version": "0.1.0",
+      "bin": {
+        "create-bakorin": "./dist/cli.js",
+      },
+    },
     "packages/sdk": {
       "name": "@bakorin/sdk",
       "version": "0.1.0",
@@ -254,6 +261,8 @@
     "caniuse-lite": ["caniuse-lite@1.0.30001826", "", {}, "sha512-wTB+9tIbLro/BCXwLuNV1meHE4L9dS6dArMDwgYfNBPMYScqClHyGunhkCSDtHhe/69Xl0sHlKgBVZ+fNsYtWA=="],
 
     "convert-source-map": ["convert-source-map@2.0.0", "", {}, "sha512-Kvp459HrV2FEJ1CAsi1Ku+MY3kasH19TFykTz2xWmMeq6bk2NU3XXvfJ+Q61m0xktWwt+1HSYf3JZsTms3aRJg=="],
+
+    "create-bakorin": ["create-bakorin@workspace:packages/create-bakorin"],
 
     "css-select": ["css-select@5.2.2", "", { "dependencies": { "boolbase": "^1.0.0", "css-what": "^6.1.0", "domhandler": "^5.0.2", "domutils": "^3.0.1", "nth-check": "^2.0.1" } }, "sha512-TizTzUddG/xYLA3NXodFM0fSbNizXjOKhqiQQwvhlspadZokn1KDy0NZFS0wuEubIYAV5/c1/lAr0TaaFXEXzw=="],
 

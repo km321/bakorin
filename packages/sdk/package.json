@@ -3,9 +3,34 @@
   "version": "0.1.0",
   "license": "MIT",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./next": "./src/next.ts",
-    "./astro": "./src/astro.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "bun": "./src/index.ts",
+      "default": "./dist/index.js"
+    },
+    "./astro": {
+      "types": "./dist/astro.d.ts",
+      "import": "./dist/astro.js",
+      "bun": "./src/astro.ts",
+      "default": "./dist/astro.js"
+    },
+    "./next": {
+      "types": "./dist/next.d.ts",
+      "import": "./dist/next.js",
+      "bun": "./src/next.ts",
+      "default": "./dist/next.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun build src/index.ts src/astro.ts src/next.ts --outdir dist --format esm --target node && bunx tsc -p tsconfig.json --emitDeclarationOnly --declaration --allowImportingTsExtensions"
   }
 }

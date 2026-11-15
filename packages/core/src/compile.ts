@@ -283,6 +283,7 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
     sqlitePath,
     postgresUrl: runtime.postgres?.url,
     jwtSecret,
+    jwtSecretPrevious: firstEnv(env, ["JWT_SECRET_PREVIOUS"]),
     accessTtlSeconds: runtime.jwt?.accessTtlSeconds ?? 900,
     refreshTtlSeconds: runtime.jwt?.refreshTtlSeconds ?? 60 * 60 * 24 * 30,
     files: {
@@ -294,6 +295,9 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
       secretKey,
       region,
       virtualHostedStyle: parseVirtualHostedStyle(runtime.files, env),
+      maxBytes: runtime.files?.maxBytes ?? 10 * 1024 * 1024,
+      allowedMimeTypes: parseAllowedMime(runtime.files?.allowedMimeTypes),
+      signedUrlTtlSeconds: runtime.files?.signedUrlTtlSeconds ?? 900,
     },
     backups: {
       intervalHours: parseIntervalHours(runtime.backups?.interval),
@@ -325,6 +329,40 @@ function parseCorsOrigins(
 function parseAppUrl(env: Record<string, string | undefined>, port: number): string {
   const raw = firstEnv(env, ["APP_URL", "BAKORIN_APP_URL"]) ?? `http://127.0.0.1:${port}`;
   return raw.replace(/\/+$/, "");
+}
+
+export const DEFAULT_ALLOWED_MIME_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/gif",
+  "application/pdf",
+  "text/plain",
+];
+
+function parseAllowedMime(raw: string[] | undefined): string[] {
+  if (!raw || raw.length === 0) {
+    return [...DEFAULT_ALLOWED_MIME_TYPES];
+  }
+  if (raw.includes("*")) {
+    return ["*"];
+  }
+  return raw;
+}
+
+function compileIndexes(entityName: string, fieldMap: Record<string, { name: string }>, raw: Array<string | string[]> | undefined): string[][] {
+  if (!raw) {
+    return [];
+  }
+  return raw.map((item) => {
+    const fields = Array.isArray(item) ? item : [item];
+    for (const field of fields) {
+      if (!fieldMap[field]) {
+        throw new SchemaError(`${entityName} index references missing field ${field}`);
+      }
+    }
+    return fields;
+  });
 }
 
 function findAuthEntity(yaml: AppYaml, entities: EntityAST[]): AuthAST {
@@ -455,6 +493,7 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
       fields,
       fieldMap,
       policies,
+      indexes: compileIndexes(name, fieldMap, raw.indexes),
       deprecated: false,
     };
   });
@@ -523,6 +562,9 @@ export function deserializeAst(raw: string): SchemaAST {
     if (!entity.display) {
       entity.display = "id";
     }
+    if (!entity.indexes) {
+      entity.indexes = [];
+    }
     for (const field of entity.fields) {
       if (!field.writable) {
         field.writable = SYSTEM_FIELDS.has(field.name) ? "none" : "any";
@@ -534,6 +576,15 @@ export function deserializeAst(raw: string): SchemaAST {
   }
   if (!parsed.runtime.appUrl) {
     parsed.runtime.appUrl = `http://127.0.0.1:${parsed.runtime.port}`;
+  }
+  if (!parsed.runtime.files.maxBytes) {
+    parsed.runtime.files.maxBytes = 10 * 1024 * 1024;
+  }
+  if (!parsed.runtime.files.allowedMimeTypes || parsed.runtime.files.allowedMimeTypes.length === 0) {
+    parsed.runtime.files.allowedMimeTypes = [...DEFAULT_ALLOWED_MIME_TYPES];
+  }
+  if (!parsed.runtime.files.signedUrlTtlSeconds) {
+    parsed.runtime.files.signedUrlTtlSeconds = 900;
   }
   return parsed;
 }

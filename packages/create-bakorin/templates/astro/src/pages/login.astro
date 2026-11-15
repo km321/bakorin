@@ -1,0 +1,39 @@
+---
+import Layout from "../layouts/Base.astro";
+import { api } from "../lib/bakorin.ts";
+
+let error = "";
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  try {
+    await api(Astro.cookies).login({
+      email: String(form.get("email") ?? ""),
+      password: String(form.get("password") ?? ""),
+    });
+    return Astro.redirect("/app");
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Could not sign in";
+  }
+}
+---
+<Layout title="Sign in">
+  <section class="card">
+    <h1>Sign in</h1>
+    <p class="lede">Welcome back. Use the email you signed up with.</p>
+    {error ? <div class="error" role="alert">{error}</div> : null}
+    <form method="post">
+      <label>
+        Email
+        <input type="email" name="email" autocomplete="email" required />
+      </label>
+      <label>
+        Password
+        <input type="password" name="password" autocomplete="current-password" minlength="8" required />
+      </label>
+      <div class="actions">
+        <button type="submit">Sign in</button>
+        <a href="/forgot-password">Forgot password?</a>
+      </div>
+    </form>
+  </section>
+</Layout>

@@ -20,11 +20,24 @@ export async function signAccessToken(
     .sign(key);
 }
 
-export async function verifyAccessToken(token: string, secret: string): Promise<AccessClaims> {
-  const key = new TextEncoder().encode(secret);
-  const { payload } = await jwtVerify(token, key, { algorithms: ["HS256"] });
-  if (!payload.sub || typeof payload.role !== "string" || typeof payload.ent !== "string") {
-    throw new Error("invalid token");
+export async function verifyAccessToken(
+  token: string,
+  secret: string,
+  previousSecret?: string,
+): Promise<AccessClaims> {
+  const secrets = [secret, previousSecret].filter((value): value is string => Boolean(value && value.length > 0));
+  let lastError: unknown;
+  for (const item of secrets) {
+    try {
+      const key = new TextEncoder().encode(item);
+      const { payload } = await jwtVerify(token, key, { algorithms: ["HS256"] });
+      if (!payload.sub || typeof payload.role !== "string" || typeof payload.ent !== "string") {
+        throw new Error("invalid token");
+      }
+      return { sub: payload.sub, role: payload.role, ent: payload.ent };
+    } catch (error) {
+      lastError = error;
+    }
   }
-  return { sub: payload.sub, role: payload.role, ent: payload.ent };
+  throw lastError instanceof Error ? lastError : new Error("invalid token");
 }

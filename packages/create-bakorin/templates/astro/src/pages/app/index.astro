@@ -1,0 +1,52 @@
+---
+import Layout from "../../layouts/Base.astro";
+import { api, type Task } from "../../lib/bakorin.ts";
+
+const client = api(Astro.cookies);
+let error = "";
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  try {
+    await client.entity("tasks").create({ title: String(form.get("title") ?? "") });
+    return Astro.redirect("/app");
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Could not create the task";
+  }
+}
+
+let tasks: Task[] = [];
+try {
+  const listed = await client.entity("tasks").list({ sort: "-createdAt", limit: 50 });
+  tasks = listed.data;
+} catch (err) {
+  error = err instanceof Error ? err.message : "Could not load tasks";
+}
+---
+<Layout title="Tasks">
+  <section class="card">
+    <h1>Your tasks</h1>
+    <p class="lede">Private to your account. Create a record and it is stored in Bakorin.</p>
+    {error ? <div class="error" role="alert">{error}</div> : null}
+    {tasks.length === 0 ? (
+      <p class="empty">No tasks yet. Add one below.</p>
+    ) : (
+      <ul class="list">
+        {tasks.map((task) => (
+          <li>
+            <span>{task.title}</span>
+            <span>{task.done ? "done" : "open"}</span>
+          </li>
+        ))}
+      </ul>
+    )}
+    <form method="post">
+      <label>
+        New task
+        <input type="text" name="title" required maxlength="200" />
+      </label>
+      <div class="actions">
+        <button type="submit">Add task</button>
+      </div>
+    </form>
+  </section>
+</Layout>

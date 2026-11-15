@@ -1,0 +1,21 @@
+---
+import Layout from "../layouts/Base.astro";
+import { api } from "../lib/bakorin.ts";
+
+try {
+  await api(Astro.cookies).me();
+  return Astro.redirect("/app");
+} catch {
+  // stay on the public home page
+}
+---
+<Layout title="Home">
+  <section class="card">
+    <h1>Your data, on your host</h1>
+    <p class="lede">This starter talks to a Bakorin API for signup, login, password reset, invites, and a private task list.</p>
+    <div class="actions">
+      <a class="button" href="/signup">Create an account</a>
+      <a class="button secondary" href="/login">Sign in</a>
+    </div>
+  </section>
+</Layout>

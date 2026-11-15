@@ -12,6 +12,9 @@ runtime:
   files:
     driver: local
     path: ./data/uploads
+    maxBytes: 10485760
+    allowedMimeTypes: [image/png, image/jpeg, image/webp, image/gif, application/pdf, text/plain]
+    signedUrlTtlSeconds: 900
   jwt:
     secret: ${JWT_SECRET:-dev-only-change-me}
     accessTtlSeconds: 900
@@ -99,6 +102,8 @@ entities:
       brief:
         type: file
         description: Optional brief or attachment.
+    indexes:
+      - [ownerId, status]
     policies:
       read: [owner(ownerId), admin]
       create: authenticated

@@ -1,5 +1,9 @@
 node_modules
 dist
+!packages/sdk/dist
+!packages/sdk/dist/**
+!packages/create-bakorin/dist
+!packages/create-bakorin/dist/**
 .DS_Store
 *.db
 *.db-wal
@@ -19,4 +23,8 @@ coverage
 uploads
 .tmp
 examples/**/data
+examples/**/.astro
+examples/**/.next
 release
+bench/k6-*.json
+.netlify

@@ -2,6 +2,8 @@ import { Hono } from "hono";
 import swaggerUiCss from "swagger-ui-dist/swagger-ui.css" with { type: "text" };
 import swaggerUiBundle from "swagger-ui-dist/swagger-ui-bundle.js" with { type: "text" };
 import pageHtml from "./page.html" with { type: "text" };
+import pageCss from "./page.css" with { type: "text" };
+import initJs from "./init.js" with { type: "text" };
 
 export function docsIndex(): Response {
   return new Response(pageHtml, {
@@ -23,6 +25,18 @@ export function createDocsRoutes(): Hono {
 
   app.get("/swagger-ui-bundle.js", () => {
     return new Response(swaggerUiBundle, {
+      headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=3600" },
+    });
+  });
+
+  app.get("/page.css", () => {
+    return new Response(pageCss, {
+      headers: { "content-type": "text/css; charset=utf-8", "cache-control": "public, max-age=3600" },
+    });
+  });
+
+  app.get("/init.js", () => {
+    return new Response(initJs, {
       headers: { "content-type": "text/javascript; charset=utf-8", "cache-control": "public, max-age=3600" },
     });
   });

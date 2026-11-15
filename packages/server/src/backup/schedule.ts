@@ -4,6 +4,8 @@ import type { SchemaAST } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
 import { createS3FileStore, parseS3Url, pruneS3Backups, type FileStore } from "../files/store.ts";
 import { resolveRuntimePath } from "../paths.ts";
+import { acquireLease, instanceHolder, releaseLease } from "../db/leases.ts";
+import { writeAudit } from "../audit/log.ts";
 import { exportPortable, pruneBackups } from "./archive.ts";
 import { backupSqlite } from "./sqlite.ts";
 
@@ -71,9 +73,12 @@ export async function runBackup(options: {
     await store.importAllFrom(dest, keyPrefix);
     await pruneS3Backups(store, prefix, options.ast.runtime.backups.retain);
     await rm(join(options.projectDir, ".tmp-backup"), { recursive: true, force: true });
-    return `s3://${bucket}/${keyPrefix}`;
+    const location = `s3://${bucket}/${keyPrefix}`;
+    await writeAudit(options.db, { action: "backup", meta: { location, remote: true } });
+    return location;
   }
   await pruneBackups(localRoot, options.ast.runtime.backups.retain);
+  await writeAudit(options.db, { action: "backup", meta: { location: dest, remote: false } });
   return dest;
 }
 
@@ -89,13 +94,25 @@ export function startBackupScheduler(
   if (!hours) {
     return () => undefined;
   }
+  const holder = instanceHolder();
   const timer = setInterval(
     () => {
-      void runBackup(options).catch((error: unknown) => {
-        console.error("[bakorin] scheduled backup failed", error);
-      });
+      void (async () => {
+        const got = await acquireLease(options.db, "backup-scheduler", holder, hours * 60 * 60 * 1000);
+        if (!got) {
+          return;
+        }
+        try {
+          await runBackup(options);
+        } catch (error: unknown) {
+          console.error("[bakorin] scheduled backup failed", error);
+        }
+      })();
     },
     hours * 60 * 60 * 1000,
   );
-  return () => clearInterval(timer);
+  return () => {
+    clearInterval(timer);
+    void releaseLease(options.db, "backup-scheduler", holder);
+  };
 }

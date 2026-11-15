@@ -1,0 +1,68 @@
+app:
+  name: {{APP_NAME}}
+  version: "0.1.0"
+
+runtime:
+  dialect: sqlite
+  host: 0.0.0.0
+  port: 4371
+  sqlite:
+    path: ./data/app.db
+  files:
+    driver: local
+    path: ./data/uploads
+    maxBytes: 10485760
+    allowedMimeTypes: [image/png, image/jpeg, image/webp, image/gif, application/pdf, text/plain]
+    signedUrlTtlSeconds: 900
+  jwt:
+    secret: ${JWT_SECRET:-dev-only-change-me}
+    accessTtlSeconds: 900
+    refreshTtlSeconds: 2592000
+  backups:
+    interval: 24h
+    retain: 14
+    destination: ./data/backups
+  hooks: ./hooks.ts
+  cors:
+    origins: ["http://localhost:4321", "http://localhost:3000"]
+
+auth:
+  entity: users
+  identity: email
+  password: password
+  role: role
+  adminRole: admin
+  requireVerifiedEmail: false
+
+entities:
+  users:
+    auth: true
+    label: User
+    plural: Users
+    display: name
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      name: { type: text, required: true }
+      role: { type: enum, values: [user, admin], default: user, writable: admin }
+    policies:
+      read: authenticated
+      create: admin
+      update: owner(id)
+      delete: admin
+
+  tasks:
+    label: Task
+    plural: Tasks
+    display: title
+    fields:
+      title: { type: text, required: true }
+      done: { type: boolean, default: false }
+      ownerId: { type: relation, to: users, required: true }
+    indexes:
+      - [ownerId, done]
+    policies:
+      read: [owner(ownerId), admin]
+      create: authenticated
+      update: owner(ownerId)
+      delete: owner(ownerId)

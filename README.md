@@ -4,6 +4,16 @@ Bakorin is a self-hosted backend for Melton Studios client projects. One `app.ya
 
 ## Quickstart
 
+Five minutes to an Astro (or Next.js) site with Bakorin as the API: [docs/quickstart.md](docs/quickstart.md).
+
+```bash
+npx create-bakorin my-app --frontend astro --schema todo --yes
+bun packages/server/src/cli.ts dev --dir ./my-app
+cd my-app/web && npm install && npm run dev
+```
+
+From this checkout:
+
 ```bash
 bun install
 bun test
@@ -225,6 +235,7 @@ Railway volume snapshots are a second copy, not a substitute for `bakorin backup
 | Variable | Required | Notes |
 |---|---|---|
 | `JWT_SECRET` | yes in production | Signing key for access tokens |
+| `JWT_SECRET_PREVIOUS` | during rotation | Previous signing key; tokens signed with it still verify |
 | `PORT` | Railway sets it | Listen port. Overrides `runtime.port` |
 | `NODE_ENV` / `BAKORIN_ENV` | image sets `production` | Production mode |
 | `BAKORIN_DATA_DIR` | recommended | SQLite file `$BAKORIN_DATA_DIR/app.db`; local uploads and backups live here if S3 is not configured |
@@ -330,10 +341,12 @@ Point `APP_URL` at that front end so reset, verify, and invite emails use its or
 - Owner ids cannot be taken over: sending `ownerId` (or another ownership field) as a non-admin returns 403. Omitting it still stamps the session user. `owner()` row filters keep another user's row at 404.
 - Password updates through CRUD require an admin, or the current password for self-service, and are always hashed. Role changes and password resets revoke that user's refresh tokens.
 - Passwords are argon2id. Access JWTs last 15 minutes. Refresh tokens are stored as SHA-256 hashes, rotated on use, and reuse of a revoked token revokes every token for that user.
-- Auth routes are rate limited. Forgot-password always returns 200 so accounts cannot be enumerated.
-- `JWT_SECRET` is required when `NODE_ENV=production` or `BAKORIN_ENV=production`.
+- Auth routes are rate limited in the database (shared across instances). Five failed logins lock that account with backoff.
+- `JWT_SECRET` is required when `NODE_ENV=production` or `BAKORIN_ENV=production`. Set `JWT_SECRET_PREVIOUS` while rotating.
 - Production refuses CORS origin `*` unless `BAKORIN_ALLOW_ANY_ORIGIN=true`.
-- File downloads require the uploader or an admin.
+- File downloads require a short-lived signed URL. Upload size and MIME types are set in `app.yaml`.
+- Admin and docs send CSP, nosniff, frame-ancestors, Referrer-Policy, and HSTS on HTTPS.
+- Audit log: `GET /api/v1/audit` (admin) and the admin Audit page.
 
 ## CLI
 
@@ -354,7 +367,11 @@ export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/bakorin
 bun test tests/postgres.test.ts
 ```
 
-GitHub Actions (`.github/workflows/ci.yml`) runs those two jobs separately: `bun test` on SQLite, then `bun test tests/postgres.test.ts` against a `postgres:16` service. To point file storage at MinIO or R2 in a real environment, set `runtime.files.driver: s3` with `bucket`, `endpoint`, `accessKey`, and `secretKey`.
+GitHub Actions (`.github/workflows/ci.yml`) runs SQLite tests, Postgres tests against a `postgres:16` service, then a dependency audit and gitleaks scan.
+
+Load baseline (measured, SQLite): `bench/baseline.md` via `bun scripts/bench-sqlite.ts`. Restore drill: `bun scripts/restore-drill.ts`.
+
+To point file storage at MinIO or R2 in a real environment, set `runtime.files.driver: s3` with `bucket`, `endpoint`, `accessKey`, and `secretKey`.
 
 Release binaries:
 
@@ -364,7 +381,7 @@ bun run release    # linux-x64, linux-arm64, darwin-arm64 in ./release
 
 ## Status of this v0.1
 
-Works: schema compiler, 3-tier diff, SQLite and Postgres migrators, CRUD with filters/sort/expand, policies, auth (signup, login, forgot/reset, verify, invites), field-level writable locks, local and S3/R2 files (list, copy, delete), webhooks, admin UI with relation labels, SDK, backup/restore/export/import including S3 retention, hooks, generated OpenAPI, compiled binary, Docker.
+Works: schema compiler, 3-tier diff, SQLite and Postgres migrators (including `indexes:`), CRUD with filters/sort/expand, policies, auth (signup, login, forgot/reset, verify, invites, lockout), DB-backed rate limits, JWT rotation, signed file URLs, audit log, leases for backups and webhooks, admin UI with Backups and Audit, SDK, create-bakorin, Astro and Next starters, backup/restore/export/import including S3 retention, hooks, generated OpenAPI, compiled binary, Docker, Railway template files.
 
 ## Roadmap
 

@@ -16,7 +16,11 @@
     "release": "bun scripts/release.ts",
     "dev": "bun packages/server/src/cli.ts dev",
     "start": "bun packages/server/src/cli.ts start",
-    "bakorin": "bun packages/server/src/cli.ts"
+    "bakorin": "bun packages/server/src/cli.ts",
+    "bench": "bun scripts/bench-sqlite.ts",
+    "restore-drill": "bun scripts/restore-drill.ts",
+    "build:sdk": "bun run --filter @bakorin/sdk build",
+    "build:create": "bun run --filter create-bakorin build"
   },
   "engines": {
     "bun": ">=1.1.0"

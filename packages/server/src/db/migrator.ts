@@ -66,8 +66,8 @@ function createTableSql(dialect: DialectName, entity: EntityAST): string {
   return `create table if not exists ${quoteChecked(entity.name)} (\n  ${cols.join(",\n  ")}\n)`;
 }
 
-function indexName(entity: string, field: string, unique: boolean): string {
-  return `_bakorin_${unique ? "uidx" : "idx"}_${entity}_${field}`;
+function indexName(entity: string, fields: string[], unique: boolean): string {
+  return `_bakorin_${unique ? "uidx" : "idx"}_${entity}_${fields.join("_")}`;
 }
 
 async function tableExists(db: BakorinDb, dialect: DialectName, name: string): Promise<boolean> {
@@ -108,16 +108,27 @@ async function addIndexes(db: BakorinDb, entity: EntityAST): Promise<void> {
     if (field.unique) {
       await sql
         .raw(
-          `create unique index if not exists ${quoteChecked(indexName(entity.name, field.name, true))} on ${quoteChecked(entity.name)} (${quoteChecked(field.name)})`,
+          `create unique index if not exists ${quoteChecked(indexName(entity.name, [field.name], true))} on ${quoteChecked(entity.name)} (${quoteChecked(field.name)})`,
         )
         .execute(db);
     } else if (field.indexed) {
       await sql
         .raw(
-          `create index if not exists ${quoteChecked(indexName(entity.name, field.name, false))} on ${quoteChecked(entity.name)} (${quoteChecked(field.name)})`,
+          `create index if not exists ${quoteChecked(indexName(entity.name, [field.name], false))} on ${quoteChecked(entity.name)} (${quoteChecked(field.name)})`,
         )
         .execute(db);
     }
+  }
+  for (const fields of entity.indexes ?? []) {
+    if (fields.length === 0) {
+      continue;
+    }
+    const cols = fields.map((field) => quoteChecked(field)).join(", ");
+    await sql
+      .raw(
+        `create index if not exists ${quoteChecked(indexName(entity.name, fields, false))} on ${quoteChecked(entity.name)} (${cols})`,
+      )
+      .execute(db);
   }
 }
 
@@ -153,9 +164,10 @@ async function applyAuto(db: BakorinDb, dialect: DialectName, plan: DiffPlan): P
         break;
       }
       case "add_index": {
+        const cols = change.fields.map((field) => quoteChecked(field)).join(", ");
         await sql
           .raw(
-            `create index if not exists ${quoteChecked(indexName(change.entity, change.field, false))} on ${quoteChecked(change.entity)} (${quoteChecked(change.field)})`,
+            `create index if not exists ${quoteChecked(indexName(change.entity, change.fields, false))} on ${quoteChecked(change.entity)} (${cols})`,
           )
           .execute(db);
         break;

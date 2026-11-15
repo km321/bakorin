@@ -248,6 +248,23 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         },
       },
     },
+    "/api/v1/audit": {
+      get: {
+        tags: ["audit"],
+        summary: "List audit events",
+        description: "Admin only. Append-only log of auth events, admin writes, and backups.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+        ],
+        responses: {
+          200: { description: "OK" },
+          401: errorResponses[401],
+          403: errorResponses[403],
+        },
+      },
+    },
     "/api/v1/backups": {
       get: {
         tags: ["backups"],
@@ -607,6 +624,7 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
                         contentType: { type: "string" },
                         size: { type: "integer" },
                         url: { type: "string" },
+                        expiresAt: { type: "integer" },
                       },
                     },
                   },
@@ -614,20 +632,38 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
               },
             },
           },
+          400: errorResponses[400],
           401: errorResponses[401],
+        },
+      },
+    },
+    "/api/v1/files/{id}/sign": {
+      post: {
+        tags: ["files"],
+        summary: "Issue a short-lived signed URL",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          200: { description: "OK" },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: errorResponses[404],
         },
       },
     },
     "/api/v1/files/{id}": {
       get: {
         tags: ["files"],
-        summary: "Download a file",
-        security: [{ bearerAuth: [] }],
-        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        summary: "Download a file with a signed URL",
+        security: [],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "string" } },
+          { name: "exp", in: "query", required: true, schema: { type: "integer" }, description: "Unix expiry (seconds)" },
+          { name: "sig", in: "query", required: true, schema: { type: "string" }, description: "HMAC signature" },
+        ],
         responses: {
           200: { description: "File bytes", content: { "application/octet-stream": { schema: { type: "string", format: "binary" } } } },
           401: errorResponses[401],
-          403: errorResponses[403],
           404: errorResponses[404],
         },
       },
@@ -797,6 +833,7 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
       { name: "auth", description: "Signup, login, token refresh, logout, and the current user." },
       { name: "files", description: "Upload and download files." },
       { name: "backups", description: "Admin-only live backups. Restore is CLI-only." },
+      { name: "audit", description: "Admin-only append-only audit log." },
       { name: "meta", description: "Health, OpenAPI, admin metadata, and docs." },
       ...ast.entities.map((entity) => ({ name: entity.name, description: entity.description ?? entity.plural })),
     ],

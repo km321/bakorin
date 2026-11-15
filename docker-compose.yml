@@ -1,0 +1,26 @@
+services:
+  bakorin:
+    build: .
+    ports:
+      - "4371:4371"
+    environment:
+      PORT: "4371"
+      NODE_ENV: production
+      BAKORIN_ENV: production
+      BAKORIN_DATA_DIR: /data
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-me-change-me-32}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:4321}
+      APP_URL: ${APP_URL:-http://localhost:4321}
+      MAIL_DRIVER: ${MAIL_DRIVER:-log}
+      S3_ADDRESSING_STYLE: ${S3_ADDRESSING_STYLE:-path}
+    volumes:
+      - bakorin-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "bun -e \"fetch('http://127.0.0.1:'+(process.env.PORT||4371)+'/health').then(r=>process.exit(r.ok?0:1))\""]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  bakorin-data:

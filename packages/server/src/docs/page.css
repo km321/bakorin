@@ -1,0 +1,22 @@
+html,
+body {
+  margin: 0;
+  background: #101214;
+}
+.docs-banner {
+  font-family: "Segoe UI", sans-serif;
+  background: #0c0e10;
+  color: #ece7dc;
+  border-bottom: 1px solid #2b3238;
+  padding: 12px 20px;
+  font-size: 13px;
+}
+.docs-banner a {
+  color: #c4a574;
+}
+.swagger-ui .topbar {
+  display: none;
+}
+.swagger-ui {
+  background: #101214;
+}

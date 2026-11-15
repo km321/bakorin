@@ -59,6 +59,7 @@ export interface EntityAST {
   fields: FieldAST[];
   fieldMap: Record<string, FieldAST>;
   policies: Record<ActionName, PolicyAST[]>;
+  indexes: string[][];
   deprecated: boolean;
 }
 
@@ -79,6 +80,9 @@ export interface FilesRuntimeAST {
   secretKey?: string;
   region?: string;
   virtualHostedStyle: boolean;
+  maxBytes: number;
+  allowedMimeTypes: string[];
+  signedUrlTtlSeconds: number;
 }
 
 export interface BackupRuntimeAST {
@@ -95,6 +99,7 @@ export interface RuntimeAST {
   sqlitePath: string;
   postgresUrl?: string;
   jwtSecret: string;
+  jwtSecretPrevious?: string;
   accessTtlSeconds: number;
   refreshTtlSeconds: number;
   files: FilesRuntimeAST;

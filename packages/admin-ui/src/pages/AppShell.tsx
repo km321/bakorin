@@ -4,6 +4,7 @@ import { Drawer } from "../components/Drawer.tsx";
 import { InviteUser } from "../components/InviteUser.tsx";
 import { fieldLabel, relatedLabel } from "../lib/label.ts";
 import { Backups } from "./Backups.tsx";
+import { Audit } from "./Audit.tsx";
 
 interface Props {
   onLogout: () => void;
@@ -40,7 +41,9 @@ export function AppShell({ onLogout }: Props) {
   const [filter, setFilter] = useState("");
   const [editing, setEditing] = useState<Record<string, unknown> | null | undefined>(undefined);
   const [inviting, setInviting] = useState(false);
-  const [page, setPage] = useState<"records" | "backups">(location.hash === "#backups" ? "backups" : "records");
+  const [page, setPage] = useState<"records" | "backups" | "audit">(
+    location.hash === "#backups" ? "backups" : location.hash === "#audit" ? "audit" : "records",
+  );
   const limit = 20;
 
   const entity: MetaEntity | undefined = useMemo(
@@ -92,7 +95,7 @@ export function AppShell({ onLogout }: Props) {
 
   useEffect(() => {
     function onHash() {
-      setPage(location.hash === "#backups" ? "backups" : "records");
+      setPage(location.hash === "#backups" ? "backups" : location.hash === "#audit" ? "audit" : "records");
     }
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);
@@ -137,6 +140,16 @@ export function AppShell({ onLogout }: Props) {
           >
             Backups
           </button>
+          <button
+            data-nav="audit"
+            class={page === "audit" ? "active" : ""}
+            onClick={() => {
+              setPage("audit");
+              location.hash = "audit";
+            }}
+          >
+            Audit
+          </button>
           <a data-nav="docs" href="/docs" target="_blank" rel="noreferrer">
             API docs
           </a>
@@ -154,6 +167,8 @@ export function AppShell({ onLogout }: Props) {
       <main class="main">
         {page === "backups" ? (
           <Backups />
+        ) : page === "audit" ? (
+          <Audit />
         ) : (
           <>
         <div class="toolbar">

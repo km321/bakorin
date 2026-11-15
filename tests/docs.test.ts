@@ -13,7 +13,10 @@ describe("api docs", () => {
     const html = await docs.text();
     expect(html).toContain("swagger-ui");
     expect(html).toContain("/api/v1/openapi.json");
-    expect(html).toContain("bakorin_access");
+    expect(html).toContain("/docs/init.js");
+    const init = await client(runtime).fetch("/docs/init.js");
+    expect(init.status).toBe(200);
+    expect(await init.text()).toContain("bakorin_access");
 
     const alias = await client(runtime).fetch("/api/v1/docs");
     expect(alias.status).toBe(200);

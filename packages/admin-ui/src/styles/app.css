@@ -11,8 +11,8 @@
   --ok: #7d9a6a;
   --focus: #e0c38a;
   --shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
-  --sans: "IBM Plex Sans", "Segoe UI", sans-serif;
-  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  --sans: "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
 * {

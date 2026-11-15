@@ -1,0 +1,15 @@
+title = "bakorin"
+
+[allowlist]
+description = "Test fixtures and documented placeholders"
+paths = [
+  '''tests/''',
+  '''examples/''',
+  '''packages/create-bakorin/templates/''',
+  '''bench/''',
+]
+regexes = [
+  '''test-secret-test-secret-test-secret-32''',
+  '''dev-only-change-me''',
+  '''minioadmin''',
+]

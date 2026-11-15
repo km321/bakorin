@@ -5,30 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Bakorin API docs</title>
     <link rel="stylesheet" href="/docs/swagger-ui.css" />
-    <style>
-      html,
-      body {
-        margin: 0;
-        background: #101214;
-      }
-      .docs-banner {
-        font-family: "Segoe UI", sans-serif;
-        background: #0c0e10;
-        color: #ece7dc;
-        border-bottom: 1px solid #2b3238;
-        padding: 12px 20px;
-        font-size: 13px;
-      }
-      .docs-banner a {
-        color: #c4a574;
-      }
-      .swagger-ui .topbar {
-        display: none;
-      }
-      .swagger-ui {
-        background: #101214;
-      }
-    </style>
+    <link rel="stylesheet" href="/docs/page.css" />
   </head>
   <body>
     <div class="docs-banner">
@@ -37,38 +14,6 @@
     </div>
     <div id="swagger-ui"></div>
     <script src="/docs/swagger-ui-bundle.js"></script>
-    <script>
-      window.onload = function () {
-        function token() {
-          try {
-            return localStorage.getItem("bakorin_access") || "";
-          } catch {
-            return "";
-          }
-        }
-        const ui = SwaggerUIBundle({
-          url: "/api/v1/openapi.json",
-          dom_id: "#swagger-ui",
-          presets: [SwaggerUIBundle.presets.apis],
-          layout: "BaseLayout",
-          persistAuthorization: true,
-          tryItOutEnabled: true,
-          requestInterceptor: function (req) {
-            const value = token();
-            if (value && !req.headers.Authorization && !req.headers.authorization) {
-              req.headers.Authorization = "Bearer " + value;
-            }
-            return req;
-          },
-          onComplete: function () {
-            const value = token();
-            if (value) {
-              ui.preauthorizeApiKey("bearerAuth", value);
-            }
-          },
-        });
-        window.ui = ui;
-      };
-    </script>
+    <script src="/docs/init.js"></script>
   </body>
 </html>

@@ -6,7 +6,7 @@ export type DiffTier = "auto" | "safe" | "deprecate" | "abort";
 export type DiffChange =
   | { tier: "auto"; kind: "add_entity"; entity: EntityAST }
   | { tier: "auto"; kind: "add_field"; entity: string; field: FieldAST }
-  | { tier: "auto"; kind: "add_index"; entity: string; field: string }
+  | { tier: "auto"; kind: "add_index"; entity: string; fields: string[] }
   | { tier: "safe"; kind: "rename_entity"; from: string; to: string }
   | { tier: "safe"; kind: "rename_field"; entity: string; from: string; to: string }
   | { tier: "deprecate"; kind: "drop_entity"; entity: string }
@@ -183,6 +183,14 @@ function diffEntity(prev: EntityAST, next: EntityAST, plan: DiffPlan): void {
       plan.deprecate.push({ tier: "deprecate", kind: "drop_field", entity: next.name, field: oldField.name });
     }
   }
+
+  const prevKeys = new Set((prev.indexes ?? []).map((fields) => fields.join(",")));
+  for (const fields of next.indexes ?? []) {
+    const key = fields.join(",");
+    if (!prevKeys.has(key)) {
+      plan.auto.push({ tier: "auto", kind: "add_index", entity: next.name, fields });
+    }
+  }
 }
 
 function compareField(entity: string, from: FieldAST, to: FieldAST, plan: DiffPlan): void {
@@ -226,7 +234,7 @@ function compareField(entity: string, from: FieldAST, to: FieldAST, plan: DiffPl
     });
   }
   if (!from.indexed && to.indexed) {
-    plan.auto.push({ tier: "auto", kind: "add_index", entity, field: to.name });
+    plan.auto.push({ tier: "auto", kind: "add_index", entity, fields: [to.name] });
   }
 }
 

@@ -4,6 +4,8 @@ import { hashPassword, verifyPassword } from "./password.ts";
 import { signAccessToken, verifyAccessToken } from "./jwt.ts";
 import { issueRefreshToken, revokeAllForUser, revokeToken, rotateRefreshToken } from "./refresh.ts";
 import { rateLimit } from "./rate-limit.ts";
+import { clearLockout, getLockout, recordFailedLogin } from "./lockout.ts";
+import { writeAudit } from "../audit/log.ts";
 import { publicRow } from "../crud/validate.ts";
 import { decodeRow } from "../crud/query.ts";
 import { sendVerificationEmail } from "./account.ts";
@@ -17,10 +19,11 @@ export function createAuthRoutes(): Hono {
   const app = new Hono();
 
   app.post("/signup", async (c) => {
-    if (!rateLimit(`signup:${clientKey(c)}`, 10, 60_000)) {
+    const ctx = c.get("app");
+    const ip = clientKey(c);
+    if (!(await rateLimit(ctx.db, `signup:${ip}`, 10, 60_000))) {
       return c.json({ error: { code: "rate_limited", message: "too many signup attempts" } }, 429);
     }
-    const ctx = c.get("app");
     const entity = ctx.ast.entityMap[ctx.ast.auth.entity];
     if (!entity) {
       return c.json({ error: { code: "misconfigured", message: "auth entity missing" } }, 500);
@@ -82,6 +85,7 @@ export function createAuthRoutes(): Hono {
     const stored = await ctx.db.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
     const after = decodeRow(entity, stored as Record<string, unknown>);
     ctx.bus.emit({ entity: entity.name, op: "create", before: null, after, actor: { id, role: String(after[ctx.ast.auth.roleField]) } });
+    await writeAudit(ctx.db, { action: "signup", actorId: id, actorRole: String(after[ctx.ast.auth.roleField]), entity: entity.name, recordId: id, ip });
     await sendVerificationEmail(ctx, id, identity);
     const role = String(after[ctx.ast.auth.roleField]);
     if (ctx.ast.auth.requireVerifiedEmail) {
@@ -93,28 +97,48 @@ export function createAuthRoutes(): Hono {
   });
 
   app.post("/login", async (c) => {
-    if (!rateLimit(`login:${clientKey(c)}`, 10, 60_000)) {
+    const ctx = c.get("app");
+    const ip = clientKey(c);
+    if (!(await rateLimit(ctx.db, `login:${ip}`, 10, 60_000))) {
       return c.json({ error: { code: "rate_limited", message: "too many login attempts" } }, 429);
     }
-    const ctx = c.get("app");
     const entity = ctx.ast.entityMap[ctx.ast.auth.entity]!;
     const body = (await c.req.json()) as Record<string, unknown>;
     const identityField = entity.fieldMap[ctx.ast.auth.identityField];
     const identityRaw = String(body[ctx.ast.auth.identityField] ?? "").trim();
     const identity = identityField?.type === "email" ? identityRaw.toLowerCase() : identityRaw;
     const password = String(body[ctx.ast.auth.passwordField] ?? "");
+    const lock = await getLockout(ctx.db, identity);
+    if (lock.locked) {
+      await writeAudit(ctx.db, { action: "failed_login", entity: entity.name, ip, meta: { identity, reason: "locked" } });
+      return c.json({ error: { code: "locked", message: `account locked until ${lock.until}` } }, 429);
+    }
     const row = await ctx.db.selectFrom(entity.name).selectAll().where(ctx.ast.auth.identityField, "=", identity).executeTakeFirst();
     if (!row) {
+      await writeAudit(ctx.db, { action: "failed_login", entity: entity.name, ip, meta: { identity, reason: "unknown" } });
       return c.json({ error: { code: "unauthenticated", message: "invalid credentials" } }, 401);
     }
     const ok = await verifyPassword(password, String(row[ctx.ast.auth.passwordField] ?? ""));
     if (!ok) {
+      const next = await recordFailedLogin(ctx.db, identity);
+      await writeAudit(ctx.db, {
+        action: "failed_login",
+        actorId: String(row.id),
+        entity: entity.name,
+        recordId: String(row.id),
+        ip,
+        meta: { identity, locked: next.locked },
+      });
+      if (next.locked) {
+        return c.json({ error: { code: "locked", message: `account locked until ${next.until}` } }, 429);
+      }
       return c.json({ error: { code: "unauthenticated", message: "invalid credentials" } }, 401);
     }
     const user = decodeRow(entity, row as Record<string, unknown>);
     if (ctx.ast.auth.requireVerifiedEmail && user.emailVerified !== true) {
       return c.json({ error: { code: "email_unverified", message: "verify your email before signing in" } }, 403);
     }
+    await clearLockout(ctx.db, identity);
     const role = String(user[ctx.ast.auth.roleField]);
     const accessToken = await signAccessToken(
       { sub: String(user.id), role, ent: entity.name },
@@ -122,6 +146,7 @@ export function createAuthRoutes(): Hono {
       ctx.ast.runtime.accessTtlSeconds,
     );
     const refreshToken = await issueRefreshToken(ctx.db, String(user.id), ctx.ast.runtime.refreshTtlSeconds);
+    await writeAudit(ctx.db, { action: "login", actorId: String(user.id), actorRole: role, entity: entity.name, recordId: String(user.id), ip });
     return c.json({ data: { user: publicRow(entity, user), accessToken, refreshToken, expiresIn: ctx.ast.runtime.accessTtlSeconds } });
   });
 

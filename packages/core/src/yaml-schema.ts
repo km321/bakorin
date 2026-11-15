@@ -52,6 +52,7 @@ const entityObject = z
     description: z.string().optional(),
     auth: z.boolean().optional(),
     fields: z.record(ident, fieldValue),
+    indexes: z.array(z.union([ident, z.array(ident).min(1)])).optional(),
     policies: z
       .object({
         read: policyValue.optional(),
@@ -118,6 +119,9 @@ export const appYamlSchema = z
             region: z.string().optional(),
             virtualHostedStyle: z.boolean().optional(),
             pathStyle: z.boolean().optional(),
+            maxBytes: z.number().int().positive().optional(),
+            allowedMimeTypes: z.array(z.string().min(1)).optional(),
+            signedUrlTtlSeconds: z.number().int().positive().optional(),
           })
           .strict()
           .optional(),

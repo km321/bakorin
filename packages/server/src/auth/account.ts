@@ -6,6 +6,7 @@ import { hashPassword } from "./password.ts";
 import { signAccessToken } from "./jwt.ts";
 import { issueRefreshToken, newToken, revokeAllForUser } from "./refresh.ts";
 import { rateLimit } from "./rate-limit.ts";
+import { writeAudit } from "../audit/log.ts";
 import { accountLink, consumeAuthToken, issueAuthToken } from "./tokens.ts";
 import { renderAccountEmail } from "../mail/templates.ts";
 import type { Mailer, MailMessage } from "../mail/types.ts";
@@ -30,10 +31,11 @@ export function createAccountRoutes(): Hono {
   const app = new Hono();
 
   app.post("/forgot-password", async (c) => {
-    if (!rateLimit(`forgot:${clientKey(c)}`, 5, 60 * 60 * 1000)) {
+    const ctx = c.get("app");
+    const ip = clientKey(c);
+    if (!(await rateLimit(ctx.db, `forgot:${ip}`, 5, 60 * 60 * 1000))) {
       return c.json({ error: { code: "rate_limited", message: "too many reset requests" } }, 429);
     }
-    const ctx = c.get("app");
     const body = (await c.req.json().catch(() => ({}))) as { email?: string };
     const email = String(body.email ?? "").trim().toLowerCase();
     const ok = { data: { ok: true } };
@@ -77,6 +79,13 @@ export function createAccountRoutes(): Hono {
       .where("id", "=", consumed.userId)
       .execute();
     await revokeAllForUser(ctx.db, consumed.userId);
+    await writeAudit(ctx.db, {
+      action: "reset_password",
+      actorId: consumed.userId,
+      entity: entity.name,
+      recordId: consumed.userId,
+      ip: clientKey(c),
+    });
     return c.json({ data: { ok: true } });
   });
 
@@ -106,10 +115,10 @@ export function createAccountRoutes(): Hono {
   });
 
   app.post("/resend-verification", async (c) => {
-    if (!rateLimit(`reverify:${clientKey(c)}`, 5, 60 * 60 * 1000)) {
+    const ctx = c.get("app");
+    if (!(await rateLimit(ctx.db, `reverify:${clientKey(c)}`, 5, 60 * 60 * 1000))) {
       return c.json({ error: { code: "rate_limited", message: "too many verification emails" } }, 429);
     }
-    const ctx = c.get("app");
     const actor = c.get("actor");
     const body = (await c.req.json().catch(() => ({}))) as { userId?: string; email?: string };
     const entity = ctx.ast.entityMap[ctx.ast.auth.entity]!;
@@ -219,6 +228,16 @@ export function createAccountRoutes(): Hono {
     const link = accountLink(ctx.ast.runtime.appUrl, "/accept-invite", token);
     const rendered = renderAccountEmail("invite", { appName: ctx.ast.appName, link });
     await sendQuietly(ctx.mailer, { to: email, ...rendered, meta: { purpose: "invite", token, link } });
+    const actor = c.get("actor");
+    await writeAudit(ctx.db, {
+      action: "invite",
+      actorId: actor?.id,
+      actorRole: actor?.role,
+      entity: entity.name,
+      recordId: id,
+      ip: clientKey(c),
+      meta: { email, role },
+    });
     return c.json({ data: { user: publicRow(entity, after), email, role } }, 201);
   });
 

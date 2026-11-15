@@ -17,12 +17,15 @@ import { createMetaRoutes } from "./meta/routes.ts";
 import { createAdminRoutes } from "./admin/serve.ts";
 import { createDocsRoutes, docsIndex } from "./docs/serve.ts";
 import { createBackupRoutes } from "./backup/routes.ts";
+import { createAuditRoutes } from "./audit/routes.ts";
+import { subscribeAudit } from "./audit/log.ts";
 import { loadHooks } from "./hooks/loader.ts";
 import { subscribeAfterHooks } from "./hooks/after.ts";
-import { subscribeWebhooks } from "./webhooks/dispatcher.ts";
+import { startWebhookWorker, subscribeWebhooks } from "./webhooks/dispatcher.ts";
 import type { AppContext } from "./context.ts";
 import { startBackupScheduler } from "./backup/schedule.ts";
 import { resolveRuntimePath } from "./paths.ts";
+import { securityHeaders } from "./http/headers.ts";
 
 export interface RuntimeHandles {
   app: Hono;
@@ -88,12 +91,15 @@ export async function createRuntime(options: {
   let files = createFiles(ast, projectDir);
   const mailer = createMailer(env, mailFrom(env, ast.appName));
   const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir, mailer };
-  subscribeWebhooks(ast, (handler) => bus.subscribe(handler));
+  subscribeWebhooks(ast, opened.db, (handler) => bus.subscribe(handler));
   subscribeAfterHooks(hooks, opened.db, (handler) => bus.subscribe(handler));
+  subscribeAudit(ast, opened.db, (handler) => bus.subscribe(handler));
   const stopBackups = startBackupScheduler({ ast, db: opened.db, files, projectDir });
+  const stopWebhooks = ast.webhooks.length > 0 ? startWebhookWorker(opened.db) : () => undefined;
 
   const app = new Hono();
   app.use("*", cors(corsOptions(ast.runtime.corsOrigins)));
+  app.use("*", securityHeaders());
   app.use("*", async (c, next) => {
     c.set("app", context);
     c.set("actor", null);
@@ -101,7 +107,7 @@ export async function createRuntime(options: {
     const token = header?.startsWith("Bearer ") ? header.slice(7) : undefined;
     if (token) {
       try {
-        const claims = await verifyAccessToken(token, context.ast.runtime.jwtSecret);
+        const claims = await verifyAccessToken(token, context.ast.runtime.jwtSecret, context.ast.runtime.jwtSecretPrevious);
         c.set("actor", { id: claims.sub, role: claims.role });
       } catch {
         c.set("actor", null);
@@ -118,6 +124,7 @@ export async function createRuntime(options: {
   app.route("/api/v1/auth", createAccountRoutes());
   app.route("/api/v1/files", createFileRoutes());
   app.route("/api/v1/backups", createBackupRoutes());
+  app.route("/api/v1/audit", createAuditRoutes());
   app.route("/api/v1", createMetaRoutes());
   app.route("/api/v1", createCrudRouter());
   app.route("/admin", createAdminRoutes());
@@ -141,6 +148,7 @@ export async function createRuntime(options: {
     },
     async close() {
       stopBackups();
+      stopWebhooks();
       await opened.close();
     },
   };

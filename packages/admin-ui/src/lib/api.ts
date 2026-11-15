@@ -140,6 +140,35 @@ export interface BackupRecord {
   restoreCommand: string;
 }
 
+export interface AuditRecord {
+  id: string;
+  at: string;
+  action: string;
+  actorId: string | null;
+  actorRole: string | null;
+  entity: string | null;
+  recordId: string | null;
+  ip: string | null;
+  meta: unknown;
+}
+
+export async function listAudit(params: { limit: number; offset: number }): Promise<{
+  data: AuditRecord[];
+  meta: { total: number; limit: number; offset: number };
+}> {
+  const search = new URLSearchParams({ limit: String(params.limit), offset: String(params.offset) });
+  const response = await request(`/api/v1/audit?${search.toString()}`);
+  const json = (await response.json()) as {
+    data?: AuditRecord[];
+    meta?: { total: number; limit: number; offset: number };
+    error?: { message: string };
+  };
+  if (!response.ok || !json.data || !json.meta) {
+    throw new Error(json.error?.message ?? "failed to list audit events");
+  }
+  return { data: json.data, meta: json.meta };
+}
+
 export async function listBackups(): Promise<BackupRecord[]> {
   const response = await request("/api/v1/backups");
   const json = (await response.json()) as { data?: BackupRecord[]; error?: { message: string } };

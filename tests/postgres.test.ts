@@ -51,7 +51,13 @@ describe.skipIf(!url)("postgres", () => {
       method: "POST",
       body: JSON.stringify({ title: "Spoof", ownerId: created.user.id }),
     });
-    expect((await spoof.json()).data.ownerId).not.toBe(created.user.id);
+    expect(spoof.status).toBe(403);
+    const own = await client(runtime, staffToken).fetch("/api/v1/items", {
+      method: "POST",
+      body: JSON.stringify({ title: "Mine" }),
+    });
+    expect(own.status).toBe(201);
+    expect((await own.json()).data.ownerId).not.toBe(created.user.id);
     await runtime.close();
   });
 
