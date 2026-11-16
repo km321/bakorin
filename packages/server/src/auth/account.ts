@@ -293,3 +293,17 @@ export async function sendVerificationEmail(
   const link = accountLink(ctx.ast.runtime.appUrl, "/verify-email", token);
   await queueAuthEmail(ctx, "verify", { to: email, token, link });
 }
+
+/**
+ * Sent when someone signs up with an email that already has an account. It carries
+ * a one hour password reset link, so the owner can get back in if it was them.
+ */
+export async function sendExistingAccountNotice(
+  ctx: { ast: SchemaAST; db: BakorinDb; mailer: Mailer; projectDir: string },
+  userId: string,
+  email: string,
+): Promise<void> {
+  const token = await issueAuthToken(ctx.db, { userId, email, purpose: "reset", ttlSeconds: 60 * 60 });
+  const link = accountLink(ctx.ast.runtime.appUrl, "/reset-password", token);
+  await queueAuthEmail(ctx, "existing", { to: email, token, link });
+}

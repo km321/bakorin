@@ -3,16 +3,16 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createDownloadToken, readTar, verifyBackup } from "@bakorin/server";
-import { boot, bootSqlite, client } from "./helpers.ts";
+import { boot, bootSqlite, client, signupAndLogin } from "./helpers.ts";
 import { startS3Mock } from "./s3-mock.ts";
 
 async function signInAdmin(runtime: Awaited<ReturnType<typeof boot>>, email: string) {
   const api = client(runtime);
-  const signup = await api.fetch("/api/v1/auth/signup", {
+  const signup = await signupAndLogin(api, {
     method: "POST",
     body: JSON.stringify({ email, password: "password123", name: "Admin" }),
   });
-  expect(signup.status).toBe(201);
+  expect(signup.status).toBe(200);
   const user = (await signup.json()).data.user as { id: string };
   await runtime.db.updateTable("users").set({ role: "admin" }).where("id", "=", user.id).execute();
   const login = await api.fetch("/api/v1/auth/login", {
@@ -28,7 +28,7 @@ describe("admin backups", () => {
     const runtime = await boot();
     const anon = await client(runtime).fetch("/api/v1/backups");
     expect(anon.status).toBe(401);
-    const userSignup = await client(runtime).fetch("/api/v1/auth/signup", {
+    const userSignup = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "user@example.com", password: "password123", name: "User" }),
     });
@@ -138,7 +138,7 @@ entities:
 
     expect((await client(runtime).fetch(`/api/v1/backups/${created.id}/link`, { method: "POST" })).status).toBe(401);
     expect((await client(runtime).fetch(`/api/v1/backups/${created.id}/download`)).status).toBe(403);
-    const userSignup = await client(runtime).fetch("/api/v1/auth/signup", {
+    const userSignup = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "user@example.com", password: "password123", name: "User" }),
     });

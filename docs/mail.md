@@ -227,7 +227,7 @@ Statuses: `pending`, `sending`, `sent`, `failed`.
 
 ## System emails (verify, reset, invite)
 
-The built in account emails use the same outbox as mail rules: signup verification, admin **Resend verification**, password reset, and admin invites. They are queued during the request and sent in the background, so they get the same lease, retries with backoff, idempotency, and a row in the admin delivery log, labeled `system: verify`, `system: reset`, or `system: invite`.
+The built in account emails use the same outbox as mail rules: signup verification, admin **Resend verification**, password reset, admin invites, and the notice sent when someone signs up with an email that already has an account. They are queued during the request and sent in the background, so they get the same lease, retries with backoff, idempotency, and a row in the admin delivery log, labeled `system: verify`, `system: reset`, `system: invite`, or `system: existing`.
 
 API responses do not change. `forgot-password` still returns the same `200` body whether or not the email belongs to an account, and the request never waits on the mail provider, so delivery speed or failures cannot reveal which addresses exist.
 
@@ -249,6 +249,7 @@ The defaults are plain and work everywhere. To brand them, add any of these file
 mail/_auth/verify.html    mail/_auth/verify.txt    mail/_auth/verify.subject
 mail/_auth/reset.html     mail/_auth/reset.txt     mail/_auth/reset.subject
 mail/_auth/invite.html    mail/_auth/invite.txt    mail/_auth/invite.subject
+mail/_auth/existing.html  mail/_auth/existing.txt  mail/_auth/existing.subject
 ```
 
 Available values: `{{ link }}`, `{{ email }}`, `{{ expires }}` (for example `1 hour`), `{{ purpose }}`, `{{ app.name }}`, and `{{ app.url }}`. A custom HTML body is wrapped in `mail/_layout.html` when you have one, and a missing `.txt` is generated from the HTML.

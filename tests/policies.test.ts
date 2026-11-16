@@ -1,12 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { boot, client } from "./helpers.ts";
+import { boot, client, signupAndLogin } from "./helpers.ts";
 
 async function signup(runtime: Awaited<ReturnType<typeof boot>>, email: string, role?: string) {
   const body: Record<string, unknown> = { email, password: "password123", name: email };
   if (role) {
     body.role = role;
   }
-  const response = await client(runtime).fetch("/api/v1/auth/signup", { method: "POST", body: JSON.stringify(body) });
+  const response = await signupAndLogin(client(runtime), { method: "POST", body: JSON.stringify(body) });
   const json = await response.json();
   return json.data as { accessToken: string; user: { id: string; role: string } };
 }

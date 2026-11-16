@@ -3,15 +3,17 @@ import Layout from "../layouts/Base.astro";
 import { api } from "../lib/bakorin.ts";
 
 let error = "";
+let sent = "";
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   try {
-    await api(Astro.cookies).signup({
+    // Signup never signs you in and answers the same way for a new or a taken email.
+    const result = await api(Astro.cookies).signup({
       email: String(form.get("email") ?? ""),
       password: String(form.get("password") ?? ""),
       name: String(form.get("name") ?? ""),
     });
-    return Astro.redirect("/app");
+    sent = result.message;
   } catch (err) {
     error = err instanceof Error ? err.message : "Could not create the account";
   }
@@ -22,23 +24,30 @@ if (Astro.request.method === "POST") {
     <h1>Create account</h1>
     <p class="lede">Use an email and a password of at least 8 characters.</p>
     {error ? <div class="error" role="alert">{error}</div> : null}
-    <form method="post">
-      <label>
-        Name
-        <input type="text" name="name" autocomplete="name" required />
-      </label>
-      <label>
-        Email
-        <input type="email" name="email" autocomplete="email" required />
-      </label>
-      <label>
-        Password
-        <input type="password" name="password" autocomplete="new-password" minlength="8" required />
-      </label>
-      <div class="actions">
-        <button type="submit">Create account</button>
-        <a href="/login">Already have an account?</a>
-      </div>
-    </form>
+    {sent ? (
+      <>
+        <div class="banner" role="status">{sent}</div>
+        <p>Check the API logs when MAIL_DRIVER=log. <a href="/login">Go to sign in</a></p>
+      </>
+    ) : (
+      <form method="post">
+        <label>
+          Name
+          <input type="text" name="name" autocomplete="name" required />
+        </label>
+        <label>
+          Email
+          <input type="email" name="email" autocomplete="email" required />
+        </label>
+        <label>
+          Password
+          <input type="password" name="password" autocomplete="new-password" minlength="8" required />
+        </label>
+        <div class="actions">
+          <button type="submit">Create account</button>
+          <a href="/login">Already have an account?</a>
+        </div>
+      </form>
+    )}
   </section>
 </Layout>

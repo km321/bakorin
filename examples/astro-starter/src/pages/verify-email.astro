@@ -1,0 +1,38 @@
+---
+import Layout from "../layouts/Base.astro";
+import { api } from "../lib/bakorin.ts";
+
+const token = Astro.url.searchParams.get("token") ?? "";
+let error = "";
+let done = false;
+// Confirm on POST, not on page load, so link scanners in mail apps do not use up the token.
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  try {
+    await api(Astro.cookies).verifyEmail({ token: String(form.get("token") ?? "") });
+    done = true;
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Could not verify the email";
+  }
+}
+---
+<Layout title="Verify email">
+  <section class="card">
+    <h1>Verify email</h1>
+    {done ? (
+      <p>Email confirmed. <a href="/login">Sign in</a> to continue.</p>
+    ) : (
+      <>
+        <p class="lede">Confirm this address to finish setting up your account.</p>
+        {error ? <div class="error" role="alert">{error}</div> : null}
+        <form method="post">
+          <input type="hidden" name="token" value={token} />
+          <div class="actions">
+            <button type="submit">Confirm email</button>
+            <a href="/login">Back to sign in</a>
+          </div>
+        </form>
+      </>
+    )}
+  </section>
+</Layout>

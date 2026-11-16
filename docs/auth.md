@@ -6,7 +6,7 @@ Identity is email plus password on the entity marked `auth: true`.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/v1/auth/signup` | Only when `auth.signup` is `open`. Role is forced to the non-admin default |
+| POST | `/api/v1/auth/signup` | Only when `auth.signup` is `open`. Role is forced to the non-admin default. Always 202 with no session, see [What signup answers](#what-signup-answers) |
 | POST | `/api/v1/auth/login` | Issues access + refresh tokens |
 | POST | `/api/v1/auth/refresh` | Rotates refresh tokens; reuse revokes the family |
 | POST | `/api/v1/auth/logout` | Revoke one token or `all: true` |
@@ -35,9 +35,28 @@ Set `JWT_SECRET` to the new key and `JWT_SECRET_PREVIOUS` to the old key. Verify
 - `/verify-email?token=`
 - `/accept-invite?token=`
 
-These emails are queued in the mail outbox and sent in the background with retries. The admin Mail page shows them as `system: verify`, `system: reset`, and `system: invite`, with the link redacted. Override them with `mail/_auth/<kind>.html|.txt|.subject`: see [System emails](mail.md#system-emails-verify-reset-invite).
+A signup with an email that already has an account sends the owner a notice with a reset link (`/reset-password?token=`, 1 hour) instead of an error.
+
+These emails are queued in the mail outbox and sent in the background with retries. The admin Mail page shows them as `system: verify`, `system: reset`, `system: invite`, and `system: existing`, with the link redacted. Override them with `mail/_auth/<kind>.html|.txt|.subject`: see [System emails](mail.md#system-emails-verify-reset-invite).
 
 Resend setup (API key, verified domain, `MAIL_FROM`, and how to test the three emails): [Email with Resend](resend.md). Missing `RESEND_API_KEY` with `MAIL_DRIVER=resend` fails at startup. In production the message starts with `[bakorin] production startup failed`.
+
+## What signup answers
+
+`POST /auth/signup` answers the same way whether or not the email already has an account, so it cannot be used to find out who is registered:
+
+```json
+{ "data": { "ok": true, "status": "check_email", "requiresVerification": false, "message": "Check your email to confirm your address. You can sign in now." } }
+```
+
+The status is always 202. There is no user, no access token, and no session in the body. With `requireVerifiedEmail: true` the message is `Check your email to confirm your address, then sign in.` and `requiresVerification` is `true`.
+
+- **New email**: the account is created and a verify email goes out.
+- **Email that already has an account**: nothing changes on the account (the submitted password is hashed and thrown away, so both paths take about the same time). The owner gets a "Someone tried to sign up for {app} with your email" notice with a one hour password reset link, at most once an hour per address. The attempt is written to the audit log as `signup_existing`.
+
+Validation errors (400), `signup_disabled` (403), a refused verify hook (403), and rate limits (429) do not depend on whether the email exists, so they still answer as before.
+
+Signup does not sign anyone in. After signup, send people to the login page (or to the verify link when `requireVerifiedEmail` is on). Logging in straight after signup would tell the caller whether the password they typed matched an existing account, so the SDK does not do it for you.
 
 ## Who can sign up
 

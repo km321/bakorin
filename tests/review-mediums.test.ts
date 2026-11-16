@@ -49,7 +49,9 @@ async function j(runtime: Runtime, method: string, path: string, body?: unknown,
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 
 async function signup(runtime: Runtime, email: string) {
-  const res = await j(runtime, "POST", "/api/v1/auth/signup", { email, password: "password123", name: email.split("@")[0] });
+  // Signup never returns a session, so sign up and then log in.
+  await j(runtime, "POST", "/api/v1/auth/signup", { email, password: "password123", name: email.split("@")[0] });
+  const res = await j(runtime, "POST", "/api/v1/auth/login", { email, password: "password123" });
   return res.json.data as { accessToken: string; refreshToken: string; user: { id: string } };
 }
 

@@ -31,6 +31,7 @@ const SYSTEM_LABELS: Record<string, string> = {
   verify: "Verify email",
   reset: "Password reset",
   invite: "Invite",
+  existing: "Signup with existing email",
 };
 
 export function sourceLabel(row: Pick<MailDelivery, "source" | "ruleId" | "purpose">): string {

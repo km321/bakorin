@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { boot, client, MINI_YAML, waitForLoggedToken } from "./helpers.ts";
+import { boot, client, MINI_YAML, waitForLoggedToken, signupAndLogin } from "./helpers.ts";
 import { clearLoggedMail, getLoggedMail, resetRateLimit } from "@bakorin/server";
 
 async function signup(runtime: Awaited<ReturnType<typeof boot>>, email: string) {
-  const response = await client(runtime).fetch("/api/v1/auth/signup", {
+  const response = await signupAndLogin(client(runtime), {
     method: "POST",
     body: JSON.stringify({ email, password: "password123", name: email }),
   });
@@ -108,10 +108,10 @@ describe("account email flows", () => {
       method: "POST",
       body: JSON.stringify({ email: "verify@example.com", password: "password123", name: "Verify" }),
     });
-    expect(signupResponse.status).toBe(201);
+    expect(signupResponse.status).toBe(202);
     const created = await signupResponse.json();
     expect(created.data.accessToken).toBeUndefined();
-    expect(created.data.needsVerification).toBe(true);
+    expect(created.data.requiresVerification).toBe(true);
     const blocked = await client(runtime).fetch("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({ email: "verify@example.com", password: "password123" }),

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import { createS3FileStore, pruneS3Backups } from "@bakorin/server";
-import { boot, client } from "./helpers.ts";
+import { boot, client, signupAndLogin } from "./helpers.ts";
 import { startS3Mock } from "./s3-mock.ts";
 import { runBackup } from "@bakorin/server";
 
@@ -62,11 +62,11 @@ entities:
       role: { type: enum, values: [user, admin], default: user }
 `;
     const runtime = await boot(yaml);
-    const signup = await client(runtime).fetch("/api/v1/auth/signup", {
+    const signup = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "dev@example.com", password: "password123", name: "Dev" }),
     });
-    expect(signup.status).toBe(201);
+    expect(signup.status).toBe(200);
     await runBackup({ ast: runtime.ast, db: runtime.db, files: runtime.context.files, projectDir: runtime.dir });
     await Bun.sleep(20);
     await runBackup({ ast: runtime.ast, db: runtime.db, files: runtime.context.files, projectDir: runtime.dir });

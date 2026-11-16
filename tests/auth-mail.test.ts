@@ -15,7 +15,7 @@ import {
 import { MAIL_OUTBOX_TABLE } from "../packages/server/src/db/system.ts";
 import { redactToken, sealMail, unsealMail } from "../packages/server/src/mail/auth.ts";
 import { sourceLabel } from "../packages/admin-ui/src/pages/Mail.tsx";
-import { client, MINI_YAML, tempProject, waitForLoggedToken } from "./helpers.ts";
+import { client, MINI_YAML, tempProject, waitForLoggedToken, signupAndLogin } from "./helpers.ts";
 
 type Runtime = RuntimeHandles & { dir: string };
 
@@ -73,7 +73,7 @@ async function setup(runtime: Runtime) {
     body: JSON.stringify({ email: "admin@studio.test", password: "password123", name: "Admin" }),
   });
   const admin = ((await first.json()) as { data: { accessToken: string } }).data.accessToken;
-  const signup = await http.fetch("/api/v1/auth/signup", {
+  const signup = await signupAndLogin(http, {
     method: "POST",
     body: JSON.stringify({ email: "member@studio.test", password: "password123", name: "Member" }),
   });
@@ -190,7 +190,7 @@ describe("account emails go through the mail outbox", () => {
     const overview = (await (await admin.fetch("/api/v1/mail")).json()) as {
       data: { system: Array<{ kind: string; html: boolean }> };
     };
-    expect(overview.data.system.map((item) => item.kind)).toEqual(["verify", "reset", "invite"]);
+    expect(overview.data.system.map((item) => item.kind)).toEqual(["verify", "reset", "invite", "existing"]);
     expect(overview.data.system.every((item) => item.html === false)).toBe(true);
     const preview = await admin.fetch("/api/v1/mail/preview", {
       method: "POST",

@@ -11,7 +11,7 @@ import {
   signWebhookPayload,
 } from "@bakorin/server";
 import { WEBHOOK_OUTBOX_TABLE } from "../packages/server/src/db/system.ts";
-import { boot, client, MINI_YAML, tempProject } from "./helpers.ts";
+import { boot, client, MINI_YAML, tempProject, signupAndLogin } from "./helpers.ts";
 
 interface Hit {
   body: string;
@@ -71,11 +71,11 @@ async function waitFor<T>(label: string, fn: () => T | undefined | Promise<T | u
 
 async function signInAdmin(runtime: Awaited<ReturnType<typeof boot>>, email: string) {
   const api = client(runtime);
-  const signup = await api.fetch("/api/v1/auth/signup", {
+  const signup = await signupAndLogin(api, {
     method: "POST",
     body: JSON.stringify({ email, password: "password123", name: "Admin" }),
   });
-  expect(signup.status).toBe(201);
+  expect(signup.status).toBe(200);
   const user = (await signup.json()).data.user as { id: string };
   await runtime.db.updateTable("users").set({ role: "admin" }).where("id", "=", user.id).execute();
   const login = await api.fetch("/api/v1/auth/login", {
@@ -104,11 +104,11 @@ describe("webhooks", () => {
           busEvents.push(event.after ?? {});
         }
       });
-      const signup = await client(runtime).fetch("/api/v1/auth/signup", {
+      const signup = await signupAndLogin(client(runtime), {
         method: "POST",
         body: JSON.stringify({ email: "ada@example.com", password: "password123", name: "Ada" }),
       });
-      expect(signup.status).toBe(201);
+      expect(signup.status).toBe(200);
       const hit = await waitFor("webhook POST", () => receiver.hits[0]);
       const payload = JSON.parse(hit.body) as {
         entity: string;
@@ -188,7 +188,7 @@ describe("webhooks", () => {
 
       const forbidden = await client(runtime).fetch("/api/v1/webhooks");
       expect(forbidden.status).toBe(401);
-      const userSignup = await client(runtime).fetch("/api/v1/auth/signup", {
+      const userSignup = await signupAndLogin(client(runtime), {
         method: "POST",
         body: JSON.stringify({ email: "member@example.com", password: "password123", name: "Member" }),
       });

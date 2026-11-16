@@ -42,6 +42,15 @@ async function j(runtime: Runtime, method: string, path: string, body?: unknown,
   return { status: res.status, json };
 }
 
+/** Signup never returns a session, so sign up and then log in. */
+async function signupLogin(runtime: Runtime, body: { email: string; password: string; name?: string }, headers: Record<string, string> = {}, env?: unknown) {
+  const res = await j(runtime, "POST", "/api/v1/auth/signup", body, headers, env);
+  if (res.status !== 202) {
+    return res;
+  }
+  return j(runtime, "POST", "/api/v1/auth/login", { email: body.email, password: body.password }, headers, env);
+}
+
 async function started(yaml?: string, hooks?: string): Promise<Runtime> {
   const runtime = await boot(yaml, hooks);
   cleanups.push(() => runtime.close());
@@ -161,8 +170,8 @@ describe("H1: signup respects config and users stay private", () => {
     const runtime = await started();
     const admin = await j(runtime, "POST", "/api/v1/auth/first-admin", { email: "a@x.test", password: "password123", name: "Admin" });
     const adminToken = admin.json.data.accessToken;
-    const u1 = await j(runtime, "POST", "/api/v1/auth/signup", { email: "one@x.test", password: "password123", name: "One" });
-    const u2 = await j(runtime, "POST", "/api/v1/auth/signup", { email: "two@x.test", password: "password123", name: "Two" });
+    const u1 = await signupLogin(runtime, { email: "one@x.test", password: "password123", name: "One" });
+    const u2 = await signupLogin(runtime, { email: "two@x.test", password: "password123", name: "Two" });
     const auth1 = { authorization: `Bearer ${u1.json.data.accessToken}` };
 
     const list = await j(runtime, "GET", "/api/v1/users", undefined, auth1);
@@ -189,7 +198,7 @@ describe("H1: signup respects config and users stay private", () => {
     const yaml = MINI_YAML.replace("      read: authenticated\n      create: public", "      create: public");
     const runtime = await started(yaml);
     await j(runtime, "POST", "/api/v1/auth/first-admin", { email: "a@x.test", password: "password123", name: "Admin" });
-    const u1 = await j(runtime, "POST", "/api/v1/auth/signup", { email: "one@x.test", password: "password123", name: "One" });
+    const u1 = await signupLogin(runtime, { email: "one@x.test", password: "password123", name: "One" });
     const list = await j(runtime, "GET", "/api/v1/users", undefined, { authorization: `Bearer ${u1.json.data.accessToken}` });
     expect(list.json.data.map((row: any) => row.email)).toEqual(["one@x.test"]);
   });
@@ -200,7 +209,7 @@ describe("H2: a failing after hook never crashes the process", () => {
 
   test("the error is captured with the request id and the server keeps serving", async () => {
     const runtime = await started(undefined, THROWING);
-    const user = await j(runtime, "POST", "/api/v1/auth/signup", { email: "c@x.test", password: "password123", name: "C" });
+    const user = await signupLogin(runtime, { email: "c@x.test", password: "password123", name: "C" });
     const created = await j(
       runtime,
       "POST",
@@ -239,11 +248,17 @@ describe("H2: a failing after hook never crashes the process", () => {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ email: "c@x.test", password: "password123", name: "C" }),
+    });
+    expect(signup.status).toBe(202);
+    const login = await fetch(`${base}/api/v1/auth/login`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email: "c@x.test", password: "password123" }),
     }).then((r) => r.json() as Promise<any>);
     const created = await fetch(`${base}/api/v1/items`, {
       method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${signup.data.accessToken}` },
-      body: JSON.stringify({ title: "x", ownerId: signup.data.user.id }),
+      headers: { "content-type": "application/json", authorization: `Bearer ${login.data.accessToken}` },
+      body: JSON.stringify({ title: "x", ownerId: login.data.user.id }),
     });
     expect(created.status).toBe(201);
     await Bun.sleep(300);

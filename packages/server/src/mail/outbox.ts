@@ -14,6 +14,7 @@ export const AUTH_LINK_TTL_MS: Record<AuthEmailKind, number> = {
   verify: 24 * 60 * 60 * 1000,
   reset: 60 * 60 * 1000,
   invite: 7 * 24 * 60 * 60 * 1000,
+  existing: 60 * 60 * 1000,
 };
 
 export type MailDeliveryStatus = "pending" | "sending" | "sent" | "failed" | "discarded";

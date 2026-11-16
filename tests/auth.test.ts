@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { boot, client } from "./helpers.ts";
+import { boot, client, signupAndLogin } from "./helpers.ts";
 import { resetRateLimit } from "@bakorin/server";
 
 describe("auth", () => {
@@ -7,11 +7,11 @@ describe("auth", () => {
     resetRateLimit();
     const runtime = await boot();
     const api = client(runtime);
-    const signup = await api.fetch("/api/v1/auth/signup", {
+    const signup = await signupAndLogin(api, {
       method: "POST",
       body: JSON.stringify({ email: "pat@example.com", password: "password123", name: "Pat" }),
     });
-    expect(signup.status).toBe(201);
+    expect(signup.status).toBe(200);
     const first = await signup.json();
     expect(first.data.user.password).toBeUndefined();
     expect(first.data.accessToken).toBeTruthy();

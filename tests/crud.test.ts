@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { boot, client } from "./helpers.ts";
+import { boot, client, signupAndLogin } from "./helpers.ts";
 
 describe("crud", () => {
   test("list filter sort expand create update delete", async () => {
     const runtime = await boot();
-    const signup = await client(runtime).fetch("/api/v1/auth/signup", {
+    const signup = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "dev@example.com", password: "password123", name: "Dev" }),
     });
@@ -56,7 +56,7 @@ describe("crud", () => {
       };
       `,
     );
-    const signup = await client(runtime).fetch("/api/v1/auth/signup", {
+    const signup = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "dev@example.com", password: "password123", name: "Dev" }),
     });

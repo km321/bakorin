@@ -2,10 +2,10 @@ import { describe, expect, test } from "bun:test";
 import { compileAppYaml, diffSchemas } from "@bakorin/core";
 import { acquireLease, instanceHolder, migrateToSchema, openSqlite, signAccessToken, verifyAccessToken } from "@bakorin/server";
 import { join } from "node:path";
-import { MINI_YAML, boot, client, tempProject } from "./helpers.ts";
+import { MINI_YAML, boot, client, tempProject, signupAndLogin } from "./helpers.ts";
 
 async function signup(runtime: Awaited<ReturnType<typeof boot>>, email: string) {
-  const response = await client(runtime).fetch("/api/v1/auth/signup", {
+  const response = await signupAndLogin(client(runtime), {
     method: "POST",
     body: JSON.stringify({ email, password: "password123", name: email }),
   });

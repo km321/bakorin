@@ -30,6 +30,6 @@ export const onRequest = defineMiddleware(async (context, next) => {
 });
 ```
 
-The starter in `examples/astro-starter` (and `create-bakorin --frontend astro`) includes signup, login, logout, forgot/reset, accept invite, and a protected `/app` list.
+The starter in `examples/astro-starter` (and `create-bakorin --frontend astro`) includes signup (a "check your email" message, no auto sign in), verify email, login, logout, forgot/reset, accept invite, and a protected `/app` list.
 
 Set `CORS_ORIGINS` on the API to the Astro origin and `APP_URL` to that origin for email links.

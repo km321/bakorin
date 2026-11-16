@@ -11,7 +11,7 @@ export interface MailMessage {
   /** Stable key for providers that deduplicate sends (Resend Idempotency-Key, SMTP Message-ID). */
   idempotencyKey?: string;
   meta?: {
-    purpose: "reset" | "verify" | "invite" | "mail";
+    purpose: "reset" | "verify" | "invite" | "existing" | "mail";
     token?: string;
     link?: string;
   };

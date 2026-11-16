@@ -129,7 +129,7 @@ export function client(runtime: RuntimeHandles & { dir?: string }, token?: strin
  * so tests wait for the log driver to record them.
  */
 export async function waitForLoggedToken(
-  purpose: "reset" | "verify" | "invite",
+  purpose: "reset" | "verify" | "invite" | "existing",
   timeoutMs = 4000,
 ): Promise<string> {
   const { getLoggedMail } = await import("@bakorin/server");
@@ -142,4 +142,25 @@ export async function waitForLoggedToken(
     await Bun.sleep(10);
   }
   throw new Error(`no ${purpose} mail`);
+}
+
+/**
+ * Signup never returns a session (it answers the same way for new and existing
+ * emails), so tests that need a signed in user sign up and then log in. Returns
+ * the login response, or the signup response when signup did not answer 202.
+ */
+export async function signupAndLogin(
+  api: { fetch(path: string, init?: RequestInit): Response | Promise<Response> },
+  init: RequestInit,
+): Promise<Response> {
+  const signup = await api.fetch("/api/v1/auth/signup", { method: "POST", ...init });
+  if (signup.status !== 202) {
+    return signup;
+  }
+  const body = JSON.parse(String(init.body ?? "{}")) as Record<string, unknown>;
+  return api.fetch("/api/v1/auth/login", {
+    method: "POST",
+    headers: init.headers,
+    body: JSON.stringify({ email: body.email, password: body.password }),
+  });
 }

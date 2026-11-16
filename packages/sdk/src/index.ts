@@ -4,6 +4,15 @@ export interface AuthTokens {
   expiresIn: number;
 }
 
+/** What signup answers, for new and existing emails alike. */
+export interface SignupResult {
+  ok: true;
+  status: "check_email";
+  /** True when the app requires a verified email before sign in. */
+  requiresVerification: boolean;
+  message: string;
+}
+
 export interface ListResult<T> {
   data: T[];
   meta: { total: number; limit: number; offset: number };
@@ -114,17 +123,14 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
   }
 
   return {
-    async signup(body: Record<string, unknown>) {
-      const json = await parse<{
-        data: { user: S[string]; accessToken?: string; refreshToken?: string; expiresIn?: number; needsVerification?: boolean };
-      }>(await request("/api/v1/auth/signup", { method: "POST", body: JSON.stringify(body) }));
-      if (json.data.accessToken && json.data.refreshToken && json.data.expiresIn !== undefined) {
-        await options.setTokens?.({
-          accessToken: json.data.accessToken,
-          refreshToken: json.data.refreshToken,
-          expiresIn: json.data.expiresIn,
-        });
-      }
+    /**
+     * Starts a signup. The server answers the same way whether or not the email is
+     * already registered, and never returns a session: check the email, then call login().
+     */
+    async signup(body: Record<string, unknown>): Promise<SignupResult> {
+      const json = await parse<{ data: SignupResult }>(
+        await request("/api/v1/auth/signup", { method: "POST", body: JSON.stringify(body) }),
+      );
       return json.data;
     },
     async login(body: Record<string, unknown>) {

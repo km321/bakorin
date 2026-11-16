@@ -8,19 +8,21 @@ import { cleanSubject, mailDir } from "./files.ts";
 import { renderAccountEmail, type AccountEmailBrand, type AccountEmailKind } from "./templates.ts";
 import type { Mailer, MailMessage } from "./types.ts";
 
-export const AUTH_EMAIL_KINDS = ["verify", "reset", "invite"] as const;
+export const AUTH_EMAIL_KINDS = ["verify", "reset", "invite", "existing"] as const;
 export type AuthEmailKind = (typeof AUTH_EMAIL_KINDS)[number];
 
 const EXPIRES: Record<AuthEmailKind, string> = {
   verify: "24 hours",
   reset: "1 hour",
   invite: "7 days",
+  existing: "1 hour",
 };
 
 const PATHS: Record<AuthEmailKind, string> = {
   verify: "/verify-email",
   reset: "/reset-password",
   invite: "/accept-invite",
+  existing: "/reset-password",
 };
 
 export function isAuthKind(value: unknown): value is AuthEmailKind {

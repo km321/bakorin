@@ -50,6 +50,7 @@ Point `APP_URL` at the starter (`http://127.0.0.1:4321` for Astro, `http://127.0
 | Verify email | Sign up, or admin "resend verification" | Subject `Verify your {app} email`. Link `/verify-email?token=`. Expires in 24 hours. |
 | Password reset | Front-end `/forgot-password`, or `POST /api/v1/auth/forgot-password` | Subject `Reset your {app} password`. Link `/reset-password?token=`. Expires in 1 hour. Forgot-password always returns 200. |
 | Invite | Admin UI invite, or `POST /api/v1/auth/invites` as an admin | Subject `You are invited to {app}`. Link `/accept-invite?token=`. Expires in 7 days. |
+| Existing email notice | Sign up again with the same email | Subject `Someone tried to sign up for {app} with your email`. Link `/reset-password?token=`. Expires in 1 hour. At most one per address per hour. |
 
 Open the link from the email (or from the Resend dashboard's event). Confirm the starter page accepts the token.
 

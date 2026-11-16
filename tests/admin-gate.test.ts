@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { checkAdminAccess, classifyAdminAccess, screenForAccess } from "../packages/admin-ui/src/lib/access.ts";
 import { AccessError, AdminsOnly } from "../packages/admin-ui/src/pages/AdminsOnly.tsx";
-import { boot, client } from "./helpers.ts";
+import { boot, client, signupAndLogin } from "./helpers.ts";
 
 type Runtime = Awaited<ReturnType<typeof boot>>;
 
@@ -19,11 +19,11 @@ beforeAll(async () => {
   });
   expect(first.status).toBe(201);
   adminToken = ((await first.json()) as { data: { accessToken: string } }).data.accessToken;
-  const signup = await http.fetch("/api/v1/auth/signup", {
+  const signup = await signupAndLogin(http, {
     method: "POST",
     body: JSON.stringify({ email: "member@studio.test", password: "password123", name: "Member" }),
   });
-  expect(signup.status).toBe(201);
+  expect(signup.status).toBe(200);
   const body = (await signup.json()) as { data: { accessToken: string; user: { id: string } } };
   memberToken = body.data.accessToken;
 

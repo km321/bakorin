@@ -19,6 +19,7 @@ description: What Bakorin does to keep a client backend safe by default.
 - Login lockouts are per email and client IP, and unknown emails look the same as wrong passwords.
 - `/api/v1/openapi.json` is admin only in production unless `runtime.apiDocs: public`.
 - `bakorin restore --discard-pending` drops queued mail and webhooks so a staging copy of production cannot email customers.
+- Signup answers 202 with the same body for new and existing emails and never returns a session, so it does not reveal who is registered. Login runs the same password check and lockout for unknown emails.
 - Signup follows `auth.signup` (`open`, `invite`, or `closed`). Apps whose users `create` policy is not public are invite only unless they opt in.
 - Ordinary users never see another user's email, role, or verification status. Those fields are private to the user and admins, and the default users read policy is `[owner(id), admin]`.
 - Webhook, mail rule, and audit rows are written in the same database transaction as the record change, so a change is never saved without them, and a failed outbox write rolls the change back.

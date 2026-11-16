@@ -489,7 +489,7 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
         tags: ["auth"],
         summary: "Create an account",
         description:
-          "Public signup. The auth role field is ignored and forced to the non-admin default. Prefer this over generic CRUD create on the auth entity. Sends a verification email. If auth.requireVerifiedEmail is true, no session tokens are returned until the address is verified.",
+          "Public signup. The auth role field is ignored and forced to the non-admin default. Prefer this over generic CRUD create on the auth entity. Answers 202 with the same body whether or not the email already has an account, and never returns a session: a new email gets a verification email, an existing owner gets a notice with a password reset link. Sign in with /auth/login afterwards.",
         security: [],
         requestBody: {
           required: true,
@@ -500,9 +500,29 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
           },
         },
         responses: {
-          201: { description: "Created", content: { "application/json": { schema: { $ref: "#/components/schemas/AuthSession" } } } },
+          202: {
+            description: "Accepted. Same body for new and existing emails",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: {
+                    data: {
+                      type: "object",
+                      required: ["ok", "status", "requiresVerification", "message"],
+                      properties: {
+                        ok: { type: "boolean", enum: [true] },
+                        status: { type: "string", enum: ["check_email"] },
+                        requiresVerification: { type: "boolean" },
+                        message: { type: "string" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
           400: errorResponses[400],
-          409: errorResponses[409],
           429: errorResponses[429],
         },
       },

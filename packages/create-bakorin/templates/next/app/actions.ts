@@ -4,18 +4,30 @@ import { redirect } from "next/navigation";
 import { cookies } from "next/headers";
 import { api } from "../lib/bakorin.ts";
 
-export async function signupAction(formData: FormData): Promise<string | void> {
+export type SignupState = { ok: true; message: string } | { ok: false; message: string };
+
+// Signup never signs you in and answers the same way for a new or a taken email.
+export async function signupAction(formData: FormData): Promise<SignupState> {
   try {
     const client = await api();
-    await client.signup({
+    const result = await client.signup({
       email: String(formData.get("email") ?? ""),
       password: String(formData.get("password") ?? ""),
       name: String(formData.get("name") ?? ""),
     });
+    return { ok: true, message: result.message };
   } catch (error) {
-    return error instanceof Error ? error.message : "Could not create the account";
+    return { ok: false, message: error instanceof Error ? error.message : "Could not create the account" };
   }
-  redirect("/app");
+}
+
+export async function verifyEmailAction(formData: FormData): Promise<string | void> {
+  try {
+    const client = await api();
+    await client.verifyEmail({ token: String(formData.get("token") ?? "") });
+  } catch (error) {
+    return error instanceof Error ? error.message : "Could not verify the email";
+  }
 }
 
 export async function loginAction(formData: FormData): Promise<string | void> {

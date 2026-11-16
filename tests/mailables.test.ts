@@ -21,7 +21,7 @@ import {
 import { MAIL_OUTBOX_TABLE } from "../packages/server/src/db/system.ts";
 import { createPreviewToken, readPreviewToken } from "../packages/server/src/mail/routes.ts";
 import { describeWhen } from "../packages/admin-ui/src/pages/Mail.tsx";
-import { client } from "./helpers.ts";
+import { client, signupAndLogin } from "./helpers.ts";
 
 const SECRET = "test-jwt-secret-0123456789-abcdefghijklmnop";
 
@@ -184,11 +184,11 @@ async function tokens(runtime: Runtime) {
   });
   expect(first.status).toBe(201);
   const admin = ((await first.json()) as { data: { accessToken: string; user: { id: string } } }).data;
-  const signup = await http.fetch("/api/v1/auth/signup", {
+  const signup = await signupAndLogin(http, {
     method: "POST",
     body: JSON.stringify({ email: "grace@shop.test", password: "password123", name: "Grace <b>Hopper</b>" }),
   });
-  expect(signup.status).toBe(201);
+  expect(signup.status).toBe(200);
   const member = ((await signup.json()) as { data: { accessToken: string; user: { id: string } } }).data;
   await runtime.db.updateTable("users").set({ apiKey: "hidden-api-key-value" }).where("id", "=", member.user.id).execute();
   return { admin: admin.accessToken, adminId: admin.user.id, member: member.accessToken, memberId: member.user.id };

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createRuntime } from "@bakorin/server";
-import { boot, client, tempProject } from "./helpers.ts";
+import { boot, client, tempProject, signupAndLogin } from "./helpers.ts";
 
 describe("first admin onboarding", () => {
   test("GET /api/v1/auth/setup is true until an admin exists", async () => {
@@ -77,11 +77,11 @@ describe("first admin onboarding", () => {
   test("first-admin stays open when only non-admin users exist", async () => {
     const runtime = await boot();
     const http = client(runtime);
-    const signup = await http.fetch("/api/v1/auth/signup", {
+    const signup = await signupAndLogin(http, {
       method: "POST",
       body: JSON.stringify({ email: "member@studio.test", password: "password123", name: "Member" }),
     });
-    expect(signup.status).toBe(201);
+    expect(signup.status).toBe(200);
     const setup = await http.fetch("/api/v1/auth/setup");
     expect(await setup.json()).toEqual({ data: { firstAdmin: true, setupTokenRequired: false, signup: "open" } });
     const created = await http.fetch("/api/v1/auth/first-admin", {

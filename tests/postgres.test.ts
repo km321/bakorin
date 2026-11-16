@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { bootPostgres, client, MINI_YAML } from "./helpers.ts";
+import { bootPostgres, client, MINI_YAML, signupAndLogin } from "./helpers.ts";
 import { deliverMailById, exportPortable, importPortable, type MailMessage } from "@bakorin/server";
 import { AUDIT_TABLE, MAIL_OUTBOX_TABLE, WEBHOOK_OUTBOX_TABLE } from "../packages/server/src/db/system.ts";
 
@@ -8,11 +8,11 @@ const url = process.env.DATABASE_URL;
 describe.skipIf(!url)("postgres", () => {
   test("migrator applies and auth works", async () => {
     const runtime = await bootPostgres();
-    const signup = await client(runtime).fetch("/api/v1/auth/signup", {
+    const signup = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "ada@studio.test", password: "password123", name: "Ada West" }),
     });
-    expect(signup.status).toBe(201);
+    expect(signup.status).toBe(200);
     const login = await client(runtime).fetch("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({ email: "ada@studio.test", password: "password123" }),
@@ -24,7 +24,7 @@ describe.skipIf(!url)("postgres", () => {
 
   test("crud expand and owner isolation", async () => {
     const runtime = await bootPostgres();
-    const signup = await client(runtime).fetch("/api/v1/auth/signup", {
+    const signup = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "ada@studio.test", password: "password123", name: "Ada West" }),
     });
@@ -41,7 +41,7 @@ describe.skipIf(!url)("postgres", () => {
     expect(expandedJson.data.$expand.ownerId.name).toBe("Ada West");
     expect(expandedJson.data.$expand.ownerId.password).toBeUndefined();
 
-    const staff = await client(runtime).fetch("/api/v1/auth/signup", {
+    const staff = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "sam@studio.test", password: "password123", name: "Sam Lee" }),
     });
@@ -64,7 +64,7 @@ describe.skipIf(!url)("postgres", () => {
 
   test("portable backup round trip", async () => {
     const runtime = await bootPostgres();
-    const signup = await client(runtime).fetch("/api/v1/auth/signup", {
+    const signup = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "ada@studio.test", password: "password123", name: "Ada West" }),
     });
@@ -102,7 +102,7 @@ describe.skipIf(!url)("postgres", () => {
       await ctx.mail.send({ to: "team@studio.test", subject: "dupe", text: "dupe", idempotencyKey: "item-" + ctx.record.id });
     } } } };\n`;
     const runtime = await bootPostgres(hooks);
-    const signup = await client(runtime).fetch("/api/v1/auth/signup", {
+    const signup = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "ada@studio.test", password: "password123", name: "Ada West" }),
     });
@@ -258,7 +258,7 @@ describe.skipIf(!url)("postgres: review mediums", () => {
   test("M7: like matches case insensitively and treats % literally", async () => {
     const runtime = await bootPostgres();
     try {
-      const signup = await client(runtime).fetch("/api/v1/auth/signup", { method: "POST", body: JSON.stringify({ email: "l@x.test", password: "password123", name: "L" }) });
+      const signup = await signupAndLogin(client(runtime), { method: "POST", body: JSON.stringify({ email: "l@x.test", password: "password123", name: "L" }) });
       const token = (await signup.json()).data.accessToken;
       const api = client(runtime, token);
       for (const title of ["Hello World", "50% off", "plain"]) {
@@ -276,7 +276,7 @@ describe.skipIf(!url)("postgres: review mediums", () => {
   test("M1: parallel refreshes on separate connections mint one successor", async () => {
     const runtime = await bootPostgres();
     try {
-      const signup = await client(runtime).fetch("/api/v1/auth/signup", { method: "POST", body: JSON.stringify({ email: "r@x.test", password: "password123", name: "R" }) });
+      const signup = await signupAndLogin(client(runtime), { method: "POST", body: JSON.stringify({ email: "r@x.test", password: "password123", name: "R" }) });
       const data = (await signup.json()).data;
       const results = await Promise.all(
         [1, 2, 3, 4].map(() => client(runtime).fetch("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken: data.refreshToken }) })),
@@ -296,7 +296,7 @@ describe.skipIf(!url)("postgres: review mediums", () => {
     try {
       const first = await client(runtime).fetch("/api/v1/auth/first-admin", { method: "POST", body: JSON.stringify({ email: "boss@x.test", password: "password123", name: "Boss" }) });
       const admin = (await first.json()).data;
-      const signup = await client(runtime).fetch("/api/v1/auth/signup", { method: "POST", body: JSON.stringify({ email: "u@x.test", password: "password123", name: "U" }) });
+      const signup = await signupAndLogin(client(runtime), { method: "POST", body: JSON.stringify({ email: "u@x.test", password: "password123", name: "U" }) });
       const user = (await signup.json()).data;
       const adminItem = await client(runtime, admin.accessToken).fetch("/api/v1/items", { method: "POST", body: JSON.stringify({ title: "admin", ownerId: admin.user.id }) });
       expect(adminItem.status).toBe(201);

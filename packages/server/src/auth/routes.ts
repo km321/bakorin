@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import { clientIp } from "../http/client-ip.ts";
 import { encodeValue } from "../db/types.ts";
 import { hashPassword, verifyPassword } from "./password.ts";
@@ -11,7 +11,8 @@ import { writeAudit } from "../audit/log.ts";
 import { authTokenValid, retireAuthTokens } from "./tokens.ts";
 import { publicRow } from "../crud/validate.ts";
 import { decodeRow } from "../crud/query.ts";
-import { sendVerificationEmail } from "./account.ts";
+import { sendExistingAccountNotice, sendVerificationEmail } from "./account.ts";
+import { constraintFailure } from "../db/errors.ts";
 import { effectiveWritable, safeDefaultRole } from "../crud/write-guards.ts";
 import { createFirstAdmin, hasAdmin } from "./seed.ts";
 import { commitChange, recordChange } from "../events/record.ts";
@@ -24,6 +25,34 @@ let dummyHash: Promise<string> | null = null;
 function dummyPasswordHash(): Promise<string> {
   dummyHash ??= hashPassword(crypto.randomUUID());
   return dummyHash;
+}
+
+/**
+ * Signup answers the same way whether or not the email already has an account:
+ * 202, no user, no session. The new owner gets a verify email; an existing owner
+ * gets a notice with a password reset link. Sign in is a separate step.
+ */
+function signupAccepted(requireVerifiedEmail: boolean) {
+  return {
+    data: {
+      ok: true,
+      status: "check_email" as const,
+      requiresVerification: requireVerifiedEmail,
+      message: requireVerifiedEmail
+        ? "Check your email to confirm your address, then sign in."
+        : "Check your email to confirm your address. You can sign in now.",
+    },
+  };
+}
+
+/** At most one notice per email per hour, so signup cannot be used to flood an inbox. */
+async function notifyExistingAccount(c: Context, entityName: string, userId: string, email: string, ip: string): Promise<void> {
+  const ctx = c.get("app");
+  await writeAudit(ctx.db, { action: "signup_existing", entity: entityName, recordId: userId, ip });
+  if (!(await rateLimit(ctx.db, `signup-existing:${email}`, 1, 60 * 60 * 1000))) {
+    return;
+  }
+  await sendExistingAccountNotice(ctx, userId, email);
 }
 
 export function createAuthRoutes(): Hono {
@@ -162,14 +191,6 @@ export function createAuthRoutes(): Hono {
     if (!identity || password.length < 8) {
       return c.json({ error: { code: "invalid_input", message: "identity and a password of at least 8 characters are required" } }, 400);
     }
-    const existing = await ctx.db
-      .selectFrom(entity.name)
-      .select("id")
-      .where(ctx.ast.auth.identityField, "=", identity)
-      .executeTakeFirst();
-    if (existing) {
-      return c.json({ error: { code: "conflict", message: "account already exists" } }, 409);
-    }
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
     const insert: Record<string, unknown> = {
@@ -182,6 +203,7 @@ export function createAuthRoutes(): Hono {
         continue;
       }
       if (field.name === ctx.ast.auth.passwordField) {
+        // Hashed for new and existing emails alike, so both paths take the same time.
         insert[field.name] = await hashPassword(password);
         continue;
       }
@@ -207,24 +229,45 @@ export function createAuthRoutes(): Hono {
         return c.json({ error: { code: "invalid_input", message: `${field.name} is required` } }, 400);
       }
     }
-    const after = await commitChange(ctx, { requestId: c.get("requestId"), ip }, async (trx) => {
-      await trx.insertInto(entity.name).values(insert).execute();
-      const stored = await trx.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
-      const row = decodeRow(entity, stored as Record<string, unknown>);
-      return {
-        event: { entity: entity.name, op: "create", before: null, after: row, actor: { id, role: String(row[ctx.ast.auth.roleField]) } },
-        result: row,
-      };
-    });
+    const accepted = signupAccepted(ctx.ast.auth.requireVerifiedEmail);
+    const existing = await ctx.db
+      .selectFrom(entity.name)
+      .select("id")
+      .where(ctx.ast.auth.identityField, "=", identity)
+      .executeTakeFirst();
+    if (existing) {
+      await notifyExistingAccount(c, entity.name, String(existing.id), identity, ip);
+      return c.json(accepted, 202);
+    }
+    let after: Record<string, unknown>;
+    try {
+      after = await commitChange(ctx, { requestId: c.get("requestId"), ip }, async (trx) => {
+        await trx.insertInto(entity.name).values(insert).execute();
+        const stored = await trx.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
+        const row = decodeRow(entity, stored as Record<string, unknown>);
+        return {
+          event: { entity: entity.name, op: "create", before: null, after: row, actor: { id, role: String(row[ctx.ast.auth.roleField]) } },
+          result: row,
+        };
+      });
+    } catch (error) {
+      // Two signups for one email at once: the loser looks exactly like an existing email.
+      if (constraintFailure(error, "POST")?.code !== "conflict") {
+        throw error;
+      }
+      const raced = await ctx.db
+        .selectFrom(entity.name)
+        .select("id")
+        .where(ctx.ast.auth.identityField, "=", identity)
+        .executeTakeFirst();
+      if (raced) {
+        await notifyExistingAccount(c, entity.name, String(raced.id), identity, ip);
+      }
+      return c.json(accepted, 202);
+    }
     await writeAudit(ctx.db, { action: "signup", actorId: id, actorRole: String(after[ctx.ast.auth.roleField]), entity: entity.name, recordId: id, ip });
     await sendVerificationEmail(ctx, id, identity);
-    const role = String(after[ctx.ast.auth.roleField]);
-    if (ctx.ast.auth.requireVerifiedEmail) {
-      return c.json({ data: { user: publicRow(entity, after), needsVerification: true } }, 201);
-    }
-    const accessToken = await signAccessToken({ sub: id, role, ent: entity.name }, ctx.ast.runtime.jwtSecret, ctx.ast.runtime.accessTtlSeconds);
-    const refreshToken = await issueRefreshToken(ctx.db, id, ctx.ast.runtime.refreshTtlSeconds);
-    return c.json({ data: { user: publicRow(entity, after), accessToken, refreshToken, expiresIn: ctx.ast.runtime.accessTtlSeconds } }, 201);
+    return c.json(accepted, 202);
   });
 
   app.post("/login", async (c) => {

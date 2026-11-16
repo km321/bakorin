@@ -6,7 +6,7 @@ import { createRuntime, issueSetupTokenIfNeeded, type RuntimeHandles } from "@ba
 import { MAIL_OUTBOX_TABLE, metaSet, WEBHOOK_OUTBOX_TABLE } from "../packages/server/src/db/system.ts";
 import { checkAlerts } from "../packages/server/src/monitor/alerts.ts";
 import { parseSentryDsn, scrubMessage } from "../packages/server/src/monitor/monitor.ts";
-import { client, MINI_YAML, tempProject } from "./helpers.ts";
+import { client, MINI_YAML, tempProject, signupAndLogin } from "./helpers.ts";
 
 const THROWING_HOOKS = `export default {
   entities: {},
@@ -49,7 +49,7 @@ async function adminToken(runtime: RuntimeHandles & { dir: string }): Promise<st
 }
 
 async function memberToken(runtime: RuntimeHandles & { dir: string }): Promise<string> {
-  const signup = await client(runtime).fetch("/api/v1/auth/signup", {
+  const signup = await signupAndLogin(client(runtime), {
     method: "POST",
     body: JSON.stringify({ email: "member@studio.test", password: "password123", name: "Member" }),
   });

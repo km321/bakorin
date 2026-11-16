@@ -163,7 +163,7 @@ mail:
     expand: [customer]
 ```
 
-The built in verify, reset, and invite emails use the same outbox (links redacted in the delivery log) and can be restyled with `mail/_auth/<kind>.html`. See [docs/mail.md](docs/mail.md).
+The built in verify, reset, invite, and existing account emails use the same outbox (links redacted in the delivery log) and can be restyled with `mail/_auth/<kind>.html`. See [docs/mail.md](docs/mail.md).
 
 Field types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`.
 
@@ -365,6 +365,7 @@ const api = createClient<BakorinEntities>({
 });
 
 await api.signup({ email: "you@studio.test", password: "password123", name: "You" });
+// signup answers { ok, status: "check_email", requiresVerification, message } and never signs in
 await api.login({ email: "you@studio.test", password: "password123" });
 await api.forgotPassword({ email: "you@studio.test" });
 await api.resetPassword({ token, password: "new-password-1" });
@@ -398,7 +399,7 @@ const api = createAstroClient({
 });
 ```
 
-Point `APP_URL` at that front end so reset, verify, and invite emails use its origin (`/reset-password?token=`, `/verify-email?token=`, `/accept-invite?token=`). The admin UI at `/admin/` can invite users and resend verification without those pages.
+Point `APP_URL` at that front end so reset, verify, and invite emails use its origin (`/reset-password?token=`, `/verify-email?token=`, `/accept-invite?token=`). Both starters ship all three pages. The admin UI at `/admin/` can invite users and resend verification without those pages.
 
 ## Security
 
@@ -409,6 +410,7 @@ Point `APP_URL` at that front end so reset, verify, and invite emails use its or
 - Passwords are argon2id. Access JWTs last 15 minutes. Refresh tokens are stored as SHA-256 hashes, rotated on use, and reuse of a rotated token more than 30 seconds later revokes every token for that user (parallel refreshes within 30 seconds share one new token).
 - Auth routes are rate limited per client IP in the database (shared across instances). The IP is the socket address unless `TRUST_PROXY` trusts a proxy, so a client sent `X-Forwarded-For` cannot dodge the limits. Five failed logins lock that account with backoff.
 - `bakorin start` refuses to boot without a strong `JWT_SECRET`. The development secret is only for `bakorin dev` and tests. Set `JWT_SECRET_PREVIOUS` while rotating.
+- Signup answers 202 with the same body for new and existing emails and never returns a session. An existing owner gets a notice with a reset link instead of an error.
 - Signup follows `auth.signup` (`open`, `invite`, or `closed`). Users' email, role, and `emailVerified` are private to the user and admins.
 - Webhook, mail rule, and audit rows commit in the same transaction as the record. A throwing `after*` hook is logged and reported, and the server keeps running.
 - Production refuses CORS origin `*` unless `BAKORIN_ALLOW_ANY_ORIGIN=true`.

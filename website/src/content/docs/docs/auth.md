@@ -9,7 +9,7 @@ Identity is email plus password on the auth entity (the entity marked `auth: tru
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/v1/auth/signup` | Only when `auth.signup` is `open`. Role is forced to the non admin default |
+| POST | `/api/v1/auth/signup` | Only when `auth.signup` is `open`. Role is forced to the non admin default. Always 202 with no session, see [What signup answers](#what-signup-answers) |
 | POST | `/api/v1/auth/login` | Issues access and refresh tokens |
 | POST | `/api/v1/auth/refresh` | Rotates refresh tokens. Reuse revokes the family |
 | POST | `/api/v1/auth/logout` | Revoke one token, or `all: true` |
@@ -20,6 +20,23 @@ Identity is email plus password on the auth entity (the entity marked `auth: tru
 | POST | `/api/v1/auth/resend-verification` | Send a fresh verification link |
 | POST | `/api/v1/auth/invites` | Admin only. Off when `auth.signup` is `closed` |
 | POST | `/api/v1/auth/accept-invite` | `{ token, password, name? }` |
+
+## What signup answers
+
+`POST /auth/signup` answers the same way whether or not the email already has an account, so it cannot be used to find out who is registered:
+
+```json
+{ "data": { "ok": true, "status": "check_email", "requiresVerification": false, "message": "Check your email to confirm your address. You can sign in now." } }
+```
+
+The status is always 202. There is no user, no access token, and no session in the body. With `requireVerifiedEmail: true` the message is `Check your email to confirm your address, then sign in.` and `requiresVerification` is `true`.
+
+- **New email**: the account is created and a verify email goes out.
+- **Email that already has an account**: nothing changes on the account (the submitted password is hashed and thrown away, so both paths take about the same time). The owner gets a "Someone tried to sign up for {app} with your email" notice with a one hour password reset link, at most once an hour per address. The attempt is written to the audit log as `signup_existing`.
+
+Validation errors (400), `signup_disabled` (403), a refused verify hook (403), and rate limits (429) do not depend on whether the email exists, so they still answer as before.
+
+Signup does not sign anyone in. After signup, send people to the login page (or to the verify link when `requireVerifiedEmail` is on). Logging in straight after signup would tell the caller whether the password they typed matched an existing account, so the SDK does not do it for you.
 
 ## Who can sign up
 
@@ -65,11 +82,13 @@ Reset, verify, and invite emails link to your front end, using `APP_URL`:
 - `/verify-email?token=`
 - `/accept-invite?token=`
 
+A signup with an email that already has an account sends the owner a notice that links to `/reset-password?token=` (1 hour).
+
 The Astro and Next.js starters include these pages. These emails go through the mail outbox: they are sent in the background with retries, show up in the admin Mail page delivery log with the link redacted, and can be restyled with `mail/_auth/reset.html` and friends. See [System emails](/docs/email/#system-emails-verify-reset-invite).
 
 ## Lockout and rate limits
 
-Login, signup, forgot password, and resend verification are rate limited per client IP in the database (add your own limits to any entity with [rateLimit](/docs/app-yaml/#rate-limits), and a captcha with the [verify hook](/docs/hooks/#captcha-and-bot-checks)), so limits survive restarts and are shared across instances. The client IP is the socket address unless you trust a proxy with `TRUST_PROXY` (see [Configuration](/docs/configuration/#client-ip-and-proxies)). A client sent `X-Forwarded-For` header is ignored by default, so rotating it does not get around the limits. After 5 failed logins for an email from one IP, Bakorin locks that email for that IP with exponential backoff capped at 60 minutes, so someone guessing from their own address cannot lock the real owner out everywhere. Unknown emails go through the same password check, failures, and lock as known ones, so login does not reveal which emails have accounts. Signup still answers 409 for an email that already has an account.
+Login, signup, forgot password, and resend verification are rate limited per client IP in the database (add your own limits to any entity with [rateLimit](/docs/app-yaml/#rate-limits), and a captcha with the [verify hook](/docs/hooks/#captcha-and-bot-checks)), so limits survive restarts and are shared across instances. The client IP is the socket address unless you trust a proxy with `TRUST_PROXY` (see [Configuration](/docs/configuration/#client-ip-and-proxies)). A client sent `X-Forwarded-For` header is ignored by default, so rotating it does not get around the limits. After 5 failed logins for an email from one IP, Bakorin locks that email for that IP with exponential backoff capped at 60 minutes, so someone guessing from their own address cannot lock the real owner out everywhere. Unknown emails go through the same password check, failures, and lock as known ones, so login does not reveal which emails have accounts. Signup answers 202 with the same body for new and existing emails, so it does not reveal them either (see [What signup answers](#what-signup-answers)).
 
 ## First admin
 

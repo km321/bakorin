@@ -17,6 +17,7 @@ const api = createClient<BakorinEntities>({
 });
 
 await api.signup({ email: "you@studio.test", password: "password123", name: "You" });
+// signup answers { ok, status: "check_email", requiresVerification, message } and never signs in
 await api.login({ email: "you@studio.test", password: "password123" });
 await api.forgotPassword({ email: "you@studio.test" });
 await api.resetPassword({ token, password: "new-password-1" });

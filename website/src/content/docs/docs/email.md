@@ -5,7 +5,7 @@ description: Account emails plus declarative transactional mail from app.yaml, w
 
 Bakorin sends two kinds of email through one driver:
 
-- **Account emails**: verify email, password reset, and invite. Built in, queued in the same outbox, and overridable with `mail/_auth/` files. See [System emails](#system-emails-verify-reset-invite).
+- **Account emails**: verify email, password reset, invite, and the notice for a signup with an existing email. Built in, queued in the same outbox, and overridable with `mail/_auth/` files. See [System emails](#system-emails-verify-reset-invite).
 - **Transactional mail**: receipts and notifications you declare in `app.yaml` or send from hooks. See [Transactional email](#transactional-email) below.
 
 Pick a driver with `MAIL_DRIVER`.
@@ -49,8 +49,9 @@ If `MAIL_DRIVER=resend` and the key is missing, Bakorin refuses to start. In pro
 | Verify email | Sign up, or admin "resend verification" | `Verify your {app} email` | `/verify-email?token=` | 24 hours |
 | Password reset | `/forgot-password` page or `POST /api/v1/auth/forgot-password` | `Reset your {app} password` | `/reset-password?token=` | 1 hour |
 | Invite | Admin UI invite or `POST /api/v1/auth/invites` | `You are invited to {app}` | `/accept-invite?token=` | 7 days |
+| Signup with an existing email | Someone signs up with an email that already has an account (at most once an hour per address) | `Someone tried to sign up for {app} with your email` | `/reset-password?token=` | 1 hour |
 
-These emails are queued and sent in the background. Each one appears in the admin **Mail** page delivery log as `system: verify`, `system: reset`, or `system: invite`, with its status, attempts, and last error, and with the link redacted.
+These emails are queued and sent in the background. Each one appears in the admin **Mail** page delivery log as `system: verify`, `system: reset`, `system: invite`, or `system: existing`, with its status, attempts, and last error, and with the link redacted.
 
 If nothing arrives, check the delivery log first, then check that `MAIL_DRIVER` is set in the process environment, the key belongs to the right account, and `MAIL_FROM` uses a verified domain. Failed Resend calls are logged as `Resend {status}: {body}`.
 
@@ -283,7 +284,7 @@ Statuses: `pending`, `sending`, `sent`, `failed`.
 
 ### System emails (verify, reset, invite)
 
-The built in account emails use the same outbox as mail rules: signup verification, admin **Resend verification**, password reset, and admin invites. They are queued during the request and sent in the background, so they get the same lease, retries with backoff, idempotency, and a row in the admin delivery log, labeled `system: verify`, `system: reset`, or `system: invite`.
+The built in account emails use the same outbox as mail rules: signup verification, admin **Resend verification**, password reset, admin invites, and the notice sent when someone signs up with an email that already has an account. They are queued during the request and sent in the background, so they get the same lease, retries with backoff, idempotency, and a row in the admin delivery log, labeled `system: verify`, `system: reset`, `system: invite`, or `system: existing`.
 
 API responses do not change. `forgot-password` still returns the same `200` body whether or not the email belongs to an account, and the request never waits on the mail provider, so delivery speed or failures cannot reveal which addresses exist.
 
@@ -305,6 +306,7 @@ The defaults are plain and work everywhere. To brand them, add any of these file
 mail/_auth/verify.html    mail/_auth/verify.txt    mail/_auth/verify.subject
 mail/_auth/reset.html     mail/_auth/reset.txt     mail/_auth/reset.subject
 mail/_auth/invite.html    mail/_auth/invite.txt    mail/_auth/invite.subject
+mail/_auth/existing.html  mail/_auth/existing.txt  mail/_auth/existing.subject
 ```
 
 Available values: `{{ link }}`, `{{ email }}`, `{{ expires }}` (for example `1 hour`), `{{ purpose }}`, `{{ app.name }}`, and `{{ app.url }}`. A custom HTML body is wrapped in `mail/_layout.html` when you have one, and a missing `.txt` is generated from the HTML.

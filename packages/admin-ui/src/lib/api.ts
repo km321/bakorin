@@ -468,7 +468,7 @@ export interface MailRuleInfo {
 }
 
 export interface MailSystemTemplate {
-  kind: "verify" | "reset" | "invite";
+  kind: "verify" | "reset" | "invite" | "existing";
   template: string;
   html: boolean;
   text: boolean;

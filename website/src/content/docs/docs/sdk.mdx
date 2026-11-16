@@ -32,7 +32,7 @@ const api = createClient<BakorinEntities>({
 |---|---|
 | `baseUrl` | Bakorin API origin |
 | `getAccessToken`, `getRefreshToken` | Return the stored tokens (sync or async) |
-| `setTokens` | Called after login, signup, accept invite, and refresh |
+| `setTokens` | Called after login, accept invite, and refresh. Signup never returns tokens |
 | `fetch` | Optional custom fetch |
 
 On a 401, the client calls `/api/v1/auth/refresh` once and retries. Refresh is mutexed, so parallel 401s share one rotation.
@@ -43,6 +43,7 @@ For server rendered apps, use the [Astro](/docs/astro/) or [Next.js](/docs/nextj
 
 ```ts
 await api.signup({ email: "you@studio.test", password: "password123", name: "You" });
+// signup answers { ok, status: "check_email", requiresVerification, message } and never signs in
 await api.login({ email: "you@studio.test", password: "password123" });
 const me = await api.me();
 await api.logout(refreshToken);

@@ -15,7 +15,10 @@ describe("sdk account methods", () => {
         return runtime.app.request(`${url.pathname}${url.search}`, init);
       },
     });
-    const session = await api.signup({ email: "sdk@example.com", password: "password123", name: "Sdk" });
+    const started = await api.signup({ email: "sdk@example.com", password: "password123", name: "Sdk" });
+    expect(started).toMatchObject({ ok: true, status: "check_email" });
+    expect(started).not.toHaveProperty("accessToken");
+    const session = await api.login({ email: "sdk@example.com", password: "password123" });
     expect(session.user.role).toBe("user");
     expect(session.accessToken).toBeTruthy();
     await api.forgotPassword({ email: "sdk@example.com" });

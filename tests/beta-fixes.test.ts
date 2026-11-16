@@ -2,10 +2,10 @@
 import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { join } from "node:path";
 import { compileAppYaml } from "@bakorin/core";
-import { createRuntime } from "@bakorin/server";
+import { clearLoggedMail, createRuntime, getLoggedMail } from "@bakorin/server";
 import { importAppYaml, toAppYaml } from "../packages/core/src/builder.ts";
 import { consumeAuthToken, issueAuthToken } from "../packages/server/src/auth/tokens.ts";
-import { boot, MINI_YAML, tempProject } from "./helpers.ts";
+import { boot, MINI_YAML, tempProject, waitForLoggedToken } from "./helpers.ts";
 
 const STRONG = "beta-fixes-secret-9f8e7d6c5b4a3210-ZYXWVUTSRQ";
 
@@ -50,8 +50,13 @@ async function j(
 const bearer = (token: string) => ({ authorization: `Bearer ${token}` });
 const from = (ip: string) => ({ "x-forwarded-for": ip });
 
-async function signup(runtime: Runtime, email: string, headers: Record<string, string> = {}) {
-  return j(runtime, "POST", "/api/v1/auth/signup", { email, password: "password123", name: email.split("@")[0] }, headers);
+/** Signup never returns a session, so sign up and then log in (unless signup refused). */
+async function signup(runtime: Parameters<typeof j>[0], email: string, headers: Record<string, string> = {}) {
+  const res = await j(runtime, "POST", "/api/v1/auth/signup", { email, password: "password123", name: email.split("@")[0] }, headers);
+  if (res.status !== 202) {
+    return res;
+  }
+  return j(runtime, "POST", "/api/v1/auth/login", { email, password: "password123" }, headers);
 }
 
 const TRUSTED = MINI_YAML.replace("  hooks: ./hooks.ts\n", "  hooks: ./hooks.ts\n  trustProxy: 1\n");
@@ -159,7 +164,7 @@ describe("M9: captcha verify hook", () => {
     expect(blocked.status).toBe(403);
     expect(blocked.json.error).toEqual({ code: "verification_failed", message: "complete the captcha" });
     const okSignup = await signup(runtime, "v@x.test", { "x-bakorin-verify": "good" });
-    expect(okSignup.status).toBe(201);
+    expect(okSignup.status).toBe(200);
 
     expect((await j(runtime, "POST", "/api/v1/leads", { email: "l@x.test" })).status).toBe(403);
     expect((await j(runtime, "POST", "/api/v1/leads", { email: "l@x.test" }, { "x-bakorin-verify": "good" })).status).toBe(201);
@@ -281,6 +286,84 @@ describe("L1: dev reload picks up hooks.ts and CORS changes", () => {
   });
 });
 
+describe("L3: signup does not reveal whether an email is registered", () => {
+  const body = (email: string, password = "password123") => ({ email, password, name: "Someone" });
+
+  test("a new and an existing email get the same status and body, and neither gets a session", async () => {
+    const runtime = await started(TRUSTED);
+    clearLoggedMail();
+    const fresh = await j(runtime, "POST", "/api/v1/auth/signup", body("taken@x.test"), from("198.51.100.1"));
+    const again = await j(runtime, "POST", "/api/v1/auth/signup", body("Taken@X.test", "another-pass-1"), from("198.51.100.2"));
+    expect(fresh.status).toBe(202);
+    expect(again.status).toBe(202);
+    expect(again.json).toEqual(fresh.json);
+    expect(fresh.json.data).toEqual({
+      ok: true,
+      status: "check_email",
+      requiresVerification: false,
+      message: "Check your email to confirm your address. You can sign in now.",
+    });
+    expect(JSON.stringify(fresh.json)).not.toMatch(/accessToken|refreshToken|"user"/);
+    const rows = await runtime.db.selectFrom("users").select(["id", "password"]).where("email", "=", "taken@x.test").execute();
+    expect(rows.length).toBe(1);
+    // The second attempt did not change the password.
+    expect((await j(runtime, "POST", "/api/v1/auth/login", { email: "taken@x.test", password: "password123" })).status).toBe(200);
+    expect((await j(runtime, "POST", "/api/v1/auth/login", { email: "taken@x.test", password: "another-pass-1" })).status).toBe(401);
+  });
+
+  test("the account holder gets a notice with a working reset link, at most once an hour", async () => {
+    const runtime = await started(TRUSTED);
+    await j(runtime, "POST", "/api/v1/auth/signup", body("owner@x.test"), from("198.51.100.3"));
+    clearLoggedMail();
+    await j(runtime, "POST", "/api/v1/auth/signup", body("owner@x.test", "attacker-pass-1"), from("198.51.100.4"));
+    const token = await waitForLoggedToken("existing");
+    const notice = getLoggedMail().find((mail) => mail.meta?.purpose === "existing")!;
+    expect(notice.to).toEqual(["owner@x.test"]);
+    expect(notice.subject).toBe("Someone tried to sign up for mini with your email");
+    expect(notice.text).toContain("/reset-password?token=");
+    expect(notice.text).not.toMatch(/[\u2013\u2014]/);
+    const audit = await runtime.db.selectFrom("_bakorin_audit").select("action").where("action", "=", "signup_existing").execute();
+    expect(audit.length).toBe(1);
+
+    await j(runtime, "POST", "/api/v1/auth/signup", body("owner@x.test", "attacker-pass-2"), from("198.51.100.5"));
+    await Bun.sleep(200);
+    expect(getLoggedMail().filter((mail) => mail.meta?.purpose === "existing").length).toBe(1);
+
+    const reset = await j(runtime, "POST", "/api/v1/auth/reset-password", { token, password: "owner-new-pass-1" });
+    expect(reset.status).toBe(200);
+    expect((await j(runtime, "POST", "/api/v1/auth/login", { email: "owner@x.test", password: "owner-new-pass-1" })).status).toBe(200);
+  });
+
+  test("validation answers the same for new and existing emails", async () => {
+    const runtime = await started(TRUSTED);
+    await j(runtime, "POST", "/api/v1/auth/signup", body("v3@x.test"), from("198.51.100.6"));
+    const missingNew = await j(runtime, "POST", "/api/v1/auth/signup", { email: "new3@x.test", password: "password123" }, from("198.51.100.7"));
+    const missingOld = await j(runtime, "POST", "/api/v1/auth/signup", { email: "v3@x.test", password: "password123" }, from("198.51.100.8"));
+    expect(missingNew.status).toBe(400);
+    expect(missingOld.status).toBe(missingNew.status);
+    expect(missingOld.json).toEqual(missingNew.json);
+  });
+
+  test("two signups for one email at once both answer 202 and create one row", async () => {
+    const runtime = await started(TRUSTED);
+    const results = await Promise.all(
+      [1, 2, 3].map((i) => j(runtime, "POST", "/api/v1/auth/signup", body("race@x.test"), from(`198.51.100.${20 + i}`))),
+    );
+    expect(results.map((r) => r.status)).toEqual([202, 202, 202]);
+    const rows = await runtime.db.selectFrom("users").select("id").where("email", "=", "race@x.test").execute();
+    expect(rows.length).toBe(1);
+  });
+
+  test("with requireVerifiedEmail the message says to confirm first", async () => {
+    const yaml = TRUSTED.replace("auth:\n  entity: users\n  adminRole: admin", "auth:\n  entity: users\n  adminRole: admin\n  requireVerifiedEmail: true");
+    const runtime = await started(yaml);
+    const res = await j(runtime, "POST", "/api/v1/auth/signup", body("rv@x.test"), from("198.51.100.30"));
+    expect(res.status).toBe(202);
+    expect(res.json.data.requiresVerification).toBe(true);
+    expect(res.json.data.message).toBe("Check your email to confirm your address, then sign in.");
+  });
+});
+
 describe("L3 and L5: login lockouts", () => {
   const login = (runtime: Runtime, email: string, ip: string, password = "wrong-password") =>
     j(runtime, "POST", "/api/v1/auth/login", { email, password }, from(ip));
@@ -343,7 +426,7 @@ describe("L8: restoring does not have to replay production deliveries", () => {
     const dir = await tempProject(yaml);
     const runtime = await createRuntime({ projectDir: dir, yamlSource: yaml, workers: false });
     cleanups.push(() => runtime.close());
-    const user = (await j(runtime, "POST", "/api/v1/auth/signup", { email: "p@x.test", password: "password123", name: "P" })).json.data;
+    const user = (await signup(runtime, "p@x.test")).json.data;
     await j(runtime, "POST", "/api/v1/items", { title: "queued" }, bearer(user.accessToken));
     const before = await countPendingDeliveries(runtime.db);
     expect(before.webhooks).toBe(1);

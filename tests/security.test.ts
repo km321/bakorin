@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { MINI_YAML, boot, client } from "./helpers.ts";
+import { MINI_YAML, boot, client, signupAndLogin } from "./helpers.ts";
 import { resetRateLimit } from "@bakorin/server";
 
 const SECURE_YAML = MINI_YAML.replace(
@@ -8,7 +8,7 @@ const SECURE_YAML = MINI_YAML.replace(
 );
 
 async function signup(runtime: Awaited<ReturnType<typeof boot>>, email: string) {
-  const response = await client(runtime).fetch("/api/v1/auth/signup", {
+  const response = await signupAndLogin(client(runtime), {
     method: "POST",
     body: JSON.stringify({ email, password: "password123", name: email }),
   });
@@ -87,11 +87,11 @@ describe("privilege escalation guards", () => {
   test("signup ignores a client-supplied admin role", async () => {
     resetRateLimit();
     const runtime = await boot();
-    const response = await client(runtime).fetch("/api/v1/auth/signup", {
+    const response = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "sneaky@example.com", password: "password123", name: "Sneaky", role: "admin" }),
     });
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(200);
     expect((await response.json()).data.user.role).toBe("user");
     await runtime.close();
   });

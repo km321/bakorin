@@ -1,4 +1,4 @@
-export type AccountEmailKind = "reset" | "verify" | "invite";
+export type AccountEmailKind = "reset" | "verify" | "invite" | "existing";
 
 export interface AccountEmail {
   subject: string;
@@ -53,6 +53,16 @@ export function renderAccountEmail(
           `<p>An admin invited you to ${escapeHtml(appName)}. Set a password with this link. It expires in 7 days.</p><p><a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>`,
         ),
       };
+    case "existing":
+      return {
+        subject: `Someone tried to sign up for ${appName} with your email`,
+        text: `Someone tried to create a ${appName} account with this email address, but you already have one.\n\nIf it was you, sign in with your password. Forgot it? Choose a new one here:\n\n${link}\n\nThis link expires in 1 hour. If it was not you, you can ignore this email. Your account has not changed.`,
+        html: wrapHtml(
+          appName,
+          "You already have an account",
+          `<p>Someone tried to create a ${escapeHtml(appName)} account with this email address, but you already have one.</p><p>If it was you, sign in with your password. Forgot it? Choose a new one with this link. It expires in 1 hour.</p><p><a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p><p>If it was not you, you can ignore this email. Your account has not changed.</p>`,
+        ),
+      };
     default: {
       const _never: never = kind;
       return _never;
@@ -75,6 +85,7 @@ const BUTTON_LABEL: Record<string, string> = {
   "Reset your password": "Choose a new password",
   "Verify your email": "Verify email",
   "You are invited": "Set your password",
+  "You already have an account": "Choose a new password",
 };
 
 function wrapBrandedHtml(brand: AccountEmailBrand, heading: string, body: string, link: string): string {

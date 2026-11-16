@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ChangeEvent } from "@bakorin/core";
 import { createChangeBus } from "@bakorin/server";
-import { boot, client } from "./helpers.ts";
+import { boot, client, signupAndLogin } from "./helpers.ts";
 
 describe("change bus", () => {
   test("subscribers receive events and can unsubscribe", () => {
@@ -22,7 +22,7 @@ describe("change bus", () => {
     runtime.context.bus.subscribe((event) => {
       events.push(event);
     });
-    const signup = await client(runtime).fetch("/api/v1/auth/signup", {
+    const signup = await signupAndLogin(client(runtime), {
       method: "POST",
       body: JSON.stringify({ email: "dev@example.com", password: "password123", name: "Dev" }),
     });
