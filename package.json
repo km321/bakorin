@@ -23,7 +23,8 @@
     "bench": "bun scripts/bench-sqlite.ts",
     "restore-drill": "bun scripts/restore-drill.ts",
     "build:sdk": "bun run --filter @bakorin/sdk build",
-    "build:create": "bun run --filter create-bakorin build"
+    "build:create": "bun run --filter create-bakorin build",
+    "load:realtime": "bun scripts/realtime-load/run.ts"
   },
   "repository": {
     "type": "git",

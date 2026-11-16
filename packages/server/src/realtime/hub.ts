@@ -105,8 +105,32 @@ function json(status: number, code: string, message: string, headers: Record<str
   });
 }
 
-function isAdmin(ast: SchemaAST, actor: Actor | null): boolean {
-  return Boolean(actor && actor.role === ast.auth.adminRole);
+function concat(chunks: Uint8Array[]): Uint8Array {
+  let length = 0;
+  for (const chunk of chunks) length += chunk.byteLength;
+  const out = new Uint8Array(length);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
+
+const policyShapes = new WeakMap<EntityAST, { isPublic: boolean; byRole: boolean; byOwner: boolean }>();
+
+function policyShape(entity: EntityAST) {
+  let shape = policyShapes.get(entity);
+  if (!shape) {
+    const read = entity.policies.read;
+    shape = {
+      isPublic: read.some((policy) => policy.kind === "public"),
+      byRole: read.some((policy) => policy.kind === "role"),
+      byOwner: read.some((policy) => policy.kind === "owner"),
+    };
+    policyShapes.set(entity, shape);
+  }
+  return shape;
 }
 
 /**
@@ -114,21 +138,27 @@ function isAdmin(ast: SchemaAST, actor: Actor | null): boolean {
  * the frame is built once per key and shared. Public read entities collapse to one
  * key for everyone who is not an admin.
  */
-export function groupKey(ast: SchemaAST, entity: EntityAST, actor: Actor | null, recordId: string): string {
-  if (isAdmin(ast, actor)) {
+export function groupKey(
+  ast: SchemaAST,
+  entity: EntityAST,
+  actor: Actor | null,
+  recordId: string,
+  shape = policyShape(entity),
+): string {
+  if (actor && actor.role === ast.auth.adminRole) {
     return "a";
   }
-  const read = entity.policies.read;
-  const self = entity.name === ast.auth.entity && actor && recordId === actor.id ? ":self" : "";
-  if (read.some((policy) => policy.kind === "public")) {
-    return `p${self}`;
+  const self = actor && recordId === actor.id && entity.name === ast.auth.entity;
+  if (shape.isPublic) {
+    return self ? "p:self" : "p";
   }
   if (!actor) {
     return "x";
   }
-  const role = read.some((policy) => policy.kind === "role") ? `:${actor.role}` : "";
-  const owner = read.some((policy) => policy.kind === "owner") ? `:${actor.id}` : "";
-  return `u${role}${owner}${self}`;
+  let key = "u";
+  if (shape.byRole) key += `:${actor.role}`;
+  if (shape.byOwner) key += `:${actor.id}`;
+  return self ? `${key}:self` : key;
 }
 
 function readable(ast: SchemaAST, entity: EntityAST, actor: Actor | null, record: Record<string, unknown> | null): boolean {
@@ -200,6 +230,11 @@ export function createRealtimeHub(options: HubOptions): RealtimeHub {
   let pumping: Promise<void> | null = null;
   let pumpAgain = false;
   let retryTimer: ReturnType<typeof setTimeout> | null = null;
+  // Adaptive batching: when fan-out gets expensive, wait a little so the next pump
+  // carries several events and each client gets one write instead of many.
+  let lastDeliverMs = 0;
+  let lastPumpAt = 0;
+  let coalesceTimer: ReturnType<typeof setTimeout> | null = null;
   let publishPending = false;
   let nextId = 1;
   const timers: Array<ReturnType<typeof setInterval>> = [];
@@ -294,38 +329,66 @@ export function createRealtimeHub(options: HubOptions): RealtimeHub {
     if (bytes && send(sub, bytes)) counters.deliveriesTotal += 1;
   }
 
-  function deliver(row: RealtimeRow): void {
-    counters.eventsTotal += 1;
-    const subs = byEntity.get(row.entity);
-    if (!subs || subs.size === 0) return;
+  /**
+   * Fans a batch of rows out to subscribers. Each frame is built once per policy
+   * context, and each subscriber gets one write per batch (fewer syscalls when
+   * events arrive in bursts).
+   */
+  function deliver(rows: RealtimeRow[]): void {
+    if (rows.length === 0) return;
+    const startedAt = performance.now();
+    try {
+      fanOut(rows);
+    } finally {
+      lastDeliverMs = performance.now() - startedAt;
+    }
+  }
+
+  function fanOut(rows: RealtimeRow[]): void {
+    counters.eventsTotal += rows.length;
     const schema = ast();
-    const entity = schema.entityMap[row.entity];
-    if (!entity?.realtime) return;
-    const frames = new Map<string, Uint8Array | null>();
-    for (const sub of [...subs]) {
-      if (!sub.ready) {
-        sub.backlog.push(row);
-        if (sub.backlog.length > replayLimit() + 1000) {
-          closeSub(sub, "slow_consumer");
+    const pending = new Map<Subscriber, Uint8Array[]>();
+    for (const row of rows) {
+      const subs = byEntity.get(row.entity);
+      if (!subs || subs.size === 0) continue;
+      const entity = schema.entityMap[row.entity];
+      if (!entity?.realtime) continue;
+      const frames = new Map<string, Uint8Array | null>();
+      const shape = policyShape(entity);
+      for (const sub of subs) {
+        if (sub.closed) continue;
+        if (!sub.ready) {
+          sub.backlog.push(row);
+          if (sub.backlog.length > replayLimit() + 1000) {
+            closeSub(sub, "slow_consumer");
+          }
+          continue;
         }
-        continue;
+        if (row.seq <= sub.lastSeq) continue;
+        sub.lastSeq = row.seq;
+        const key = groupKey(schema, entity, sub.actor, row.recordId, shape);
+        let bytes = frames.get(key);
+        if (bytes === undefined) {
+          bytes = buildFrame(schema, entity, row, sub.actor);
+          counters.framesBuiltTotal += 1;
+          frames.set(key, bytes);
+        }
+        if (!bytes) continue;
+        const list = pending.get(sub);
+        if (list) list.push(bytes);
+        else pending.set(sub, [bytes]);
       }
-      if (row.seq <= sub.lastSeq) continue;
-      sub.lastSeq = row.seq;
-      const key = groupKey(schema, entity, sub.actor, row.recordId);
-      let bytes = frames.get(key);
-      if (bytes === undefined) {
-        bytes = buildFrame(schema, entity, row, sub.actor);
-        counters.framesBuiltTotal += 1;
-        frames.set(key, bytes);
-      }
-      if (bytes && send(sub, bytes)) counters.deliveriesTotal += 1;
+    }
+    for (const [sub, chunks] of pending) {
+      const bytes = chunks.length === 1 ? chunks[0]! : concat(chunks);
+      if (send(sub, bytes)) counters.deliveriesTotal += chunks.length;
     }
   }
 
   /** Reads new log rows in id order. A missing id may belong to a transaction that has not committed yet. */
   async function pumpOnce(): Promise<boolean> {
     const rows = await readRealtimeAfter(db, cursor, 500);
+    const ready: RealtimeRow[] = [];
     for (const row of rows) {
       if (row.seq !== cursor + 1) {
         const now = Date.now();
@@ -337,6 +400,7 @@ export function createRealtimeHub(options: HubOptions): RealtimeHub {
               void pump();
             }, 50);
           }
+          deliver(ready);
           return false;
         }
         // Waited long enough: the missing ids were rolled back.
@@ -344,8 +408,9 @@ export function createRealtimeHub(options: HubOptions): RealtimeHub {
       gapSince = null;
       cursor = row.seq;
       remember(row);
-      deliver(row);
+      ready.push(row);
     }
+    deliver(ready);
     return rows.length === 500;
   }
 
@@ -357,6 +422,19 @@ export function createRealtimeHub(options: HubOptions): RealtimeHub {
       pumpAgain = true;
       return pumping;
     }
+    // At most one flush per window. The window grows with the audience (each write
+    // to a stream has a fixed cost) and with how long the last fan-out took. A
+    // lone event still goes out at once; only bursts are batched.
+    const delay = Math.min(100, Math.max(lastDeliverMs > 2 ? lastDeliverMs * 2 : 0, subscribers.size >= 1000 ? subscribers.size / 100 : 0));
+    const since = Date.now() - lastPumpAt;
+    if (delay > 0 && since < delay) {
+      coalesceTimer ??= setTimeout(() => {
+        coalesceTimer = null;
+        void pump();
+      }, delay - since);
+      return Promise.resolve();
+    }
+    lastPumpAt = Date.now();
     pumping = (async () => {
       try {
         do {
@@ -644,6 +722,7 @@ export function createRealtimeHub(options: HubOptions): RealtimeHub {
       for (const timer of timers) clearInterval(timer);
       timers.length = 0;
       if (retryTimer) clearTimeout(retryTimer);
+      if (coalesceTimer) clearTimeout(coalesceTimer);
       for (const off of unsubscribers) off();
       unsubscribers.length = 0;
       await pumping?.catch(() => undefined);
