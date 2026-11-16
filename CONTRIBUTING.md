@@ -15,3 +15,7 @@ The server packages (`packages/server`, `packages/core`, `packages/admin-ui`) ar
 - Run `bun test` and make sure it passes.
 - Keep changes focused, and describe what changed and why.
 - Never commit secrets, API keys, or real `.env` files.
+
+## Security issues
+
+Do not report vulnerabilities in public issues. See [SECURITY.md](SECURITY.md).
