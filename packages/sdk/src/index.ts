@@ -13,6 +13,37 @@ export interface SignupResult {
   message: string;
 }
 
+/**
+ * Thrown for an error answer from Bakorin. The message is the server's message,
+ * so code that only reads error.message keeps working.
+ */
+export class BakorinRequestError extends Error {
+  /** HTTP status, for example 400, 401, 403, 404, 409, or 429. */
+  readonly status: number;
+  /** Machine readable code from the server, for example invalid_input or conflict. */
+  readonly code: string;
+  /** The input field the error is about, when the server names one. */
+  readonly field?: string;
+  constructor(message: string, status: number, code: string, field?: string) {
+    super(message);
+    this.name = "BakorinRequestError";
+    this.status = status;
+    this.code = code;
+    this.field = field;
+  }
+}
+
+/** A stored file, as the upload route answers. url is a signed link that expires at expiresAt (seconds). */
+export interface UploadedFile {
+  id: string;
+  key: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  url: string;
+  expiresAt: number;
+}
+
 export interface ListResult<T> {
   data: T[];
   meta: { total: number; limit: number; offset: number };
@@ -67,7 +98,7 @@ export interface Query {
   filter?: Record<string, string | number | boolean | { op: string; value: unknown }>;
 }
 
-type Entities = Record<string, Record<string, unknown>>;
+export type Entities = Record<string, Record<string, unknown>>;
 
 /** One change from a realtime stream, as the signed in reader may see it. */
 export interface RealtimeChange<T = Record<string, unknown>> {
@@ -95,11 +126,16 @@ export interface SubscribeOptions {
 
 const API_PREFIX = "/api/v1";
 
-export function createClient<S extends Entities = Entities>(options: ClientOptions) {
+export function createClient<S extends object = Entities>(options: ClientOptions) {
   const fetcher = options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
   let refreshMutex: Promise<string | null> | null = null;
   const base = options.baseUrl.replace(/\/+$/, "");
   const apiPath = (options.apiPath ?? API_PREFIX).replace(/\/+$/, "");
+
+  /** Signed file links come back as /api/v1/files/...; point them at this client's base (your site in the browser). */
+  function fileUrl(path: string): string {
+    return path.startsWith("/api/v1/") ? url(path) : path;
+  }
 
   /** Maps an /api/v1/... route onto baseUrl + apiPath. */
   function url(path: string): string {
@@ -145,7 +181,9 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
     if (access) {
       headers.set("authorization", `Bearer ${access}`);
     }
-    if (init.body && !headers.has("content-type")) {
+    // FormData (file uploads) sets its own multipart content type.
+    const isForm = typeof FormData !== "undefined" && init.body instanceof FormData;
+    if (init.body && !isForm && !headers.has("content-type")) {
       headers.set("content-type", "application/json");
     }
     const response = await fetcher(url(path), { credentials: options.credentials, ...init, headers });
@@ -184,9 +222,10 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
   }
 
   async function parse<T>(response: Response): Promise<T> {
-    const json = await response.json();
+    const json = (await response.json().catch(() => ({}))) as { error?: { message?: string; code?: string; field?: string } };
     if (!response.ok) {
-      throw new Error(json.error?.message ?? `request failed (${response.status})`);
+      const error = json.error ?? {};
+      throw new BakorinRequestError(error.message ?? `request failed (${response.status})`, response.status, error.code ?? "error", error.field);
     }
     return json as T;
   }
@@ -237,7 +276,7 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
       return json.data;
     },
     async login(body: Record<string, unknown>) {
-      const json = await parse<{ data: { user: S[string]; accessToken: string; refreshToken: string; expiresIn: number } }>(
+      const json = await parse<{ data: { user: S[keyof S]; accessToken: string; refreshToken: string; expiresIn: number } }>(
         await request("/api/v1/auth/login", { method: "POST", body: JSON.stringify(body) }),
       );
       await options.setTokens?.(json.data);
@@ -249,7 +288,7 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
       realtime.restart(true);
     },
     async me() {
-      const json = await parse<{ data: S[string] }>(await request("/api/v1/auth/me"));
+      const json = await parse<{ data: S[keyof S] }>(await request("/api/v1/auth/me"));
       return json.data;
     },
     async forgotPassword(body: { email: string }) {
@@ -271,14 +310,14 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
       return json.data;
     },
     async acceptInvite(body: { token: string; password: string; name?: string }) {
-      const json = await parse<{ data: { user: S[string]; accessToken: string; refreshToken: string; expiresIn: number } }>(
+      const json = await parse<{ data: { user: S[keyof S]; accessToken: string; refreshToken: string; expiresIn: number } }>(
         await request("/api/v1/auth/accept-invite", { method: "POST", body: JSON.stringify(body) }),
       );
       await options.setTokens?.(json.data);
       return json.data;
     },
     async invite(body: { email: string; role?: string; name?: string }) {
-      const json = await parse<{ data: { user: S[string]; email: string; role: string } }>(
+      const json = await parse<{ data: { user: S[keyof S]; email: string; role: string } }>(
         await request("/api/v1/auth/invites", { method: "POST", body: JSON.stringify(body) }),
       );
       return json.data;
@@ -288,6 +327,26 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
         await request("/api/v1/auth/resend-verification", { method: "POST", body: JSON.stringify(body) }),
       );
       return json.data;
+    },
+    files: {
+      /** Uploads a file (signed in users only). Use uploadFile from @bakorin/sdk/headless for progress. */
+      async upload(file: Blob, filename?: string): Promise<UploadedFile> {
+        const form = new FormData();
+        form.set("file", file, filename ?? (file as File).name ?? "upload");
+        const json = await parse<{ data: UploadedFile }>(await request("/api/v1/files", { method: "POST", body: form }));
+        return { ...json.data, url: fileUrl(json.data.url) };
+      },
+      /** A fresh signed link for a file you uploaded (admins: any file). */
+      async sign(id: string): Promise<{ url: string; expiresAt: number }> {
+        const json = await parse<{ data: { url: string; expiresAt: number } }>(
+          await request(`/api/v1/files/${encodeURIComponent(id)}/sign`, { method: "POST" }),
+        );
+        return { ...json.data, url: fileUrl(json.data.url) };
+      },
+    },
+    /** The resolved API root, for example https://site.example/api/bakorin. Signed file links are relative to it. */
+    apiUrl(path = ""): string {
+      return url(`/api/v1${path}`);
     },
     entity<K extends keyof S & string>(name: K) {
       return {
@@ -316,7 +375,7 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
   };
 }
 
-export type BakorinClient<S extends Entities = Entities> = ReturnType<typeof createClient<S>>;
+export type BakorinClient<S extends object = Entities> = ReturnType<typeof createClient<S>>;
 
 interface Listener {
   handler: (change: RealtimeChange) => void;

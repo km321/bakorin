@@ -1,0 +1,35 @@
+---
+import AuthForm from "./AuthForm.astro";
+import { escapeHtml, signInFields } from "../dist/astro-render.js";
+
+interface Props {
+  /** Where to go after signing in. Default /. */
+  redirectTo?: string;
+  identityField?: string;
+  forgotPasswordHref?: string;
+  signUpHref?: string;
+  submitLabel?: string;
+  basePath?: string;
+  /** From handleAuthForm(Astro, { mode: "sign-in" }). */
+  result?: { errors?: Record<string, string>; error?: string; values?: Record<string, unknown> };
+}
+
+const { redirectTo = "/", identityField = "email", forgotPasswordHref, signUpHref, submitLabel = "Sign in", basePath, result } = Astro.props;
+const links = [
+  forgotPasswordHref && `<a href="${escapeHtml(forgotPasswordHref)}">Forgot your password?</a>`,
+  signUpHref && `<a href="${escapeHtml(signUpHref)}">Create an account</a>`,
+].filter(Boolean);
+---
+
+<AuthForm
+  mode="sign-in"
+  fields={signInFields(identityField)}
+  submitLabel={submitLabel}
+  className="bk-sign-in"
+  redirectTo={redirectTo}
+  basePath={basePath}
+  result={result}
+  autocomplete={{ [identityField]: identityField === "email" ? "email" : "username", password: "current-password" }}
+  footer={links.length ? `<p class="bk-links">${links.join("")}</p>` : undefined}
+/>
+

@@ -32,11 +32,29 @@ export interface FieldAST {
     relation?: {
         to: string;
         onDelete: OnDelete;
+        /**
+         * Many to many: the field holds a list of ids, stored in a hidden join table
+         * (see joinTableName). Links are removed when either record is deleted.
+         */
+        many?: boolean;
     };
     renameFrom?: string;
     secret: boolean;
     description?: string;
     writable: FieldWritable;
+    /**
+     * Private fields are left out of API responses for ordinary users. On the auth
+     * entity a user still sees their own private fields; admins see everything.
+     * The auth identity, role and emailVerified fields are private by default.
+     */
+    private?: boolean;
+}
+/** Fixed window request limit, counted in the database per client IP or signed in user. */
+export interface RateLimitAST {
+    limit: number;
+    windowSeconds: number;
+    /** ip: per client IP. user: per signed in user, falling back to IP when signed out. */
+    per: "ip" | "user";
 }
 export interface EntityAST {
     name: string;
@@ -52,7 +70,44 @@ export interface EntityAST {
     deprecated: boolean;
     /** Previous entity (table) name, declared in app.yaml to rename without losing data. */
     renameFrom?: string;
+    /** Optional per action request limits (app.yaml rateLimit:). */
+    rateLimit?: Partial<Record<ActionName, RateLimitAST>>;
+    /**
+     * Realtime change events over server sent events (app.yaml realtime:). Off when
+     * unset. full: events carry the record as the reader may see it. ids: events
+     * carry only the id and operation, for heavy tables; clients refetch.
+     */
+    realtime?: RealtimeMode;
 }
+export type RealtimeMode = "full" | "ids";
+/**
+ * memory: one process (SQLite, or a single Postgres instance).
+ * postgres: fan out across instances with LISTEN/NOTIFY.
+ * auto: postgres on Postgres, memory on SQLite.
+ */
+export type RealtimeBrokerName = "auto" | "memory" | "postgres";
+export interface RealtimeRuntimeAST {
+    broker: RealtimeBrokerName;
+    /** Open streams allowed on one instance. */
+    maxConnections: number;
+    /** Open streams per signed in user (or per IP when signed out) on one instance. */
+    maxPerUser: number;
+    heartbeatSeconds: number;
+    /** Recent events kept in memory for Last-Event-ID resume. */
+    replayEvents: number;
+    /** How long change rows stay in the database log for resume after a longer gap. */
+    retainMinutes: number;
+    /** Data queued for one client before it is dropped as too slow, in KiB. */
+    maxBufferKb: number;
+}
+/** The read only MCP dev server at /mcp. Off unless runtime.mcp or BAKORIN_MCP turns it on. */
+export interface McpRuntimeAST {
+    enabled: boolean;
+    /** Most rows the sample_records tool returns. */
+    sampleLimit: number;
+}
+export declare const REALTIME_DEFAULTS: RealtimeRuntimeAST;
+export declare const MCP_DEFAULTS: McpRuntimeAST;
 export declare const WEBHOOK_DEFAULT_MAX_ATTEMPTS = 10;
 export declare const WEBHOOK_DEFAULT_TIMEOUT_MS = 10000;
 export declare const WEBHOOK_DEFAULT_RETAIN_DAYS = 30;
@@ -102,6 +157,8 @@ export interface FilesRuntimeAST {
     maxBytes: number;
     allowedMimeTypes: string[];
     signedUrlTtlSeconds: number;
+    /** Optional upload limit (runtime.files.rateLimit). */
+    rateLimit?: RateLimitAST;
 }
 export interface BackupRuntimeAST {
     intervalHours: number | null;
@@ -130,11 +187,31 @@ export interface RuntimeAST {
     backups: BackupRuntimeAST;
     corsOrigins: string[];
     hooksPath?: string;
+    /** Who can read /api/v1/openapi.json: everyone, or admins only (the production default). */
+    apiDocs: "public" | "admin";
     appUrl: string;
     webhooksRetainDays: number;
     mailRetainDays: number;
     alerts: AlertsRuntimeAST;
+    /** How to find the client IP behind proxies. See TrustProxyAST. */
+    trustProxy: TrustProxyAST;
+    realtime: RealtimeRuntimeAST;
+    mcp: McpRuntimeAST;
 }
+/**
+ * none: use the socket address and ignore X-Forwarded-For (the default).
+ * hops: trust this many proxies in front of Bakorin (Railway, Fly, Render: 1).
+ * cidrs: trust X-Forwarded-For entries added by proxies in these ranges.
+ */
+export type TrustProxyAST = {
+    kind: "none";
+} | {
+    kind: "hops";
+    hops: number;
+} | {
+    kind: "cidrs";
+    cidrs: string[];
+};
 export interface AuthAST {
     entity: string;
     identityField: string;
@@ -142,7 +219,14 @@ export interface AuthAST {
     roleField: string;
     adminRole: string;
     requireVerifiedEmail: boolean;
+    /**
+     * open: anyone can create an account at POST /api/v1/auth/signup.
+     * invite: only admins add people, with invites (the default).
+     * closed: no signup and no invites; admins create users in the admin.
+     */
+    signup: SignupMode;
 }
+export type SignupMode = "open" | "invite" | "closed";
 export interface SchemaAST {
     version: typeof SCHEMA_AST_VERSION;
     appName: string;

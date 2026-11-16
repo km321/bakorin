@@ -2,51 +2,44 @@ import { z } from "zod";
 export declare const FIELD_TYPES: readonly ["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"];
 export declare const APP_YAML_TOP_LEVEL_KEYS: readonly ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail"];
 declare const fieldObject: z.ZodObject<{
-    type: z.ZodEnum<["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"]>;
+    type: z.ZodEnum<{
+        number: "number";
+        boolean: "boolean";
+        text: "text";
+        email: "email";
+        password: "password";
+        integer: "integer";
+        date: "date";
+        datetime: "datetime";
+        enum: "enum";
+        file: "file";
+        relation: "relation";
+    }>;
     required: z.ZodOptional<z.ZodBoolean>;
     unique: z.ZodOptional<z.ZodBoolean>;
     index: z.ZodOptional<z.ZodBoolean>;
     default: z.ZodOptional<z.ZodUnknown>;
-    values: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    values: z.ZodOptional<z.ZodArray<z.ZodString>>;
     to: z.ZodOptional<z.ZodString>;
-    onDelete: z.ZodOptional<z.ZodEnum<["restrict", "cascade", "set_null"]>>;
+    onDelete: z.ZodOptional<z.ZodEnum<{
+        restrict: "restrict";
+        cascade: "cascade";
+        set_null: "set_null";
+    }>>;
+    many: z.ZodOptional<z.ZodBoolean>;
     renameFrom: z.ZodOptional<z.ZodString>;
     secret: z.ZodOptional<z.ZodBoolean>;
     description: z.ZodOptional<z.ZodString>;
-    writable: z.ZodOptional<z.ZodEnum<["admin", "none"]>>;
+    writable: z.ZodOptional<z.ZodEnum<{
+        admin: "admin";
+        none: "none";
+    }>>;
     readonly: z.ZodOptional<z.ZodBoolean>;
     adminOnly: z.ZodOptional<z.ZodBoolean>;
-}, "strict", z.ZodTypeAny, {
-    type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-    values?: string[] | undefined;
-    index?: boolean | undefined;
-    required?: boolean | undefined;
-    unique?: boolean | undefined;
-    default?: unknown;
-    to?: string | undefined;
-    onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-    renameFrom?: string | undefined;
-    secret?: boolean | undefined;
-    description?: string | undefined;
-    writable?: "admin" | "none" | undefined;
-    readonly?: boolean | undefined;
-    adminOnly?: boolean | undefined;
-}, {
-    type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-    values?: string[] | undefined;
-    index?: boolean | undefined;
-    required?: boolean | undefined;
-    unique?: boolean | undefined;
-    default?: unknown;
-    to?: string | undefined;
-    onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-    renameFrom?: string | undefined;
-    secret?: boolean | undefined;
-    description?: string | undefined;
-    writable?: "admin" | "none" | undefined;
-    readonly?: boolean | undefined;
-    adminOnly?: boolean | undefined;
-}>;
+    private: z.ZodOptional<z.ZodBoolean>;
+}, z.core.$strict>;
+/** A window like 30s, 10m, 1h, 1d, or a number of seconds. */
+export declare const RATE_WINDOW_PATTERN: RegExp;
 declare const entityObject: z.ZodObject<{
     label: z.ZodOptional<z.ZodString>;
     plural: z.ZodOptional<z.ZodString>;
@@ -54,239 +47,144 @@ declare const entityObject: z.ZodObject<{
     description: z.ZodOptional<z.ZodString>;
     auth: z.ZodOptional<z.ZodBoolean>;
     renameFrom: z.ZodOptional<z.ZodString>;
-    fields: z.ZodRecord<z.ZodString, z.ZodUnion<[z.ZodEnum<["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"]>, z.ZodObject<{
-        type: z.ZodEnum<["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"]>;
+    fields: z.ZodRecord<z.ZodString, z.ZodUnion<readonly [z.ZodEnum<{
+        number: "number";
+        boolean: "boolean";
+        text: "text";
+        email: "email";
+        password: "password";
+        integer: "integer";
+        date: "date";
+        datetime: "datetime";
+        enum: "enum";
+        file: "file";
+        relation: "relation";
+    }>, z.ZodObject<{
+        type: z.ZodEnum<{
+            number: "number";
+            boolean: "boolean";
+            text: "text";
+            email: "email";
+            password: "password";
+            integer: "integer";
+            date: "date";
+            datetime: "datetime";
+            enum: "enum";
+            file: "file";
+            relation: "relation";
+        }>;
         required: z.ZodOptional<z.ZodBoolean>;
         unique: z.ZodOptional<z.ZodBoolean>;
         index: z.ZodOptional<z.ZodBoolean>;
         default: z.ZodOptional<z.ZodUnknown>;
-        values: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        values: z.ZodOptional<z.ZodArray<z.ZodString>>;
         to: z.ZodOptional<z.ZodString>;
-        onDelete: z.ZodOptional<z.ZodEnum<["restrict", "cascade", "set_null"]>>;
+        onDelete: z.ZodOptional<z.ZodEnum<{
+            restrict: "restrict";
+            cascade: "cascade";
+            set_null: "set_null";
+        }>>;
+        many: z.ZodOptional<z.ZodBoolean>;
         renameFrom: z.ZodOptional<z.ZodString>;
         secret: z.ZodOptional<z.ZodBoolean>;
         description: z.ZodOptional<z.ZodString>;
-        writable: z.ZodOptional<z.ZodEnum<["admin", "none"]>>;
+        writable: z.ZodOptional<z.ZodEnum<{
+            admin: "admin";
+            none: "none";
+        }>>;
         readonly: z.ZodOptional<z.ZodBoolean>;
         adminOnly: z.ZodOptional<z.ZodBoolean>;
-    }, "strict", z.ZodTypeAny, {
-        type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-        values?: string[] | undefined;
-        index?: boolean | undefined;
-        required?: boolean | undefined;
-        unique?: boolean | undefined;
-        default?: unknown;
-        to?: string | undefined;
-        onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-        renameFrom?: string | undefined;
-        secret?: boolean | undefined;
-        description?: string | undefined;
-        writable?: "admin" | "none" | undefined;
-        readonly?: boolean | undefined;
-        adminOnly?: boolean | undefined;
-    }, {
-        type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-        values?: string[] | undefined;
-        index?: boolean | undefined;
-        required?: boolean | undefined;
-        unique?: boolean | undefined;
-        default?: unknown;
-        to?: string | undefined;
-        onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-        renameFrom?: string | undefined;
-        secret?: boolean | undefined;
-        description?: string | undefined;
-        writable?: "admin" | "none" | undefined;
-        readonly?: boolean | undefined;
-        adminOnly?: boolean | undefined;
-    }>]>>;
-    indexes: z.ZodOptional<z.ZodArray<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>, "many">>;
+        private: z.ZodOptional<z.ZodBoolean>;
+    }, z.core.$strict>]>>;
+    indexes: z.ZodOptional<z.ZodArray<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>>;
     policies: z.ZodOptional<z.ZodObject<{
-        read: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
-        create: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
-        update: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
-        delete: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
-    }, "strict", z.ZodTypeAny, {
-        read?: string | string[] | undefined;
-        create?: string | string[] | undefined;
-        update?: string | string[] | undefined;
-        delete?: string | string[] | undefined;
-    }, {
-        read?: string | string[] | undefined;
-        create?: string | string[] | undefined;
-        update?: string | string[] | undefined;
-        delete?: string | string[] | undefined;
-    }>>;
-}, "strict", z.ZodTypeAny, {
-    fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
-        type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-        values?: string[] | undefined;
-        index?: boolean | undefined;
-        required?: boolean | undefined;
-        unique?: boolean | undefined;
-        default?: unknown;
-        to?: string | undefined;
-        onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-        renameFrom?: string | undefined;
-        secret?: boolean | undefined;
-        description?: string | undefined;
-        writable?: "admin" | "none" | undefined;
-        readonly?: boolean | undefined;
-        adminOnly?: boolean | undefined;
-    }>;
-    auth?: boolean | undefined;
-    renameFrom?: string | undefined;
-    description?: string | undefined;
-    label?: string | undefined;
-    plural?: string | undefined;
-    display?: string | undefined;
-    indexes?: (string | string[])[] | undefined;
-    policies?: {
-        read?: string | string[] | undefined;
-        create?: string | string[] | undefined;
-        update?: string | string[] | undefined;
-        delete?: string | string[] | undefined;
-    } | undefined;
-}, {
-    fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
-        type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-        values?: string[] | undefined;
-        index?: boolean | undefined;
-        required?: boolean | undefined;
-        unique?: boolean | undefined;
-        default?: unknown;
-        to?: string | undefined;
-        onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-        renameFrom?: string | undefined;
-        secret?: boolean | undefined;
-        description?: string | undefined;
-        writable?: "admin" | "none" | undefined;
-        readonly?: boolean | undefined;
-        adminOnly?: boolean | undefined;
-    }>;
-    auth?: boolean | undefined;
-    renameFrom?: string | undefined;
-    description?: string | undefined;
-    label?: string | undefined;
-    plural?: string | undefined;
-    display?: string | undefined;
-    indexes?: (string | string[])[] | undefined;
-    policies?: {
-        read?: string | string[] | undefined;
-        create?: string | string[] | undefined;
-        update?: string | string[] | undefined;
-        delete?: string | string[] | undefined;
-    } | undefined;
-}>;
-declare const brandingObject: z.ZodEffects<z.ZodObject<{
+        read: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
+        create: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
+        update: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
+        delete: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
+    }, z.core.$strict>>;
+    rateLimit: z.ZodOptional<z.ZodObject<{
+        read: z.ZodOptional<z.ZodObject<{
+            limit: z.ZodNumber;
+            window: z.ZodUnion<readonly [z.ZodString, z.ZodNumber]>;
+            per: z.ZodOptional<z.ZodEnum<{
+                ip: "ip";
+                user: "user";
+            }>>;
+        }, z.core.$strict>>;
+        create: z.ZodOptional<z.ZodObject<{
+            limit: z.ZodNumber;
+            window: z.ZodUnion<readonly [z.ZodString, z.ZodNumber]>;
+            per: z.ZodOptional<z.ZodEnum<{
+                ip: "ip";
+                user: "user";
+            }>>;
+        }, z.core.$strict>>;
+        update: z.ZodOptional<z.ZodObject<{
+            limit: z.ZodNumber;
+            window: z.ZodUnion<readonly [z.ZodString, z.ZodNumber]>;
+            per: z.ZodOptional<z.ZodEnum<{
+                ip: "ip";
+                user: "user";
+            }>>;
+        }, z.core.$strict>>;
+        delete: z.ZodOptional<z.ZodObject<{
+            limit: z.ZodNumber;
+            window: z.ZodUnion<readonly [z.ZodString, z.ZodNumber]>;
+            per: z.ZodOptional<z.ZodEnum<{
+                ip: "ip";
+                user: "user";
+            }>>;
+        }, z.core.$strict>>;
+    }, z.core.$strict>>;
+    realtime: z.ZodOptional<z.ZodUnion<readonly [z.ZodBoolean, z.ZodEnum<{
+        full: "full";
+        ids: "ids";
+    }>]>>;
+}, z.core.$strict>;
+declare const brandingObject: z.ZodObject<{
     name: z.ZodOptional<z.ZodString>;
     primaryColor: z.ZodOptional<z.ZodString>;
     accentColor: z.ZodOptional<z.ZodString>;
     logo: z.ZodOptional<z.ZodString>;
     favicon: z.ZodOptional<z.ZodString>;
-}, "strict", z.ZodTypeAny, {
-    name?: string | undefined;
-    logo?: string | undefined;
-    favicon?: string | undefined;
-    primaryColor?: string | undefined;
-    accentColor?: string | undefined;
-}, {
-    name?: string | undefined;
-    logo?: string | undefined;
-    favicon?: string | undefined;
-    primaryColor?: string | undefined;
-    accentColor?: string | undefined;
-}>, {
-    name?: string | undefined;
-    logo?: string | undefined;
-    favicon?: string | undefined;
-    primaryColor?: string | undefined;
-    accentColor?: string | undefined;
-}, {
-    name?: string | undefined;
-    logo?: string | undefined;
-    favicon?: string | undefined;
-    primaryColor?: string | undefined;
-    accentColor?: string | undefined;
-}>;
+}, z.core.$strict>;
 export declare const appYamlSchema: z.ZodObject<{
     app: z.ZodObject<{
         name: z.ZodString;
         version: z.ZodOptional<z.ZodString>;
         description: z.ZodOptional<z.ZodString>;
-    }, "strict", z.ZodTypeAny, {
-        name: string;
-        description?: string | undefined;
-        version?: string | undefined;
-    }, {
-        name: string;
-        description?: string | undefined;
-        version?: string | undefined;
-    }>;
-    branding: z.ZodOptional<z.ZodEffects<z.ZodObject<{
+    }, z.core.$strict>;
+    branding: z.ZodOptional<z.ZodObject<{
         name: z.ZodOptional<z.ZodString>;
         primaryColor: z.ZodOptional<z.ZodString>;
         accentColor: z.ZodOptional<z.ZodString>;
         logo: z.ZodOptional<z.ZodString>;
         favicon: z.ZodOptional<z.ZodString>;
-    }, "strict", z.ZodTypeAny, {
-        name?: string | undefined;
-        logo?: string | undefined;
-        favicon?: string | undefined;
-        primaryColor?: string | undefined;
-        accentColor?: string | undefined;
-    }, {
-        name?: string | undefined;
-        logo?: string | undefined;
-        favicon?: string | undefined;
-        primaryColor?: string | undefined;
-        accentColor?: string | undefined;
-    }>, {
-        name?: string | undefined;
-        logo?: string | undefined;
-        favicon?: string | undefined;
-        primaryColor?: string | undefined;
-        accentColor?: string | undefined;
-    }, {
-        name?: string | undefined;
-        logo?: string | undefined;
-        favicon?: string | undefined;
-        primaryColor?: string | undefined;
-        accentColor?: string | undefined;
-    }>>;
+    }, z.core.$strict>>;
     runtime: z.ZodOptional<z.ZodObject<{
-        dialect: z.ZodOptional<z.ZodEnum<["sqlite", "postgres"]>>;
+        dialect: z.ZodOptional<z.ZodEnum<{
+            sqlite: "sqlite";
+            postgres: "postgres";
+        }>>;
         host: z.ZodOptional<z.ZodString>;
         port: z.ZodOptional<z.ZodNumber>;
         sqlite: z.ZodOptional<z.ZodObject<{
             path: z.ZodString;
-        }, "strict", z.ZodTypeAny, {
-            path: string;
-        }, {
-            path: string;
-        }>>;
+        }, z.core.$strict>>;
         postgres: z.ZodOptional<z.ZodObject<{
             url: z.ZodString;
-        }, "strict", z.ZodTypeAny, {
-            url: string;
-        }, {
-            url: string;
-        }>>;
+        }, z.core.$strict>>;
         jwt: z.ZodOptional<z.ZodObject<{
             secret: z.ZodOptional<z.ZodString>;
             accessTtlSeconds: z.ZodOptional<z.ZodNumber>;
             refreshTtlSeconds: z.ZodOptional<z.ZodNumber>;
-        }, "strict", z.ZodTypeAny, {
-            secret?: string | undefined;
-            accessTtlSeconds?: number | undefined;
-            refreshTtlSeconds?: number | undefined;
-        }, {
-            secret?: string | undefined;
-            accessTtlSeconds?: number | undefined;
-            refreshTtlSeconds?: number | undefined;
-        }>>;
+        }, z.core.$strict>>;
         files: z.ZodOptional<z.ZodObject<{
-            driver: z.ZodOptional<z.ZodEnum<["local", "s3"]>>;
+            driver: z.ZodOptional<z.ZodEnum<{
+                local: "local";
+                s3: "s3";
+            }>>;
             path: z.ZodOptional<z.ZodString>;
             bucket: z.ZodOptional<z.ZodString>;
             endpoint: z.ZodOptional<z.ZodString>;
@@ -296,192 +194,62 @@ export declare const appYamlSchema: z.ZodObject<{
             virtualHostedStyle: z.ZodOptional<z.ZodBoolean>;
             pathStyle: z.ZodOptional<z.ZodBoolean>;
             maxBytes: z.ZodOptional<z.ZodNumber>;
-            allowedMimeTypes: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+            allowedMimeTypes: z.ZodOptional<z.ZodArray<z.ZodString>>;
             signedUrlTtlSeconds: z.ZodOptional<z.ZodNumber>;
-        }, "strict", z.ZodTypeAny, {
-            path?: string | undefined;
-            driver?: "local" | "s3" | undefined;
-            bucket?: string | undefined;
-            endpoint?: string | undefined;
-            accessKey?: string | undefined;
-            secretKey?: string | undefined;
-            region?: string | undefined;
-            virtualHostedStyle?: boolean | undefined;
-            pathStyle?: boolean | undefined;
-            maxBytes?: number | undefined;
-            allowedMimeTypes?: string[] | undefined;
-            signedUrlTtlSeconds?: number | undefined;
-        }, {
-            path?: string | undefined;
-            driver?: "local" | "s3" | undefined;
-            bucket?: string | undefined;
-            endpoint?: string | undefined;
-            accessKey?: string | undefined;
-            secretKey?: string | undefined;
-            region?: string | undefined;
-            virtualHostedStyle?: boolean | undefined;
-            pathStyle?: boolean | undefined;
-            maxBytes?: number | undefined;
-            allowedMimeTypes?: string[] | undefined;
-            signedUrlTtlSeconds?: number | undefined;
-        }>>;
+            rateLimit: z.ZodOptional<z.ZodObject<{
+                limit: z.ZodNumber;
+                window: z.ZodUnion<readonly [z.ZodString, z.ZodNumber]>;
+                per: z.ZodOptional<z.ZodEnum<{
+                    ip: "ip";
+                    user: "user";
+                }>>;
+            }, z.core.$strict>>;
+        }, z.core.$strict>>;
         backups: z.ZodOptional<z.ZodObject<{
             interval: z.ZodOptional<z.ZodString>;
             cron: z.ZodOptional<z.ZodString>;
             retain: z.ZodOptional<z.ZodNumber>;
             destination: z.ZodOptional<z.ZodString>;
-        }, "strict", z.ZodTypeAny, {
-            interval?: string | undefined;
-            cron?: string | undefined;
-            retain?: number | undefined;
-            destination?: string | undefined;
-        }, {
-            interval?: string | undefined;
-            cron?: string | undefined;
-            retain?: number | undefined;
-            destination?: string | undefined;
-        }>>;
+        }, z.core.$strict>>;
         alerts: z.ZodOptional<z.ZodObject<{
-            email: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
+            email: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
             webhook: z.ZodOptional<z.ZodString>;
             backupMaxAgeHours: z.ZodOptional<z.ZodNumber>;
             checkIntervalMinutes: z.ZodOptional<z.ZodNumber>;
-        }, "strict", z.ZodTypeAny, {
-            email?: string | string[] | undefined;
-            webhook?: string | undefined;
-            backupMaxAgeHours?: number | undefined;
-            checkIntervalMinutes?: number | undefined;
-        }, {
-            email?: string | string[] | undefined;
-            webhook?: string | undefined;
-            backupMaxAgeHours?: number | undefined;
-            checkIntervalMinutes?: number | undefined;
-        }>>;
+        }, z.core.$strict>>;
         cors: z.ZodOptional<z.ZodObject<{
-            origins: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
-        }, "strict", z.ZodTypeAny, {
-            origins?: string[] | undefined;
-        }, {
-            origins?: string[] | undefined;
-        }>>;
+            origins: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        }, z.core.$strict>>;
         hooks: z.ZodOptional<z.ZodString>;
+        apiDocs: z.ZodOptional<z.ZodEnum<{
+            public: "public";
+            admin: "admin";
+        }>>;
+        realtime: z.ZodOptional<z.ZodObject<{
+            broker: z.ZodOptional<z.ZodEnum<{
+                postgres: "postgres";
+                auto: "auto";
+                memory: "memory";
+            }>>;
+            maxConnections: z.ZodOptional<z.ZodNumber>;
+            maxPerUser: z.ZodOptional<z.ZodNumber>;
+            heartbeatSeconds: z.ZodOptional<z.ZodNumber>;
+            replayEvents: z.ZodOptional<z.ZodNumber>;
+            retainMinutes: z.ZodOptional<z.ZodNumber>;
+            maxBufferKb: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>>;
+        mcp: z.ZodOptional<z.ZodUnion<readonly [z.ZodBoolean, z.ZodObject<{
+            enabled: z.ZodOptional<z.ZodBoolean>;
+            sampleLimit: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>]>>;
+        trustProxy: z.ZodOptional<z.ZodUnion<readonly [z.ZodBoolean, z.ZodNumber, z.ZodArray<z.ZodString>]>>;
         webhooks: z.ZodOptional<z.ZodObject<{
             retainDays: z.ZodOptional<z.ZodNumber>;
-        }, "strict", z.ZodTypeAny, {
-            retainDays?: number | undefined;
-        }, {
-            retainDays?: number | undefined;
-        }>>;
+        }, z.core.$strict>>;
         mail: z.ZodOptional<z.ZodObject<{
             retainDays: z.ZodOptional<z.ZodNumber>;
-        }, "strict", z.ZodTypeAny, {
-            retainDays?: number | undefined;
-        }, {
-            retainDays?: number | undefined;
-        }>>;
-    }, "strict", z.ZodTypeAny, {
-        sqlite?: {
-            path: string;
-        } | undefined;
-        postgres?: {
-            url: string;
-        } | undefined;
-        webhooks?: {
-            retainDays?: number | undefined;
-        } | undefined;
-        mail?: {
-            retainDays?: number | undefined;
-        } | undefined;
-        dialect?: "sqlite" | "postgres" | undefined;
-        host?: string | undefined;
-        port?: number | undefined;
-        jwt?: {
-            secret?: string | undefined;
-            accessTtlSeconds?: number | undefined;
-            refreshTtlSeconds?: number | undefined;
-        } | undefined;
-        files?: {
-            path?: string | undefined;
-            driver?: "local" | "s3" | undefined;
-            bucket?: string | undefined;
-            endpoint?: string | undefined;
-            accessKey?: string | undefined;
-            secretKey?: string | undefined;
-            region?: string | undefined;
-            virtualHostedStyle?: boolean | undefined;
-            pathStyle?: boolean | undefined;
-            maxBytes?: number | undefined;
-            allowedMimeTypes?: string[] | undefined;
-            signedUrlTtlSeconds?: number | undefined;
-        } | undefined;
-        backups?: {
-            interval?: string | undefined;
-            cron?: string | undefined;
-            retain?: number | undefined;
-            destination?: string | undefined;
-        } | undefined;
-        alerts?: {
-            email?: string | string[] | undefined;
-            webhook?: string | undefined;
-            backupMaxAgeHours?: number | undefined;
-            checkIntervalMinutes?: number | undefined;
-        } | undefined;
-        cors?: {
-            origins?: string[] | undefined;
-        } | undefined;
-        hooks?: string | undefined;
-    }, {
-        sqlite?: {
-            path: string;
-        } | undefined;
-        postgres?: {
-            url: string;
-        } | undefined;
-        webhooks?: {
-            retainDays?: number | undefined;
-        } | undefined;
-        mail?: {
-            retainDays?: number | undefined;
-        } | undefined;
-        dialect?: "sqlite" | "postgres" | undefined;
-        host?: string | undefined;
-        port?: number | undefined;
-        jwt?: {
-            secret?: string | undefined;
-            accessTtlSeconds?: number | undefined;
-            refreshTtlSeconds?: number | undefined;
-        } | undefined;
-        files?: {
-            path?: string | undefined;
-            driver?: "local" | "s3" | undefined;
-            bucket?: string | undefined;
-            endpoint?: string | undefined;
-            accessKey?: string | undefined;
-            secretKey?: string | undefined;
-            region?: string | undefined;
-            virtualHostedStyle?: boolean | undefined;
-            pathStyle?: boolean | undefined;
-            maxBytes?: number | undefined;
-            allowedMimeTypes?: string[] | undefined;
-            signedUrlTtlSeconds?: number | undefined;
-        } | undefined;
-        backups?: {
-            interval?: string | undefined;
-            cron?: string | undefined;
-            retain?: number | undefined;
-            destination?: string | undefined;
-        } | undefined;
-        alerts?: {
-            email?: string | string[] | undefined;
-            webhook?: string | undefined;
-            backupMaxAgeHours?: number | undefined;
-            checkIntervalMinutes?: number | undefined;
-        } | undefined;
-        cors?: {
-            origins?: string[] | undefined;
-        } | undefined;
-        hooks?: string | undefined;
-    }>>;
+        }, z.core.$strict>>;
+    }, z.core.$strict>>;
     auth: z.ZodOptional<z.ZodObject<{
         entity: z.ZodOptional<z.ZodString>;
         identity: z.ZodOptional<z.ZodString>;
@@ -489,586 +257,152 @@ export declare const appYamlSchema: z.ZodObject<{
         role: z.ZodOptional<z.ZodString>;
         adminRole: z.ZodOptional<z.ZodString>;
         requireVerifiedEmail: z.ZodOptional<z.ZodBoolean>;
-    }, "strict", z.ZodTypeAny, {
-        password?: string | undefined;
-        role?: string | undefined;
-        entity?: string | undefined;
-        identity?: string | undefined;
-        adminRole?: string | undefined;
-        requireVerifiedEmail?: boolean | undefined;
-    }, {
-        password?: string | undefined;
-        role?: string | undefined;
-        entity?: string | undefined;
-        identity?: string | undefined;
-        adminRole?: string | undefined;
-        requireVerifiedEmail?: boolean | undefined;
-    }>>;
-    entities: z.ZodEffects<z.ZodRecord<z.ZodString, z.ZodObject<{
+        signup: z.ZodOptional<z.ZodEnum<{
+            open: "open";
+            invite: "invite";
+            closed: "closed";
+        }>>;
+    }, z.core.$strict>>;
+    entities: z.ZodRecord<z.ZodString, z.ZodObject<{
         label: z.ZodOptional<z.ZodString>;
         plural: z.ZodOptional<z.ZodString>;
         display: z.ZodOptional<z.ZodString>;
         description: z.ZodOptional<z.ZodString>;
         auth: z.ZodOptional<z.ZodBoolean>;
         renameFrom: z.ZodOptional<z.ZodString>;
-        fields: z.ZodRecord<z.ZodString, z.ZodUnion<[z.ZodEnum<["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"]>, z.ZodObject<{
-            type: z.ZodEnum<["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"]>;
+        fields: z.ZodRecord<z.ZodString, z.ZodUnion<readonly [z.ZodEnum<{
+            number: "number";
+            boolean: "boolean";
+            text: "text";
+            email: "email";
+            password: "password";
+            integer: "integer";
+            date: "date";
+            datetime: "datetime";
+            enum: "enum";
+            file: "file";
+            relation: "relation";
+        }>, z.ZodObject<{
+            type: z.ZodEnum<{
+                number: "number";
+                boolean: "boolean";
+                text: "text";
+                email: "email";
+                password: "password";
+                integer: "integer";
+                date: "date";
+                datetime: "datetime";
+                enum: "enum";
+                file: "file";
+                relation: "relation";
+            }>;
             required: z.ZodOptional<z.ZodBoolean>;
             unique: z.ZodOptional<z.ZodBoolean>;
             index: z.ZodOptional<z.ZodBoolean>;
             default: z.ZodOptional<z.ZodUnknown>;
-            values: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+            values: z.ZodOptional<z.ZodArray<z.ZodString>>;
             to: z.ZodOptional<z.ZodString>;
-            onDelete: z.ZodOptional<z.ZodEnum<["restrict", "cascade", "set_null"]>>;
+            onDelete: z.ZodOptional<z.ZodEnum<{
+                restrict: "restrict";
+                cascade: "cascade";
+                set_null: "set_null";
+            }>>;
+            many: z.ZodOptional<z.ZodBoolean>;
             renameFrom: z.ZodOptional<z.ZodString>;
             secret: z.ZodOptional<z.ZodBoolean>;
             description: z.ZodOptional<z.ZodString>;
-            writable: z.ZodOptional<z.ZodEnum<["admin", "none"]>>;
+            writable: z.ZodOptional<z.ZodEnum<{
+                admin: "admin";
+                none: "none";
+            }>>;
             readonly: z.ZodOptional<z.ZodBoolean>;
             adminOnly: z.ZodOptional<z.ZodBoolean>;
-        }, "strict", z.ZodTypeAny, {
-            type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            values?: string[] | undefined;
-            index?: boolean | undefined;
-            required?: boolean | undefined;
-            unique?: boolean | undefined;
-            default?: unknown;
-            to?: string | undefined;
-            onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-            renameFrom?: string | undefined;
-            secret?: boolean | undefined;
-            description?: string | undefined;
-            writable?: "admin" | "none" | undefined;
-            readonly?: boolean | undefined;
-            adminOnly?: boolean | undefined;
-        }, {
-            type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            values?: string[] | undefined;
-            index?: boolean | undefined;
-            required?: boolean | undefined;
-            unique?: boolean | undefined;
-            default?: unknown;
-            to?: string | undefined;
-            onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-            renameFrom?: string | undefined;
-            secret?: boolean | undefined;
-            description?: string | undefined;
-            writable?: "admin" | "none" | undefined;
-            readonly?: boolean | undefined;
-            adminOnly?: boolean | undefined;
-        }>]>>;
-        indexes: z.ZodOptional<z.ZodArray<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>, "many">>;
+            private: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strict>]>>;
+        indexes: z.ZodOptional<z.ZodArray<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>>;
         policies: z.ZodOptional<z.ZodObject<{
-            read: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
-            create: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
-            update: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
-            delete: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
-        }, "strict", z.ZodTypeAny, {
-            read?: string | string[] | undefined;
-            create?: string | string[] | undefined;
-            update?: string | string[] | undefined;
-            delete?: string | string[] | undefined;
-        }, {
-            read?: string | string[] | undefined;
-            create?: string | string[] | undefined;
-            update?: string | string[] | undefined;
-            delete?: string | string[] | undefined;
-        }>>;
-    }, "strict", z.ZodTypeAny, {
-        fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
-            type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            values?: string[] | undefined;
-            index?: boolean | undefined;
-            required?: boolean | undefined;
-            unique?: boolean | undefined;
-            default?: unknown;
-            to?: string | undefined;
-            onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-            renameFrom?: string | undefined;
-            secret?: boolean | undefined;
-            description?: string | undefined;
-            writable?: "admin" | "none" | undefined;
-            readonly?: boolean | undefined;
-            adminOnly?: boolean | undefined;
-        }>;
-        auth?: boolean | undefined;
-        renameFrom?: string | undefined;
-        description?: string | undefined;
-        label?: string | undefined;
-        plural?: string | undefined;
-        display?: string | undefined;
-        indexes?: (string | string[])[] | undefined;
-        policies?: {
-            read?: string | string[] | undefined;
-            create?: string | string[] | undefined;
-            update?: string | string[] | undefined;
-            delete?: string | string[] | undefined;
-        } | undefined;
-    }, {
-        fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
-            type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            values?: string[] | undefined;
-            index?: boolean | undefined;
-            required?: boolean | undefined;
-            unique?: boolean | undefined;
-            default?: unknown;
-            to?: string | undefined;
-            onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-            renameFrom?: string | undefined;
-            secret?: boolean | undefined;
-            description?: string | undefined;
-            writable?: "admin" | "none" | undefined;
-            readonly?: boolean | undefined;
-            adminOnly?: boolean | undefined;
-        }>;
-        auth?: boolean | undefined;
-        renameFrom?: string | undefined;
-        description?: string | undefined;
-        label?: string | undefined;
-        plural?: string | undefined;
-        display?: string | undefined;
-        indexes?: (string | string[])[] | undefined;
-        policies?: {
-            read?: string | string[] | undefined;
-            create?: string | string[] | undefined;
-            update?: string | string[] | undefined;
-            delete?: string | string[] | undefined;
-        } | undefined;
-    }>>, Record<string, {
-        fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
-            type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            values?: string[] | undefined;
-            index?: boolean | undefined;
-            required?: boolean | undefined;
-            unique?: boolean | undefined;
-            default?: unknown;
-            to?: string | undefined;
-            onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-            renameFrom?: string | undefined;
-            secret?: boolean | undefined;
-            description?: string | undefined;
-            writable?: "admin" | "none" | undefined;
-            readonly?: boolean | undefined;
-            adminOnly?: boolean | undefined;
-        }>;
-        auth?: boolean | undefined;
-        renameFrom?: string | undefined;
-        description?: string | undefined;
-        label?: string | undefined;
-        plural?: string | undefined;
-        display?: string | undefined;
-        indexes?: (string | string[])[] | undefined;
-        policies?: {
-            read?: string | string[] | undefined;
-            create?: string | string[] | undefined;
-            update?: string | string[] | undefined;
-            delete?: string | string[] | undefined;
-        } | undefined;
-    }>, Record<string, {
-        fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
-            type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            values?: string[] | undefined;
-            index?: boolean | undefined;
-            required?: boolean | undefined;
-            unique?: boolean | undefined;
-            default?: unknown;
-            to?: string | undefined;
-            onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-            renameFrom?: string | undefined;
-            secret?: boolean | undefined;
-            description?: string | undefined;
-            writable?: "admin" | "none" | undefined;
-            readonly?: boolean | undefined;
-            adminOnly?: boolean | undefined;
-        }>;
-        auth?: boolean | undefined;
-        renameFrom?: string | undefined;
-        description?: string | undefined;
-        label?: string | undefined;
-        plural?: string | undefined;
-        display?: string | undefined;
-        indexes?: (string | string[])[] | undefined;
-        policies?: {
-            read?: string | string[] | undefined;
-            create?: string | string[] | undefined;
-            update?: string | string[] | undefined;
-            delete?: string | string[] | undefined;
-        } | undefined;
-    }>>;
+            read: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
+            create: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
+            update: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
+            delete: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
+        }, z.core.$strict>>;
+        rateLimit: z.ZodOptional<z.ZodObject<{
+            read: z.ZodOptional<z.ZodObject<{
+                limit: z.ZodNumber;
+                window: z.ZodUnion<readonly [z.ZodString, z.ZodNumber]>;
+                per: z.ZodOptional<z.ZodEnum<{
+                    ip: "ip";
+                    user: "user";
+                }>>;
+            }, z.core.$strict>>;
+            create: z.ZodOptional<z.ZodObject<{
+                limit: z.ZodNumber;
+                window: z.ZodUnion<readonly [z.ZodString, z.ZodNumber]>;
+                per: z.ZodOptional<z.ZodEnum<{
+                    ip: "ip";
+                    user: "user";
+                }>>;
+            }, z.core.$strict>>;
+            update: z.ZodOptional<z.ZodObject<{
+                limit: z.ZodNumber;
+                window: z.ZodUnion<readonly [z.ZodString, z.ZodNumber]>;
+                per: z.ZodOptional<z.ZodEnum<{
+                    ip: "ip";
+                    user: "user";
+                }>>;
+            }, z.core.$strict>>;
+            delete: z.ZodOptional<z.ZodObject<{
+                limit: z.ZodNumber;
+                window: z.ZodUnion<readonly [z.ZodString, z.ZodNumber]>;
+                per: z.ZodOptional<z.ZodEnum<{
+                    ip: "ip";
+                    user: "user";
+                }>>;
+            }, z.core.$strict>>;
+        }, z.core.$strict>>;
+        realtime: z.ZodOptional<z.ZodUnion<readonly [z.ZodBoolean, z.ZodEnum<{
+            full: "full";
+            ids: "ids";
+        }>]>>;
+    }, z.core.$strict>>;
     webhooks: z.ZodOptional<z.ZodArray<z.ZodObject<{
-        entity: z.ZodUnion<[z.ZodString, z.ZodLiteral<"*">]>;
-        events: z.ZodArray<z.ZodEnum<["create", "update", "delete"]>, "many">;
+        entity: z.ZodUnion<readonly [z.ZodString, z.ZodLiteral<"*">]>;
+        events: z.ZodArray<z.ZodEnum<{
+            create: "create";
+            update: "update";
+            delete: "delete";
+        }>>;
         url: z.ZodString;
         secret: z.ZodOptional<z.ZodString>;
         maxAttempts: z.ZodOptional<z.ZodNumber>;
         timeoutMs: z.ZodOptional<z.ZodNumber>;
-    }, "strict", z.ZodTypeAny, {
-        entity: string;
-        events: ("create" | "update" | "delete")[];
-        url: string;
-        secret?: string | undefined;
-        maxAttempts?: number | undefined;
-        timeoutMs?: number | undefined;
-    }, {
-        entity: string;
-        events: ("create" | "update" | "delete")[];
-        url: string;
-        secret?: string | undefined;
-        maxAttempts?: number | undefined;
-        timeoutMs?: number | undefined;
-    }>, "many">>;
+    }, z.core.$strict>>>;
     mail: z.ZodOptional<z.ZodArray<z.ZodObject<{
         name: z.ZodOptional<z.ZodString>;
         entity: z.ZodString;
-        events: z.ZodArray<z.ZodEnum<["create", "update", "delete"]>, "many">;
-        to: z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>;
-        cc: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
-        bcc: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
+        events: z.ZodArray<z.ZodEnum<{
+            create: "create";
+            update: "update";
+            delete: "delete";
+        }>>;
+        to: z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>;
+        cc: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
+        bcc: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodArray<z.ZodString>]>>;
         replyTo: z.ZodOptional<z.ZodString>;
         subject: z.ZodOptional<z.ZodString>;
         template: z.ZodString;
-        when: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnion<[z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>, z.ZodEffects<z.ZodObject<{
-            equals: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>>;
-            not: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>>;
-            in: z.ZodOptional<z.ZodArray<z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>, "many">>;
-            notIn: z.ZodOptional<z.ZodArray<z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>, "many">>;
+        when: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnion<readonly [z.ZodUnion<readonly [z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>, z.ZodObject<{
+            equals: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>>;
+            not: z.ZodOptional<z.ZodUnion<readonly [z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>>;
+            in: z.ZodOptional<z.ZodArray<z.ZodUnion<readonly [z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>>>;
+            notIn: z.ZodOptional<z.ZodArray<z.ZodUnion<readonly [z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>>>;
             exists: z.ZodOptional<z.ZodBoolean>;
-        }, "strict", z.ZodTypeAny, {
-            equals?: string | number | boolean | null | undefined;
-            not?: string | number | boolean | null | undefined;
-            in?: (string | number | boolean | null)[] | undefined;
-            notIn?: (string | number | boolean | null)[] | undefined;
-            exists?: boolean | undefined;
-        }, {
-            equals?: string | number | boolean | null | undefined;
-            not?: string | number | boolean | null | undefined;
-            in?: (string | number | boolean | null)[] | undefined;
-            notIn?: (string | number | boolean | null)[] | undefined;
-            exists?: boolean | undefined;
-        }>, {
-            equals?: string | number | boolean | null | undefined;
-            not?: string | number | boolean | null | undefined;
-            in?: (string | number | boolean | null)[] | undefined;
-            notIn?: (string | number | boolean | null)[] | undefined;
-            exists?: boolean | undefined;
-        }, {
-            equals?: string | number | boolean | null | undefined;
-            not?: string | number | boolean | null | undefined;
-            in?: (string | number | boolean | null)[] | undefined;
-            notIn?: (string | number | boolean | null)[] | undefined;
-            exists?: boolean | undefined;
-        }>]>>>;
-        changed: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
-        expand: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        }, z.core.$strict>]>>>;
+        changed: z.ZodOptional<z.ZodArray<z.ZodString>>;
+        expand: z.ZodOptional<z.ZodArray<z.ZodString>>;
         maxAttempts: z.ZodOptional<z.ZodNumber>;
-    }, "strict", z.ZodTypeAny, {
-        entity: string;
-        to: string | string[];
-        events: ("create" | "update" | "delete")[];
-        template: string;
-        name?: string | undefined;
-        maxAttempts?: number | undefined;
-        cc?: string | string[] | undefined;
-        bcc?: string | string[] | undefined;
-        replyTo?: string | undefined;
-        subject?: string | undefined;
-        when?: Record<string, string | number | boolean | {
-            equals?: string | number | boolean | null | undefined;
-            not?: string | number | boolean | null | undefined;
-            in?: (string | number | boolean | null)[] | undefined;
-            notIn?: (string | number | boolean | null)[] | undefined;
-            exists?: boolean | undefined;
-        } | null> | undefined;
-        changed?: string[] | undefined;
-        expand?: string[] | undefined;
-    }, {
-        entity: string;
-        to: string | string[];
-        events: ("create" | "update" | "delete")[];
-        template: string;
-        name?: string | undefined;
-        maxAttempts?: number | undefined;
-        cc?: string | string[] | undefined;
-        bcc?: string | string[] | undefined;
-        replyTo?: string | undefined;
-        subject?: string | undefined;
-        when?: Record<string, string | number | boolean | {
-            equals?: string | number | boolean | null | undefined;
-            not?: string | number | boolean | null | undefined;
-            in?: (string | number | boolean | null)[] | undefined;
-            notIn?: (string | number | boolean | null)[] | undefined;
-            exists?: boolean | undefined;
-        } | null> | undefined;
-        changed?: string[] | undefined;
-        expand?: string[] | undefined;
-    }>, "many">>;
-}, "strict", z.ZodTypeAny, {
-    app: {
-        name: string;
-        description?: string | undefined;
-        version?: string | undefined;
-    };
-    entities: Record<string, {
-        fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
-            type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            values?: string[] | undefined;
-            index?: boolean | undefined;
-            required?: boolean | undefined;
-            unique?: boolean | undefined;
-            default?: unknown;
-            to?: string | undefined;
-            onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-            renameFrom?: string | undefined;
-            secret?: boolean | undefined;
-            description?: string | undefined;
-            writable?: "admin" | "none" | undefined;
-            readonly?: boolean | undefined;
-            adminOnly?: boolean | undefined;
-        }>;
-        auth?: boolean | undefined;
-        renameFrom?: string | undefined;
-        description?: string | undefined;
-        label?: string | undefined;
-        plural?: string | undefined;
-        display?: string | undefined;
-        indexes?: (string | string[])[] | undefined;
-        policies?: {
-            read?: string | string[] | undefined;
-            create?: string | string[] | undefined;
-            update?: string | string[] | undefined;
-            delete?: string | string[] | undefined;
-        } | undefined;
-    }>;
-    branding?: {
-        name?: string | undefined;
-        logo?: string | undefined;
-        favicon?: string | undefined;
-        primaryColor?: string | undefined;
-        accentColor?: string | undefined;
-    } | undefined;
-    runtime?: {
-        sqlite?: {
-            path: string;
-        } | undefined;
-        postgres?: {
-            url: string;
-        } | undefined;
-        webhooks?: {
-            retainDays?: number | undefined;
-        } | undefined;
-        mail?: {
-            retainDays?: number | undefined;
-        } | undefined;
-        dialect?: "sqlite" | "postgres" | undefined;
-        host?: string | undefined;
-        port?: number | undefined;
-        jwt?: {
-            secret?: string | undefined;
-            accessTtlSeconds?: number | undefined;
-            refreshTtlSeconds?: number | undefined;
-        } | undefined;
-        files?: {
-            path?: string | undefined;
-            driver?: "local" | "s3" | undefined;
-            bucket?: string | undefined;
-            endpoint?: string | undefined;
-            accessKey?: string | undefined;
-            secretKey?: string | undefined;
-            region?: string | undefined;
-            virtualHostedStyle?: boolean | undefined;
-            pathStyle?: boolean | undefined;
-            maxBytes?: number | undefined;
-            allowedMimeTypes?: string[] | undefined;
-            signedUrlTtlSeconds?: number | undefined;
-        } | undefined;
-        backups?: {
-            interval?: string | undefined;
-            cron?: string | undefined;
-            retain?: number | undefined;
-            destination?: string | undefined;
-        } | undefined;
-        alerts?: {
-            email?: string | string[] | undefined;
-            webhook?: string | undefined;
-            backupMaxAgeHours?: number | undefined;
-            checkIntervalMinutes?: number | undefined;
-        } | undefined;
-        cors?: {
-            origins?: string[] | undefined;
-        } | undefined;
-        hooks?: string | undefined;
-    } | undefined;
-    auth?: {
-        password?: string | undefined;
-        role?: string | undefined;
-        entity?: string | undefined;
-        identity?: string | undefined;
-        adminRole?: string | undefined;
-        requireVerifiedEmail?: boolean | undefined;
-    } | undefined;
-    webhooks?: {
-        entity: string;
-        events: ("create" | "update" | "delete")[];
-        url: string;
-        secret?: string | undefined;
-        maxAttempts?: number | undefined;
-        timeoutMs?: number | undefined;
-    }[] | undefined;
-    mail?: {
-        entity: string;
-        to: string | string[];
-        events: ("create" | "update" | "delete")[];
-        template: string;
-        name?: string | undefined;
-        maxAttempts?: number | undefined;
-        cc?: string | string[] | undefined;
-        bcc?: string | string[] | undefined;
-        replyTo?: string | undefined;
-        subject?: string | undefined;
-        when?: Record<string, string | number | boolean | {
-            equals?: string | number | boolean | null | undefined;
-            not?: string | number | boolean | null | undefined;
-            in?: (string | number | boolean | null)[] | undefined;
-            notIn?: (string | number | boolean | null)[] | undefined;
-            exists?: boolean | undefined;
-        } | null> | undefined;
-        changed?: string[] | undefined;
-        expand?: string[] | undefined;
-    }[] | undefined;
-}, {
-    app: {
-        name: string;
-        description?: string | undefined;
-        version?: string | undefined;
-    };
-    entities: Record<string, {
-        fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
-            type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            values?: string[] | undefined;
-            index?: boolean | undefined;
-            required?: boolean | undefined;
-            unique?: boolean | undefined;
-            default?: unknown;
-            to?: string | undefined;
-            onDelete?: "restrict" | "cascade" | "set_null" | undefined;
-            renameFrom?: string | undefined;
-            secret?: boolean | undefined;
-            description?: string | undefined;
-            writable?: "admin" | "none" | undefined;
-            readonly?: boolean | undefined;
-            adminOnly?: boolean | undefined;
-        }>;
-        auth?: boolean | undefined;
-        renameFrom?: string | undefined;
-        description?: string | undefined;
-        label?: string | undefined;
-        plural?: string | undefined;
-        display?: string | undefined;
-        indexes?: (string | string[])[] | undefined;
-        policies?: {
-            read?: string | string[] | undefined;
-            create?: string | string[] | undefined;
-            update?: string | string[] | undefined;
-            delete?: string | string[] | undefined;
-        } | undefined;
-    }>;
-    branding?: {
-        name?: string | undefined;
-        logo?: string | undefined;
-        favicon?: string | undefined;
-        primaryColor?: string | undefined;
-        accentColor?: string | undefined;
-    } | undefined;
-    runtime?: {
-        sqlite?: {
-            path: string;
-        } | undefined;
-        postgres?: {
-            url: string;
-        } | undefined;
-        webhooks?: {
-            retainDays?: number | undefined;
-        } | undefined;
-        mail?: {
-            retainDays?: number | undefined;
-        } | undefined;
-        dialect?: "sqlite" | "postgres" | undefined;
-        host?: string | undefined;
-        port?: number | undefined;
-        jwt?: {
-            secret?: string | undefined;
-            accessTtlSeconds?: number | undefined;
-            refreshTtlSeconds?: number | undefined;
-        } | undefined;
-        files?: {
-            path?: string | undefined;
-            driver?: "local" | "s3" | undefined;
-            bucket?: string | undefined;
-            endpoint?: string | undefined;
-            accessKey?: string | undefined;
-            secretKey?: string | undefined;
-            region?: string | undefined;
-            virtualHostedStyle?: boolean | undefined;
-            pathStyle?: boolean | undefined;
-            maxBytes?: number | undefined;
-            allowedMimeTypes?: string[] | undefined;
-            signedUrlTtlSeconds?: number | undefined;
-        } | undefined;
-        backups?: {
-            interval?: string | undefined;
-            cron?: string | undefined;
-            retain?: number | undefined;
-            destination?: string | undefined;
-        } | undefined;
-        alerts?: {
-            email?: string | string[] | undefined;
-            webhook?: string | undefined;
-            backupMaxAgeHours?: number | undefined;
-            checkIntervalMinutes?: number | undefined;
-        } | undefined;
-        cors?: {
-            origins?: string[] | undefined;
-        } | undefined;
-        hooks?: string | undefined;
-    } | undefined;
-    auth?: {
-        password?: string | undefined;
-        role?: string | undefined;
-        entity?: string | undefined;
-        identity?: string | undefined;
-        adminRole?: string | undefined;
-        requireVerifiedEmail?: boolean | undefined;
-    } | undefined;
-    webhooks?: {
-        entity: string;
-        events: ("create" | "update" | "delete")[];
-        url: string;
-        secret?: string | undefined;
-        maxAttempts?: number | undefined;
-        timeoutMs?: number | undefined;
-    }[] | undefined;
-    mail?: {
-        entity: string;
-        to: string | string[];
-        events: ("create" | "update" | "delete")[];
-        template: string;
-        name?: string | undefined;
-        maxAttempts?: number | undefined;
-        cc?: string | string[] | undefined;
-        bcc?: string | string[] | undefined;
-        replyTo?: string | undefined;
-        subject?: string | undefined;
-        when?: Record<string, string | number | boolean | {
-            equals?: string | number | boolean | null | undefined;
-            not?: string | number | boolean | null | undefined;
-            in?: (string | number | boolean | null)[] | undefined;
-            notIn?: (string | number | boolean | null)[] | undefined;
-            exists?: boolean | undefined;
-        } | null> | undefined;
-        changed?: string[] | undefined;
-        expand?: string[] | undefined;
-    }[] | undefined;
-}>;
+    }, z.core.$strict>>>;
+}, z.core.$strict>;
 export type AppYaml = z.infer<typeof appYamlSchema>;
 export type RawEntity = z.infer<typeof entityObject>;
 export type RawField = z.infer<typeof fieldObject>;

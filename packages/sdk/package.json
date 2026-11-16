@@ -1,7 +1,7 @@
 {
   "name": "@bakorin/sdk",
   "version": "0.0.1",
-  "description": "Typed client for a Bakorin API, with Astro and Next.js helpers",
+  "description": "Typed client for a Bakorin API, with Astro and Next.js helpers, headless stores, React hooks, and components",
   "license": "MIT",
   "author": "Melton Studios",
   "type": "module",
@@ -37,16 +37,44 @@
       "import": "./dist/proxy.js",
       "bun": "./src/proxy.ts",
       "default": "./dist/proxy.js"
-    }
+    },
+    "./headless": {
+      "types": "./dist/headless.d.ts",
+      "import": "./dist/headless.js",
+      "bun": "./src/headless.ts",
+      "default": "./dist/headless.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "import": "./dist/react.js",
+      "bun": "./src/react.ts",
+      "default": "./dist/react.js"
+    },
+    "./elements": {
+      "types": "./dist/elements.d.ts",
+      "import": "./dist/elements.js",
+      "bun": "./src/elements.ts",
+      "default": "./dist/elements.js"
+    },
+    "./astro-render": {
+      "types": "./dist/astro-render.d.ts",
+      "import": "./dist/astro-render.js",
+      "bun": "./src/astro-render.ts",
+      "default": "./dist/astro-render.js"
+    },
+    "./astro/*": "./astro/*",
+    "./styles.css": "./styles.css"
   },
   "files": [
     "dist",
     "src",
+    "astro",
+    "styles.css",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun build src/index.ts src/astro.ts src/next.ts src/browser.ts src/proxy.ts --outdir dist --format esm --target node && bunx tsc -p tsconfig.json --emitDeclarationOnly --declaration --allowImportingTsExtensions",
+    "build": "bun scripts/build.ts",
     "prepublishOnly": "bun run build"
   },
   "publishConfig": {
@@ -69,6 +97,28 @@
     "bakorin",
     "sdk",
     "astro",
-    "next"
-  ]
+    "astro-component",
+    "next",
+    "react"
+  ],
+  "sideEffects": [
+    "./dist/elements.js",
+    "./src/elements.ts",
+    "./src/elements/index.ts",
+    "./styles.css",
+    "*.astro",
+    "./dist/chunks/*.js"
+  ],
+  "peerDependencies": {
+    "react": ">=18",
+    "astro": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
+    "astro": {
+      "optional": true
+    }
+  }
 }

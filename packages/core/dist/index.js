@@ -1,5 +1,15 @@
 // src/ast.ts
 var SCHEMA_AST_VERSION = 1;
+var REALTIME_DEFAULTS = {
+  broker: "auto",
+  maxConnections: 1e4,
+  maxPerUser: 20,
+  heartbeatSeconds: 15,
+  replayEvents: 1000,
+  retainMinutes: 10,
+  maxBufferKb: 1024
+};
+var MCP_DEFAULTS = { enabled: false, sampleLimit: 5 };
 var WEBHOOK_DEFAULT_MAX_ATTEMPTS = 10;
 var WEBHOOK_DEFAULT_TIMEOUT_MS = 1e4;
 var WEBHOOK_DEFAULT_RETAIN_DAYS = 30;
@@ -411,6 +421,9 @@ function topologicalLayers(entities) {
       if (!names.has(target)) {
         throw new SchemaError(`entity ${entity.name} field ${field.name} relates to unknown entity ${target}`);
       }
+      if (field.relation?.many) {
+        continue;
+      }
       incoming.get(entity.name)?.add(target);
     }
   }
@@ -468,14 +481,31 @@ var fieldObject = z.object({
   values: z.array(z.string().min(1)).min(1).optional(),
   to: ident.optional(),
   onDelete: z.enum(["restrict", "cascade", "set_null"]).optional(),
+  many: z.boolean().optional(),
   renameFrom: ident.optional(),
   secret: z.boolean().optional(),
   description: z.string().optional(),
   writable: z.enum(["admin", "none"]).optional(),
   readonly: z.boolean().optional(),
-  adminOnly: z.boolean().optional()
+  adminOnly: z.boolean().optional(),
+  private: z.boolean().optional()
 }).strict();
 var fieldValue = z.union([fieldType, fieldObject]);
+var RATE_WINDOW_PATTERN = /^([1-9][0-9]{0,5})(s|m|h|d)$/;
+var rateLimitRule = z.object({
+  limit: z.number().int().min(1).max(1e6),
+  window: z.union([
+    z.string().regex(RATE_WINDOW_PATTERN, "must be a window like 30s, 10m, 1h, or 1d"),
+    z.number().int().min(1).max(7 * 24 * 60 * 60)
+  ]),
+  per: z.enum(["ip", "user"]).optional()
+}).strict();
+var entityRateLimit = z.object({
+  read: rateLimitRule.optional(),
+  create: rateLimitRule.optional(),
+  update: rateLimitRule.optional(),
+  delete: rateLimitRule.optional()
+}).strict().refine((value) => Object.keys(value).length > 0, { message: "add at least one of read, create, update, or delete" });
 var entityObject = z.object({
   label: z.string().optional(),
   plural: z.string().optional(),
@@ -490,7 +520,9 @@ var entityObject = z.object({
     create: policyValue.optional(),
     update: policyValue.optional(),
     delete: policyValue.optional()
-  }).strict().optional()
+  }).strict().optional(),
+  rateLimit: entityRateLimit.optional(),
+  realtime: z.union([z.boolean(), z.enum(["full", "ids"])]).optional()
 }).strict();
 var webhookObject = z.object({
   entity: z.union([ident, z.literal("*")]),
@@ -530,7 +562,7 @@ var mailRuleObject = z.object({
   maxAttempts: z.number().int().min(1).max(100).optional()
 }).strict();
 var hexColor = z.string({
-  invalid_type_error: 'must be a quoted hex color like "#0f766e" (without quotes, # starts a YAML comment)'
+  error: (issue) => issue.input === undefined ? undefined : 'must be a quoted hex color like "#0f766e" (without quotes, # starts a YAML comment)'
 }).regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "must be a hex color like #0f766e or #0a7");
 function brandingFile(kind, extensions) {
   const pattern = new RegExp(`^(?:\\./)?branding/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.(?:${extensions.join("|")})$`, "i");
@@ -579,7 +611,8 @@ var appYamlSchema = z.object({
       pathStyle: z.boolean().optional(),
       maxBytes: z.number().int().positive().optional(),
       allowedMimeTypes: z.array(z.string().min(1)).optional(),
-      signedUrlTtlSeconds: z.number().int().positive().optional()
+      signedUrlTtlSeconds: z.number().int().positive().optional(),
+      rateLimit: rateLimitRule.optional()
     }).strict().optional(),
     backups: z.object({
       interval: z.string().optional(),
@@ -597,6 +630,24 @@ var appYamlSchema = z.object({
       origins: z.array(z.string()).optional()
     }).strict().optional(),
     hooks: z.string().optional(),
+    apiDocs: z.enum(["public", "admin"]).optional(),
+    realtime: z.object({
+      broker: z.enum(["auto", "memory", "postgres"]).optional(),
+      maxConnections: z.number().int().min(1).max(1e6).optional(),
+      maxPerUser: z.number().int().min(1).max(1e4).optional(),
+      heartbeatSeconds: z.number().int().min(1).max(300).optional(),
+      replayEvents: z.number().int().min(0).max(1e5).optional(),
+      retainMinutes: z.number().int().min(1).max(10080).optional(),
+      maxBufferKb: z.number().int().min(1).max(65536).optional()
+    }).strict().optional(),
+    mcp: z.union([
+      z.boolean(),
+      z.object({
+        enabled: z.boolean().optional(),
+        sampleLimit: z.number().int().min(1).max(50).optional()
+      }).strict()
+    ]).optional(),
+    trustProxy: z.union([z.boolean(), z.number().int().min(0).max(10), z.array(z.string().min(1)).min(1)]).optional(),
     webhooks: z.object({
       retainDays: z.number().int().min(1).max(3650).optional()
     }).strict().optional(),
@@ -610,7 +661,8 @@ var appYamlSchema = z.object({
     password: ident.optional(),
     role: ident.optional(),
     adminRole: z.string().optional(),
-    requireVerifiedEmail: z.boolean().optional()
+    requireVerifiedEmail: z.boolean().optional(),
+    signup: z.enum(["open", "invite", "closed"]).optional()
   }).strict().optional(),
   entities: z.record(ident, entityObject).refine((value) => Object.keys(value).length > 0, {
     message: "at least one entity is required"
@@ -658,22 +710,31 @@ function prefixLines(message) {
 function flattenZodIssues(error) {
   const out = [];
   for (const issue of error.issues) {
-    if (issue.code === "invalid_union") {
-      const children = issue.unionErrors.flatMap((child) => flattenZodIssues(child));
-      out.push(...preferUsefulIssues(children, issue.path));
-      continue;
-    }
-    out.push(issue);
+    out.push(...flattenIssue(issue, []));
   }
   return out;
 }
+function flattenIssue(issue, prefix) {
+  const path = [...prefix, ...issue.path];
+  if (issue.code === "invalid_union") {
+    const children = issue.errors.flatMap((branch) => branch.flatMap((child) => flattenIssue(child, path)));
+    return preferUsefulIssues(children, path);
+  }
+  if (issue.code === "invalid_key") {
+    return issue.issues.flatMap((child) => flattenIssue(child, path));
+  }
+  if (issue.code === "invalid_element") {
+    return issue.issues.flatMap((child) => flattenIssue(child, [...path, issue.key]));
+  }
+  return [{ ...issue, path }];
+}
 function preferUsefulIssues(issues, path) {
-  const ranked = issues.filter((issue) => issue.code === "unrecognized_keys" || issue.code === "invalid_enum_value" || issue.code === "invalid_string" && issue.path.length >= path.length);
+  const ranked = issues.filter((issue) => issue.code === "unrecognized_keys" || issue.code === "invalid_value" && (issue.input === null || typeof issue.input !== "object") || issue.code === "invalid_format" && issue.path.length >= path.length);
   if (ranked.length > 0) {
     return ranked;
   }
-  const first = issues[0];
-  return first ? [first] : [];
+  const deepest = issues.reduce((best, issue) => !best || issue.path.length > best.path.length ? issue : best, undefined);
+  return deepest ? [deepest] : [];
 }
 function looksLikeEntityName(key) {
   return IDENT2.test(key) && !TOP_LEVEL.has(key);
@@ -682,10 +743,10 @@ function pathLabel(path) {
   return path.map(String).join(".");
 }
 function isFieldTypeIssue(issue) {
-  if (issue.code !== "invalid_enum_value") {
+  if (issue.code !== "invalid_value") {
     return false;
   }
-  const options = issue.options.map(String);
+  const options = issue.values.map(String);
   return options.every((option) => FIELD_TYPE_SET.has(option)) && FIELD_TYPES.every((type) => options.includes(type));
 }
 function formatIssue(issue) {
@@ -705,16 +766,16 @@ function formatIssue(issue) {
         }
         return `app.yaml: unknown key "${key}"${at}`;
       });
-    case "invalid_enum_value": {
+    case "invalid_value": {
       if (isFieldTypeIssue(issue)) {
         return [
-          `app.yaml: unknown field type ${JSON.stringify(issue.received)}${at}. Valid types: ${FIELD_TYPES.join(", ")}`
+          `app.yaml: unknown field type ${JSON.stringify(issue.input)}${at}. Valid types: ${FIELD_TYPES.join(", ")}`
         ];
       }
-      return [`app.yaml: invalid value ${JSON.stringify(issue.received)}${at}. Expected ${issue.options.join(", ")}`];
+      return [`app.yaml: invalid value ${JSON.stringify(issue.input)}${at}. Expected ${issue.values.map(String).join(", ")}`];
     }
     case "invalid_type": {
-      if (issue.received === "undefined") {
+      if (issue.input === undefined) {
         if (issue.path.length === 1 && issue.path[0] === "entities") {
           return [`app.yaml: missing "entities". At least one entity is required.`];
         }
@@ -726,7 +787,7 @@ function formatIssue(issue) {
       if (issue.path[0] === "branding" && /Color$/.test(String(issue.path[1] ?? ""))) {
         return [`app.yaml: ${path} ${issue.message}`];
       }
-      return [`app.yaml: ${path || "root"} should be ${issue.expected}, not ${issue.received}`];
+      return [`app.yaml: ${path || "root"} should be ${issue.expected}, not ${receivedType(issue.input)}`];
     }
     case "too_small":
       if (issue.path.length === 1 && issue.path[0] === "entities") {
@@ -739,29 +800,120 @@ function formatIssue(issue) {
       return [`app.yaml: ${issue.message}${at}`];
   }
 }
+function receivedType(input) {
+  if (input === null)
+    return "null";
+  if (Array.isArray(input))
+    return "array";
+  return typeof input;
+}
 function hintEntityKeys() {
-  return ". Valid keys are label, plural, display, description, auth, renameFrom, fields, indexes, policies.";
+  return ". Valid keys are label, plural, display, description, auth, renameFrom, fields, indexes, policies, rateLimit.";
 }
 
-// src/compile.ts
+// src/compile-auth.ts
+function findAuthEntity(yaml, entities) {
+  const marked = entities.filter((entity) => entity.auth);
+  const configured = yaml.auth?.entity;
+  let entity;
+  if (configured) {
+    entity = entities.find((item) => item.name === configured);
+    if (!entity) {
+      throw new SchemaError(`auth.entity ${configured} does not exist`);
+    }
+  } else if (marked.length === 1) {
+    entity = marked[0];
+  } else if (marked.length > 1) {
+    throw new SchemaError("multiple entities have auth: true; set auth.entity explicitly");
+  } else {
+    entity = entities.find((item) => item.name === "users");
+  }
+  if (!entity) {
+    throw new SchemaError("an auth entity is required; mark one entity with auth: true");
+  }
+  entity.auth = true;
+  const identityField = yaml.auth?.identity ?? "email";
+  const passwordField = yaml.auth?.password ?? "password";
+  const roleField = yaml.auth?.role ?? "role";
+  if (!entity.fieldMap[identityField]) {
+    throw new SchemaError(`auth identity field ${entity.name}.${identityField} is missing`);
+  }
+  if (!entity.fieldMap[passwordField] || entity.fieldMap[passwordField]?.type !== "password") {
+    throw new SchemaError(`auth password field ${entity.name}.${passwordField} must have type password`);
+  }
+  if (!entity.fieldMap[roleField] || entity.fieldMap[roleField]?.type !== "enum") {
+    throw new SchemaError(`auth role field ${entity.name}.${roleField} must be an enum`);
+  }
+  const adminRole = yaml.auth?.adminRole ?? "admin";
+  if (!entity.fieldMap[roleField]?.enumValues?.includes(adminRole)) {
+    throw new SchemaError(`auth adminRole ${adminRole} is not in ${entity.name}.${roleField} values`);
+  }
+  entity.fieldMap[identityField].unique = true;
+  entity.fieldMap[identityField].required = true;
+  entity.fieldMap[passwordField].required = true;
+  entity.fieldMap[passwordField].secret = true;
+  entity.fieldMap[roleField].writable = "admin";
+  ensureEmailVerifiedField(entity);
+  markPrivateAuthFields(entity, [identityField, roleField, "emailVerified"]);
+  return {
+    entity: entity.name,
+    identityField,
+    passwordField,
+    roleField,
+    adminRole,
+    requireVerifiedEmail: yaml.auth?.requireVerifiedEmail === true,
+    signup: compileSignup(yaml, entity)
+  };
+}
+function compileSignup(yaml, entity) {
+  const publicCreate = entity.policies.create.some((policy) => policy.kind === "public");
+  const mode = yaml.auth?.signup ?? (publicCreate ? "open" : "invite");
+  if (mode !== "open" && publicCreate) {
+    throw new SchemaError(`${entity.name}.policies.create is public, which lets anyone sign up through POST /api/v1/${entity.name}, but auth.signup is ${mode}. ` + "Set auth.signup: open to allow public signup, and use admin for the create policy.");
+  }
+  return mode;
+}
+function markPrivateAuthFields(entity, names) {
+  for (const name of names) {
+    const field = entity.fieldMap[name];
+    if (field && field.private === undefined) {
+      field.private = true;
+    }
+  }
+}
+function ensureEmailVerifiedField(entity) {
+  const existing = entity.fieldMap.emailVerified;
+  if (existing) {
+    if (existing.type !== "boolean") {
+      throw new SchemaError(`${entity.name}.emailVerified must be boolean`);
+    }
+    if (existing.writable === "any") {
+      existing.writable = "admin";
+    }
+    return;
+  }
+  const field = {
+    name: "emailVerified",
+    type: "boolean",
+    required: false,
+    unique: false,
+    indexed: false,
+    defaultValue: false,
+    secret: false,
+    writable: "admin",
+    description: "True after the user confirms their email, or when an admin marks them verified."
+  };
+  entity.fields.push(field);
+  entity.fieldMap.emailVerified = field;
+}
+
+// src/compile-entity.ts
 var SYSTEM_FIELDS = new Set(["id", "createdAt", "updatedAt"]);
 function asFieldObject(value) {
   if (typeof value === "string") {
     return { type: value };
   }
   return value;
-}
-function parseIntervalHours(value) {
-  if (!value) {
-    return null;
-  }
-  const match = /^(\d+)(h|d)?$/.exec(value.trim());
-  if (!match?.[1]) {
-    throw new SchemaError(`invalid backup interval ${JSON.stringify(value)}; use e.g. 24h or 7d`);
-  }
-  const amount = Number(match[1]);
-  const unit = match[2] ?? "h";
-  return unit === "d" ? amount * 24 : amount;
 }
 function compileField(entityName, name, raw) {
   assertIdent(name, "field");
@@ -778,6 +930,20 @@ function compileField(entityName, name, raw) {
   if (raw.to && type !== "relation") {
     throw new SchemaError(`${entityName}.${name} has to: but is not a relation`);
   }
+  if (raw.many !== undefined && type !== "relation") {
+    throw new SchemaError(`${entityName}.${name} has many: but is not a relation`);
+  }
+  if (raw.many === true) {
+    if (raw.unique === true || raw.index === true) {
+      throw new SchemaError(`${entityName}.${name} is a many to many relation and cannot be unique or indexed (its join table is indexed already)`);
+    }
+    if (raw.default !== undefined) {
+      throw new SchemaError(`${entityName}.${name} is a many to many relation and cannot have a default`);
+    }
+    if (raw.onDelete !== undefined) {
+      throw new SchemaError(`${entityName}.${name} is a many to many relation: links are always removed when either record is deleted, so leave out onDelete`);
+    }
+  }
   if (raw.values && type !== "enum") {
     throw new SchemaError(`${entityName}.${name} has values: but is not an enum`);
   }
@@ -789,17 +955,19 @@ function compileField(entityName, name, raw) {
     type,
     required: raw.required === true || raw.default !== undefined ? raw.required !== false : false,
     unique: raw.unique === true,
-    indexed: raw.index === true || raw.unique === true || type === "relation",
+    indexed: raw.index === true || raw.unique === true || type === "relation" && raw.many !== true,
     defaultValue: raw.default,
     enumValues: raw.values,
     relation: raw.to ? {
       to: raw.to,
-      onDelete: raw.onDelete ?? "restrict"
+      onDelete: raw.onDelete ?? "restrict",
+      ...raw.many === true ? { many: true } : {}
     } : undefined,
     renameFrom: raw.renameFrom,
     secret: raw.secret === true || type === "password",
     description: raw.description,
-    writable: compileWritable(entityName, name, raw)
+    writable: compileWritable(entityName, name, raw),
+    ...raw.private !== undefined ? { private: raw.private } : {}
   };
 }
 function compileWritable(entityName, name, raw) {
@@ -847,7 +1015,7 @@ function systemFields() {
 function defaultPolicies(auth) {
   if (auth) {
     return {
-      read: [{ kind: "authenticated" }],
+      read: [{ kind: "owner", field: "id" }, { kind: "admin" }],
       create: [{ kind: "admin" }],
       update: [{ kind: "owner", field: "id" }],
       delete: [{ kind: "admin" }]
@@ -891,187 +1059,56 @@ function pluralize(name) {
   }
   return `${name}s`;
 }
-function firstEnv(env, names) {
-  for (const name of names) {
-    const value = env[name];
-    if (value !== undefined && value !== "") {
-      return value;
+var RESERVED_ENTITY_NAMES = ["auth", "audit", "backups", "docs", "files", "mail", "realtime", "status", "webhooks", "_meta"];
+function assertEntityRouteFree(name) {
+  if (RESERVED_ENTITY_NAMES.includes(name.toLowerCase())) {
+    throw new SchemaError(`entity name "${name}" is reserved because /api/v1/${name.toLowerCase()} is a built in route. Rename the entity, for example to "${name}_items" or a more specific name.`);
+  }
+}
+function compileIndexes(entityName, fieldMap, raw) {
+  if (!raw) {
+    return [];
+  }
+  return raw.map((item) => {
+    const fields = Array.isArray(item) ? item : [item];
+    for (const field of fields) {
+      if (!fieldMap[field]) {
+        throw new SchemaError(`${entityName} index references missing field ${field}`);
+      }
+    }
+    return fields;
+  });
+}
+var WINDOW_UNIT_SECONDS = { s: 1, m: 60, h: 3600, d: 86400 };
+function rateWindowSeconds(window) {
+  if (typeof window === "number") {
+    return window;
+  }
+  const match = RATE_WINDOW_PATTERN.exec(window);
+  if (!match) {
+    throw new SchemaError(`rate limit window ${JSON.stringify(window)} must look like 30s, 10m, 1h, or 1d`);
+  }
+  const seconds = Number(match[1]) * WINDOW_UNIT_SECONDS[match[2]];
+  if (seconds > 7 * 86400) {
+    throw new SchemaError(`rate limit window ${window} is longer than 7 days`);
+  }
+  return seconds;
+}
+function compileRateLimit(raw) {
+  return { limit: raw.limit, windowSeconds: rateWindowSeconds(raw.window), per: raw.per ?? "ip" };
+}
+function compileEntityRateLimit(raw) {
+  const out = {};
+  for (const action of ["read", "create", "update", "delete"]) {
+    const rule = raw[action];
+    if (rule) {
+      out[action] = compileRateLimit(rule);
     }
   }
-  return;
+  return out;
 }
-function joinPosix(base, child) {
-  if (child.startsWith("/") || /^[A-Za-z]:[\\/]/.test(child)) {
-    return child;
-  }
-  return `${base.replace(/[/\\]+$/, "")}/${child.replace(/^[/\\]+/, "")}`;
-}
-function parsePort(runtimePort, env) {
-  const raw = firstEnv(env, ["PORT"]) ?? (runtimePort !== undefined ? String(runtimePort) : undefined);
-  const port = raw ? Number(raw) : 4371;
-  return Number.isFinite(port) && port > 0 ? port : 4371;
-}
-function parseVirtualHostedStyle(files, env) {
-  const addressing = (firstEnv(env, ["S3_ADDRESSING_STYLE"]) ?? "").toLowerCase();
-  if (addressing === "path") {
-    return false;
-  }
-  if (addressing === "virtual" || addressing === "virtual-hosted" || addressing === "virtualhosted") {
-    return true;
-  }
-  const pathStyle = (firstEnv(env, ["S3_FORCE_PATH_STYLE", "S3_PATH_STYLE"]) ?? "").toLowerCase();
-  if (pathStyle === "true" || pathStyle === "1" || pathStyle === "yes") {
-    return false;
-  }
-  if (pathStyle === "false" || pathStyle === "0" || pathStyle === "no") {
-    return true;
-  }
-  const virtual = (firstEnv(env, ["S3_VIRTUAL_HOSTED_STYLE"]) ?? "").toLowerCase();
-  if (virtual === "true" || virtual === "1" || virtual === "yes") {
-    return true;
-  }
-  if (virtual === "false" || virtual === "0" || virtual === "no") {
-    return false;
-  }
-  if (files?.pathStyle === true) {
-    return false;
-  }
-  if (files?.virtualHostedStyle === true) {
-    return true;
-  }
-  return false;
-}
-var DEV_JWT_SECRET = "dev-only-change-me";
-function compileRuntime(yaml, production, env) {
-  const runtime = yaml.runtime ?? {};
-  const dialect = runtime.dialect ?? (runtime.postgres?.url ? "postgres" : "sqlite");
-  const jwtSecret = runtime.jwt?.secret ?? env.JWT_SECRET ?? (production ? "" : DEV_JWT_SECRET);
-  if (production && (!jwtSecret || jwtSecret === DEV_JWT_SECRET)) {
-    throw new SchemaError("JWT_SECRET is required in production");
-  }
-  if (dialect === "postgres" && !runtime.postgres?.url) {
-    throw new SchemaError("runtime.postgres.url is required when dialect is postgres");
-  }
-  const dataDir = firstEnv(env, ["BAKORIN_DATA_DIR"]);
-  const bucket = runtime.files?.bucket ?? firstEnv(env, ["S3_BUCKET", "BUCKET"]);
-  const endpoint = runtime.files?.endpoint ?? firstEnv(env, ["S3_ENDPOINT", "AWS_ENDPOINT_URL", "AWS_ENDPOINT"]);
-  const accessKey = runtime.files?.accessKey ?? firstEnv(env, ["S3_ACCESS_KEY", "AWS_ACCESS_KEY_ID"]);
-  const secretKey = runtime.files?.secretKey ?? firstEnv(env, ["S3_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"]);
-  const region = runtime.files?.region ?? firstEnv(env, ["S3_REGION", "AWS_DEFAULT_REGION", "AWS_REGION"]) ?? "auto";
-  const filesDriverEnv = firstEnv(env, ["FILES_DRIVER", "BAKORIN_FILES_DRIVER"]);
-  const driver = filesDriverEnv === "local" || filesDriverEnv === "s3" ? filesDriverEnv : bucket ? "s3" : runtime.files?.driver ?? "local";
-  const yamlSqlite = runtime.sqlite?.path ?? "./data/app.db";
-  const sqliteFile = yamlSqlite.split(/[/\\]/).pop() ?? "app.db";
-  const sqlitePath = dataDir ? joinPosix(dataDir, sqliteFile) : yamlSqlite;
-  const yamlFilesPath = runtime.files?.path ?? "./data/uploads";
-  const filesPath = driver === "local" && dataDir ? joinPosix(dataDir, "uploads") : yamlFilesPath;
-  const yamlDest = runtime.backups?.destination;
-  const backupPrefix = firstEnv(env, ["BAKORIN_BACKUP_PREFIX"]) ?? "backups";
-  const destination = firstEnv(env, ["BAKORIN_BACKUP_DESTINATION"]) ?? (yamlDest?.startsWith("s3://") ? yamlDest : undefined) ?? (bucket ? `s3://${bucket}/${backupPrefix}` : undefined) ?? (dataDir ? joinPosix(dataDir, "backups") : undefined) ?? yamlDest ?? "./data/backups";
-  return {
-    dialect,
-    host: runtime.host ?? "0.0.0.0",
-    port: parsePort(runtime.port, env),
-    sqlitePath,
-    postgresUrl: runtime.postgres?.url,
-    jwtSecret,
-    jwtSecretPrevious: firstEnv(env, ["JWT_SECRET_PREVIOUS"]),
-    accessTtlSeconds: runtime.jwt?.accessTtlSeconds ?? 900,
-    refreshTtlSeconds: runtime.jwt?.refreshTtlSeconds ?? 60 * 60 * 24 * 30,
-    files: {
-      driver,
-      path: filesPath,
-      bucket,
-      endpoint,
-      accessKey,
-      secretKey,
-      region,
-      virtualHostedStyle: parseVirtualHostedStyle(runtime.files, env),
-      maxBytes: runtime.files?.maxBytes ?? 10 * 1024 * 1024,
-      allowedMimeTypes: parseAllowedMime(runtime.files?.allowedMimeTypes),
-      signedUrlTtlSeconds: runtime.files?.signedUrlTtlSeconds ?? 900
-    },
-    backups: {
-      intervalHours: parseIntervalHours(runtime.backups?.interval),
-      cron: runtime.backups?.cron,
-      retain: runtime.backups?.retain ?? 14,
-      destination
-    },
-    corsOrigins: parseCorsOrigins(runtime.cors?.origins, env),
-    hooksPath: runtime.hooks,
-    appUrl: parseAppUrl(env, parsePort(runtime.port, env)),
-    webhooksRetainDays: parseWebhookRetainDays(runtime.webhooks?.retainDays, env),
-    mailRetainDays: parseMailRetainDays(runtime.mail?.retainDays, env),
-    alerts: parseAlerts(runtime.alerts, env)
-  };
-}
-function parseAlerts(yaml, env) {
-  const emailSource = yaml?.email ?? env.BAKORIN_ALERT_EMAIL;
-  const email = (Array.isArray(emailSource) ? emailSource : (emailSource ?? "").split(",")).map((value) => value.trim()).filter(Boolean);
-  for (const address of email) {
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
-      throw new SchemaError(`runtime.alerts.email: ${address} is not an email address`);
-    }
-  }
-  const webhook = (yaml?.webhook ?? env.BAKORIN_ALERT_WEBHOOK ?? "").trim() || undefined;
-  if (webhook && !/^https?:\/\//.test(webhook)) {
-    throw new SchemaError("runtime.alerts.webhook must be an http(s) URL");
-  }
-  const envMaxAge = env.BAKORIN_ALERT_BACKUP_MAX_AGE_HOURS ? Number(env.BAKORIN_ALERT_BACKUP_MAX_AGE_HOURS) : undefined;
-  const maxAge = yaml?.backupMaxAgeHours ?? (envMaxAge && Number.isFinite(envMaxAge) && envMaxAge > 0 ? envMaxAge : undefined);
-  return {
-    email,
-    ...webhook ? { webhook } : {},
-    backupMaxAgeHours: maxAge ?? null,
-    checkIntervalMinutes: yaml?.checkIntervalMinutes ?? 15
-  };
-}
-var REDACTED = "[redacted]";
-function redactUrl(value) {
-  if (!value) {
-    return value;
-  }
-  try {
-    const url = new URL(value);
-    if (url.password) {
-      url.password = REDACTED;
-    }
-    url.search = "";
-    return url.toString();
-  } catch {
-    return REDACTED;
-  }
-}
-function redactRuntime(runtime) {
-  return {
-    ...runtime,
-    jwtSecret: REDACTED,
-    ...runtime.jwtSecretPrevious ? { jwtSecretPrevious: REDACTED } : {},
-    ...runtime.postgresUrl ? { postgresUrl: redactUrl(runtime.postgresUrl) } : {},
-    files: {
-      ...runtime.files,
-      ...runtime.files.accessKey ? { accessKey: REDACTED } : {},
-      ...runtime.files.secretKey ? { secretKey: REDACTED } : {}
-    },
-    ...runtime.alerts ? { alerts: { ...runtime.alerts, ...runtime.alerts.webhook ? { webhook: redactUrl(runtime.alerts.webhook) } : {} } } : {}
-  };
-}
-function parseWebhookRetainDays(yamlValue, env) {
-  const fromEnv = firstEnv(env, ["BAKORIN_WEBHOOK_RETAIN_DAYS"]);
-  const value = fromEnv ? Number(fromEnv) : yamlValue ?? WEBHOOK_DEFAULT_RETAIN_DAYS;
-  if (!Number.isInteger(value) || value < 1 || value > 3650) {
-    throw new SchemaError("runtime.webhooks.retainDays must be an integer from 1 to 3650");
-  }
-  return value;
-}
-function parseMailRetainDays(yamlValue, env) {
-  const fromEnv = firstEnv(env, ["BAKORIN_MAIL_RETAIN_DAYS"]);
-  const value = fromEnv ? Number(fromEnv) : yamlValue ?? MAIL_DEFAULT_RETAIN_DAYS;
-  if (!Number.isInteger(value) || value < 1 || value > 3650) {
-    throw new SchemaError("runtime.mail.retainDays must be an integer from 1 to 3650");
-  }
-  return value;
-}
+
+// src/compile-mail.ts
 var MAIL_TEMPLATE_TOKEN = /\{\{\{?\s*([^}]*?)\s*\}?\}\}/g;
 var MAIL_ROOTS = new Set(["record", "before", "expand", "event", "app"]);
 function listOf(value) {
@@ -1195,6 +1232,306 @@ function compileMailRules(yaml, entityMap) {
     };
   });
 }
+
+// src/compile-secrets.ts
+var DEV_JWT_SECRET = "dev-only-change-me";
+var MIN_JWT_SECRET_LENGTH = 32;
+var PLACEHOLDER_SECRET = /change[-_ ]?me|replace[-_ ]?me|your[-_ ]?secret|dev[-_ ]?only|example|placeholder/i;
+function isDevMode(env) {
+  const mode = (env.BAKORIN_ENV ?? "").trim().toLowerCase();
+  if (mode === "production") {
+    return false;
+  }
+  return mode === "development" || mode === "dev" || mode === "test" || env.BAKORIN_TEST === "1";
+}
+function weakJwtSecretReason(secret) {
+  if (!secret) {
+    return "it is not set";
+  }
+  if (secret === DEV_JWT_SECRET || PLACEHOLDER_SECRET.test(secret)) {
+    return "it is a placeholder value";
+  }
+  if (secret.length < MIN_JWT_SECRET_LENGTH) {
+    return `it is ${secret.length} characters; use at least ${MIN_JWT_SECRET_LENGTH}`;
+  }
+  if (new Set(secret).size < 10) {
+    return "it repeats too few characters to be random";
+  }
+  return null;
+}
+function assertStrongJwtSecret(secret, name = "JWT_SECRET") {
+  const reason = weakJwtSecretReason(secret);
+  if (reason) {
+    throw new SchemaError(`${name} is too weak for production: ${reason}. Generate one with: openssl rand -base64 48. ` + "Only `bakorin dev` (BAKORIN_ENV=development) runs without a strong secret.");
+  }
+}
+
+// src/compile-runtime.ts
+function parseIntervalHours(value) {
+  if (!value) {
+    return null;
+  }
+  const match = /^(\d+)(h|d)?$/.exec(value.trim());
+  if (!match?.[1]) {
+    throw new SchemaError(`invalid backup interval ${JSON.stringify(value)}; use e.g. 24h or 7d`);
+  }
+  const amount = Number(match[1]);
+  const unit = match[2] ?? "h";
+  return unit === "d" ? amount * 24 : amount;
+}
+function firstEnv(env, names) {
+  for (const name of names) {
+    const value = env[name];
+    if (value !== undefined && value !== "") {
+      return value;
+    }
+  }
+  return;
+}
+function joinPosix(base, child) {
+  if (child.startsWith("/") || /^[A-Za-z]:[\\/]/.test(child)) {
+    return child;
+  }
+  return `${base.replace(/[/\\]+$/, "")}/${child.replace(/^[/\\]+/, "")}`;
+}
+function parsePort(runtimePort, env) {
+  const raw = firstEnv(env, ["PORT"]) ?? (runtimePort !== undefined ? String(runtimePort) : undefined);
+  const port = raw ? Number(raw) : 4371;
+  return Number.isFinite(port) && port > 0 ? port : 4371;
+}
+function parseVirtualHostedStyle(files, env) {
+  const addressing = (firstEnv(env, ["S3_ADDRESSING_STYLE"]) ?? "").toLowerCase();
+  if (addressing === "path") {
+    return false;
+  }
+  if (addressing === "virtual" || addressing === "virtual-hosted" || addressing === "virtualhosted") {
+    return true;
+  }
+  const pathStyle = (firstEnv(env, ["S3_FORCE_PATH_STYLE", "S3_PATH_STYLE"]) ?? "").toLowerCase();
+  if (pathStyle === "true" || pathStyle === "1" || pathStyle === "yes") {
+    return false;
+  }
+  if (pathStyle === "false" || pathStyle === "0" || pathStyle === "no") {
+    return true;
+  }
+  const virtual = (firstEnv(env, ["S3_VIRTUAL_HOSTED_STYLE"]) ?? "").toLowerCase();
+  if (virtual === "true" || virtual === "1" || virtual === "yes") {
+    return true;
+  }
+  if (virtual === "false" || virtual === "0" || virtual === "no") {
+    return false;
+  }
+  if (files?.pathStyle === true) {
+    return false;
+  }
+  if (files?.virtualHostedStyle === true) {
+    return true;
+  }
+  return false;
+}
+function compileRuntime(yaml, production, env) {
+  const runtime = yaml.runtime ?? {};
+  const dialect = runtime.dialect ?? (runtime.postgres?.url ? "postgres" : "sqlite");
+  const jwtSecret = runtime.jwt?.secret || env.JWT_SECRET || (production ? "" : DEV_JWT_SECRET);
+  const jwtSecretPrevious = firstEnv(env, ["JWT_SECRET_PREVIOUS"]);
+  if (production) {
+    assertStrongJwtSecret(jwtSecret);
+    if (jwtSecretPrevious) {
+      assertStrongJwtSecret(jwtSecretPrevious, "JWT_SECRET_PREVIOUS");
+    }
+  }
+  if (dialect === "postgres" && !runtime.postgres?.url) {
+    throw new SchemaError("runtime.postgres.url is required when dialect is postgres");
+  }
+  const dataDir = firstEnv(env, ["BAKORIN_DATA_DIR"]);
+  const bucket = runtime.files?.bucket ?? firstEnv(env, ["S3_BUCKET", "BUCKET"]);
+  const endpoint = runtime.files?.endpoint ?? firstEnv(env, ["S3_ENDPOINT", "AWS_ENDPOINT_URL", "AWS_ENDPOINT"]);
+  const accessKey = runtime.files?.accessKey ?? firstEnv(env, ["S3_ACCESS_KEY", "AWS_ACCESS_KEY_ID"]);
+  const secretKey = runtime.files?.secretKey ?? firstEnv(env, ["S3_SECRET_KEY", "AWS_SECRET_ACCESS_KEY"]);
+  const region = runtime.files?.region ?? firstEnv(env, ["S3_REGION", "AWS_DEFAULT_REGION", "AWS_REGION"]) ?? "auto";
+  const filesDriverEnv = firstEnv(env, ["FILES_DRIVER", "BAKORIN_FILES_DRIVER"]);
+  const driver = filesDriverEnv === "local" || filesDriverEnv === "s3" ? filesDriverEnv : bucket ? "s3" : runtime.files?.driver ?? "local";
+  const yamlSqlite = runtime.sqlite?.path ?? "./data/app.db";
+  const sqliteFile = yamlSqlite.split(/[/\\]/).pop() ?? "app.db";
+  const sqlitePath = dataDir ? joinPosix(dataDir, sqliteFile) : yamlSqlite;
+  const yamlFilesPath = runtime.files?.path ?? "./data/uploads";
+  const filesPath = driver === "local" && dataDir ? joinPosix(dataDir, "uploads") : yamlFilesPath;
+  const yamlDest = runtime.backups?.destination;
+  const backupPrefix = firstEnv(env, ["BAKORIN_BACKUP_PREFIX"]) ?? "backups";
+  const destination = firstEnv(env, ["BAKORIN_BACKUP_DESTINATION"]) ?? (yamlDest?.startsWith("s3://") ? yamlDest : undefined) ?? (bucket ? `s3://${bucket}/${backupPrefix}` : undefined) ?? (dataDir ? joinPosix(dataDir, "backups") : undefined) ?? yamlDest ?? "./data/backups";
+  return {
+    dialect,
+    host: runtime.host ?? "0.0.0.0",
+    port: parsePort(runtime.port, env),
+    sqlitePath,
+    postgresUrl: runtime.postgres?.url,
+    jwtSecret,
+    jwtSecretPrevious,
+    accessTtlSeconds: runtime.jwt?.accessTtlSeconds ?? 900,
+    refreshTtlSeconds: runtime.jwt?.refreshTtlSeconds ?? 60 * 60 * 24 * 30,
+    files: {
+      driver,
+      path: filesPath,
+      bucket,
+      endpoint,
+      accessKey,
+      secretKey,
+      region,
+      virtualHostedStyle: parseVirtualHostedStyle(runtime.files, env),
+      maxBytes: runtime.files?.maxBytes ?? 10 * 1024 * 1024,
+      allowedMimeTypes: parseAllowedMime(runtime.files?.allowedMimeTypes),
+      signedUrlTtlSeconds: runtime.files?.signedUrlTtlSeconds ?? 900,
+      ...runtime.files?.rateLimit ? { rateLimit: compileRateLimit(runtime.files.rateLimit) } : {}
+    },
+    backups: {
+      intervalHours: parseIntervalHours(runtime.backups?.interval),
+      cron: runtime.backups?.cron,
+      retain: runtime.backups?.retain ?? 14,
+      destination
+    },
+    corsOrigins: parseCorsOrigins(runtime.cors?.origins, env),
+    hooksPath: runtime.hooks,
+    apiDocs: parseApiDocs(runtime.apiDocs, env, production),
+    appUrl: parseAppUrl(env, parsePort(runtime.port, env)),
+    webhooksRetainDays: parseWebhookRetainDays(runtime.webhooks?.retainDays, env),
+    mailRetainDays: parseMailRetainDays(runtime.mail?.retainDays, env),
+    alerts: parseAlerts(runtime.alerts, env),
+    trustProxy: parseTrustProxy(runtime.trustProxy, env),
+    realtime: parseRealtime(runtime.realtime, env, dialect),
+    mcp: parseMcp(runtime.mcp, env)
+  };
+}
+function envInt(env, name, min, max) {
+  const raw = (env[name] ?? "").trim();
+  if (!raw) {
+    return;
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new SchemaError(`${name} must be a whole number from ${min} to ${max}`);
+  }
+  return value;
+}
+function parseRealtime(raw, env, dialect) {
+  const brokerEnv = (env.BAKORIN_REALTIME_BROKER ?? "").trim().toLowerCase();
+  if (brokerEnv && brokerEnv !== "auto" && brokerEnv !== "memory" && brokerEnv !== "postgres") {
+    throw new SchemaError(`BAKORIN_REALTIME_BROKER must be auto, memory, or postgres, not ${JSON.stringify(env.BAKORIN_REALTIME_BROKER)}`);
+  }
+  const broker = brokerEnv || raw?.broker || REALTIME_DEFAULTS.broker;
+  if (broker === "postgres" && dialect !== "postgres") {
+    throw new SchemaError("runtime.realtime.broker postgres needs runtime.dialect postgres");
+  }
+  return {
+    broker,
+    maxConnections: envInt(env, "BAKORIN_REALTIME_MAX_CONNECTIONS", 1, 1e6) ?? raw?.maxConnections ?? REALTIME_DEFAULTS.maxConnections,
+    maxPerUser: envInt(env, "BAKORIN_REALTIME_MAX_PER_USER", 1, 1e4) ?? raw?.maxPerUser ?? REALTIME_DEFAULTS.maxPerUser,
+    heartbeatSeconds: raw?.heartbeatSeconds ?? REALTIME_DEFAULTS.heartbeatSeconds,
+    replayEvents: raw?.replayEvents ?? REALTIME_DEFAULTS.replayEvents,
+    retainMinutes: raw?.retainMinutes ?? REALTIME_DEFAULTS.retainMinutes,
+    maxBufferKb: raw?.maxBufferKb ?? REALTIME_DEFAULTS.maxBufferKb
+  };
+}
+function parseMcp(raw, env) {
+  const fromYaml = typeof raw === "boolean" ? { enabled: raw } : raw ?? {};
+  const flag = (env.BAKORIN_MCP ?? "").trim().toLowerCase();
+  let enabled = fromYaml.enabled ?? MCP_DEFAULTS.enabled;
+  if (flag === "true" || flag === "1") {
+    enabled = true;
+  } else if (flag === "false" || flag === "0") {
+    enabled = false;
+  } else if (flag) {
+    throw new SchemaError(`BAKORIN_MCP must be true or false, not ${JSON.stringify(env.BAKORIN_MCP)}`);
+  }
+  return { enabled, sampleLimit: fromYaml.sampleLimit ?? MCP_DEFAULTS.sampleLimit };
+}
+function parseTrustProxy(yaml, env) {
+  const raw = (env.TRUST_PROXY ?? "").trim();
+  let value = yaml;
+  if (raw) {
+    const lower = raw.toLowerCase();
+    if (lower === "false" || lower === "no" || lower === "off") {
+      value = false;
+    } else if (lower === "true" || lower === "yes" || lower === "on") {
+      value = true;
+    } else if (/^\d+$/.test(raw)) {
+      value = Number(raw);
+    } else {
+      value = raw.split(",").map((item) => item.trim()).filter(Boolean);
+    }
+  }
+  if (value === undefined || value === false || value === 0) {
+    return { kind: "none" };
+  }
+  if (value === true) {
+    return { kind: "hops", hops: 1 };
+  }
+  if (typeof value === "number") {
+    if (!Number.isInteger(value) || value < 0 || value > 10) {
+      throw new SchemaError("runtime.trustProxy hop count must be a whole number from 0 to 10");
+    }
+    return { kind: "hops", hops: value };
+  }
+  for (const cidr of value) {
+    if (!isCidr(cidr)) {
+      throw new SchemaError(`runtime.trustProxy: ${cidr} is not an IP address or CIDR range`);
+    }
+  }
+  return { kind: "cidrs", cidrs: value };
+}
+function isCidr(value) {
+  const [address, bits, extra] = value.split("/");
+  if (extra !== undefined || !address) {
+    return false;
+  }
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(address);
+  if (v4) {
+    if (v4.slice(1).some((part) => Number(part) > 255)) {
+      return false;
+    }
+    return bits === undefined || /^\d+$/.test(bits) && Number(bits) <= 32;
+  }
+  if (address.includes(":") && /^[0-9a-fA-F:.]+$/.test(address)) {
+    return bits === undefined || /^\d+$/.test(bits) && Number(bits) <= 128;
+  }
+  return false;
+}
+function parseAlerts(yaml, env) {
+  const emailSource = yaml?.email ?? env.BAKORIN_ALERT_EMAIL;
+  const email = (Array.isArray(emailSource) ? emailSource : (emailSource ?? "").split(",")).map((value) => value.trim()).filter(Boolean);
+  for (const address of email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+      throw new SchemaError(`runtime.alerts.email: ${address} is not an email address`);
+    }
+  }
+  const webhook = (yaml?.webhook ?? env.BAKORIN_ALERT_WEBHOOK ?? "").trim() || undefined;
+  if (webhook && !/^https?:\/\//.test(webhook)) {
+    throw new SchemaError("runtime.alerts.webhook must be an http(s) URL");
+  }
+  const envMaxAge = env.BAKORIN_ALERT_BACKUP_MAX_AGE_HOURS ? Number(env.BAKORIN_ALERT_BACKUP_MAX_AGE_HOURS) : undefined;
+  const maxAge = yaml?.backupMaxAgeHours ?? (envMaxAge && Number.isFinite(envMaxAge) && envMaxAge > 0 ? envMaxAge : undefined);
+  return {
+    email,
+    ...webhook ? { webhook } : {},
+    backupMaxAgeHours: maxAge ?? null,
+    checkIntervalMinutes: yaml?.checkIntervalMinutes ?? 15
+  };
+}
+function parseWebhookRetainDays(yamlValue, env) {
+  const fromEnv = firstEnv(env, ["BAKORIN_WEBHOOK_RETAIN_DAYS"]);
+  const value = fromEnv ? Number(fromEnv) : yamlValue ?? WEBHOOK_DEFAULT_RETAIN_DAYS;
+  if (!Number.isInteger(value) || value < 1 || value > 3650) {
+    throw new SchemaError("runtime.webhooks.retainDays must be an integer from 1 to 3650");
+  }
+  return value;
+}
+function parseMailRetainDays(yamlValue, env) {
+  const fromEnv = firstEnv(env, ["BAKORIN_MAIL_RETAIN_DAYS"]);
+  const value = fromEnv ? Number(fromEnv) : yamlValue ?? MAIL_DEFAULT_RETAIN_DAYS;
+  if (!Number.isInteger(value) || value < 1 || value > 3650) {
+    throw new SchemaError("runtime.mail.retainDays must be an integer from 1 to 3650");
+  }
+  return value;
+}
 function parseCorsOrigins(yamlOrigins, env) {
   const fromEnv = firstEnv(env, ["CORS_ORIGINS"]);
   if (fromEnv !== undefined) {
@@ -1227,96 +1564,123 @@ function parseAllowedMime(raw) {
   }
   return raw;
 }
-function compileIndexes(entityName, fieldMap, raw) {
-  if (!raw) {
-    return [];
+function parseApiDocs(value, env, production) {
+  const fromEnv = (env.BAKORIN_API_DOCS ?? "").trim().toLowerCase();
+  if (fromEnv === "public" || fromEnv === "admin") {
+    return fromEnv;
   }
-  return raw.map((item) => {
-    const fields = Array.isArray(item) ? item : [item];
-    for (const field of fields) {
-      if (!fieldMap[field]) {
-        throw new SchemaError(`${entityName} index references missing field ${field}`);
-      }
+  if (fromEnv) {
+    throw new SchemaError(`BAKORIN_API_DOCS must be public or admin, not ${JSON.stringify(env.BAKORIN_API_DOCS)}`);
+  }
+  return value ?? (production ? "admin" : "public");
+}
+// src/compile-serialize.ts
+var REDACTED = "[redacted]";
+function redactUrl(value) {
+  if (!value) {
+    return value;
+  }
+  try {
+    const url = new URL(value);
+    if (url.password) {
+      url.password = REDACTED;
     }
-    return fields;
+    url.search = "";
+    return url.toString();
+  } catch {
+    return REDACTED;
+  }
+}
+function redactRuntime(runtime) {
+  return {
+    ...runtime,
+    jwtSecret: REDACTED,
+    ...runtime.jwtSecretPrevious ? { jwtSecretPrevious: REDACTED } : {},
+    ...runtime.postgresUrl ? { postgresUrl: redactUrl(runtime.postgresUrl) } : {},
+    files: {
+      ...runtime.files,
+      ...runtime.files.accessKey ? { accessKey: REDACTED } : {},
+      ...runtime.files.secretKey ? { secretKey: REDACTED } : {}
+    },
+    ...runtime.alerts ? { alerts: { ...runtime.alerts, ...runtime.alerts.webhook ? { webhook: redactUrl(runtime.alerts.webhook) } : {} } } : {}
+  };
+}
+function serializeAst(ast) {
+  return JSON.stringify({
+    version: ast.version,
+    appName: ast.appName,
+    appVersion: ast.appVersion,
+    appDescription: ast.appDescription,
+    branding: ast.branding,
+    runtime: redactRuntime(ast.runtime),
+    entities: ast.entities,
+    order: ast.order,
+    auth: ast.auth,
+    webhooks: ast.webhooks,
+    mail: ast.mail
   });
 }
-function findAuthEntity(yaml, entities) {
-  const marked = entities.filter((entity) => entity.auth);
-  const configured = yaml.auth?.entity;
-  let entity;
-  if (configured) {
-    entity = entities.find((item) => item.name === configured);
-    if (!entity) {
-      throw new SchemaError(`auth.entity ${configured} does not exist`);
+function deserializeAst(raw) {
+  const parsed = JSON.parse(raw);
+  if (parsed.version !== SCHEMA_AST_VERSION) {
+    throw new SchemaError(`unsupported schema AST version ${String(parsed.version)}`);
+  }
+  parsed.entityMap = Object.fromEntries(parsed.entities.map((entity) => [entity.name, entity]));
+  for (const entity of parsed.entities) {
+    entity.fieldMap = Object.fromEntries(entity.fields.map((field) => [field.name, field]));
+    if (!entity.display) {
+      entity.display = "id";
     }
-  } else if (marked.length === 1) {
-    entity = marked[0];
-  } else if (marked.length > 1) {
-    throw new SchemaError("multiple entities have auth: true; set auth.entity explicitly");
-  } else {
-    entity = entities.find((item) => item.name === "users");
+    if (!entity.indexes) {
+      entity.indexes = [];
+    }
+    for (const field of entity.fields) {
+      if (!field.writable) {
+        field.writable = SYSTEM_FIELDS.has(field.name) ? "none" : "any";
+      }
+    }
   }
-  if (!entity) {
-    throw new SchemaError("an auth entity is required; mark one entity with auth: true");
+  if (!parsed.auth.requireVerifiedEmail) {
+    parsed.auth.requireVerifiedEmail = false;
   }
-  entity.auth = true;
-  const identityField = yaml.auth?.identity ?? "email";
-  const passwordField = yaml.auth?.password ?? "password";
-  const roleField = yaml.auth?.role ?? "role";
-  if (!entity.fieldMap[identityField]) {
-    throw new SchemaError(`auth identity field ${entity.name}.${identityField} is missing`);
+  if (!parsed.auth.signup) {
+    parsed.auth.signup = "invite";
   }
-  if (!entity.fieldMap[passwordField] || entity.fieldMap[passwordField]?.type !== "password") {
-    throw new SchemaError(`auth password field ${entity.name}.${passwordField} must have type password`);
+  if (!parsed.runtime.trustProxy) {
+    parsed.runtime.trustProxy = { kind: "none" };
   }
-  if (!entity.fieldMap[roleField] || entity.fieldMap[roleField]?.type !== "enum") {
-    throw new SchemaError(`auth role field ${entity.name}.${roleField} must be an enum`);
+  if (!parsed.runtime.apiDocs) {
+    parsed.runtime.apiDocs = "admin";
   }
-  const adminRole = yaml.auth?.adminRole ?? "admin";
-  if (!entity.fieldMap[roleField]?.enumValues?.includes(adminRole)) {
-    throw new SchemaError(`auth adminRole ${adminRole} is not in ${entity.name}.${roleField} values`);
+  parsed.runtime.realtime = { ...REALTIME_DEFAULTS, ...parsed.runtime.realtime ?? {} };
+  parsed.runtime.mcp = { ...MCP_DEFAULTS, ...parsed.runtime.mcp ?? {} };
+  if (!parsed.runtime.appUrl) {
+    parsed.runtime.appUrl = `http://127.0.0.1:${parsed.runtime.port}`;
   }
-  entity.fieldMap[identityField].unique = true;
-  entity.fieldMap[identityField].required = true;
-  entity.fieldMap[passwordField].required = true;
-  entity.fieldMap[passwordField].secret = true;
-  entity.fieldMap[roleField].writable = "admin";
-  ensureEmailVerifiedField(entity);
-  return {
-    entity: entity.name,
-    identityField,
-    passwordField,
-    roleField,
-    adminRole,
-    requireVerifiedEmail: yaml.auth?.requireVerifiedEmail === true
-  };
+  if (!parsed.runtime.files.maxBytes) {
+    parsed.runtime.files.maxBytes = 10 * 1024 * 1024;
+  }
+  if (!parsed.runtime.files.allowedMimeTypes || parsed.runtime.files.allowedMimeTypes.length === 0) {
+    parsed.runtime.files.allowedMimeTypes = [...DEFAULT_ALLOWED_MIME_TYPES];
+  }
+  if (!parsed.runtime.files.signedUrlTtlSeconds) {
+    parsed.runtime.files.signedUrlTtlSeconds = 900;
+  }
+  if (!parsed.runtime.webhooksRetainDays) {
+    parsed.runtime.webhooksRetainDays = WEBHOOK_DEFAULT_RETAIN_DAYS;
+  }
+  if (!parsed.runtime.mailRetainDays) {
+    parsed.runtime.mailRetainDays = MAIL_DEFAULT_RETAIN_DAYS;
+  }
+  parsed.mail = parsed.mail ?? [];
+  for (const hook of parsed.webhooks ?? []) {
+    hook.maxAttempts = hook.maxAttempts ?? WEBHOOK_DEFAULT_MAX_ATTEMPTS;
+    hook.timeoutMs = hook.timeoutMs ?? WEBHOOK_DEFAULT_TIMEOUT_MS;
+  }
+  return parsed;
 }
-function ensureEmailVerifiedField(entity) {
-  const existing = entity.fieldMap.emailVerified;
-  if (existing) {
-    if (existing.type !== "boolean") {
-      throw new SchemaError(`${entity.name}.emailVerified must be boolean`);
-    }
-    if (existing.writable === "any") {
-      existing.writable = "admin";
-    }
-    return;
-  }
-  const field = {
-    name: "emailVerified",
-    type: "boolean",
-    required: false,
-    unique: false,
-    indexed: false,
-    defaultValue: false,
-    secret: false,
-    writable: "admin",
-    description: "True after the user confirms their email, or when an admin marks them verified."
-  };
-  entity.fields.push(field);
-  entity.fieldMap.emailVerified = field;
-}
+
+// src/compile.ts
 function compileAppYaml(source, options = {}) {
   const env = options.env ?? process.env;
   const interpolated = interpolateEnv(source, env);
@@ -1326,15 +1690,16 @@ function compileAppYaml(source, options = {}) {
   } catch (error) {
     throw new SchemaError(`app.yaml is not valid YAML: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const parsedYaml = appYamlSchema.safeParse(parsed);
+  const parsedYaml = appYamlSchema.safeParse(parsed, { reportInput: true });
   if (!parsedYaml.success) {
     throw new SchemaError(formatZodError(parsedYaml.error));
   }
   const yaml = parsedYaml.data;
-  const production = options.production ?? (env.NODE_ENV === "production" || env.BAKORIN_ENV === "production");
+  const production = options.production ?? !isDevMode(env);
   const runtime = compileRuntime(yaml, production, env);
   const entities = Object.entries(yaml.entities).map(([name, raw]) => {
     assertIdent(name, "entity");
+    assertEntityRouteFree(name);
     const compiledFields = Object.entries(raw.fields).map(([fieldName, fieldRaw]) => compileField(name, fieldName, asFieldObject(fieldRaw)));
     const fields = [...systemFields(), ...compiledFields];
     const fieldMap = Object.fromEntries(fields.map((field) => [field.name, field]));
@@ -1364,7 +1729,10 @@ function compileAppYaml(source, options = {}) {
       policies,
       indexes: compileIndexes(name, fieldMap, raw.indexes),
       deprecated: false,
-      ...raw.renameFrom ? { renameFrom: raw.renameFrom } : {}
+      ...raw.renameFrom ? { renameFrom: raw.renameFrom } : {},
+      ...raw.rateLimit ? { rateLimit: compileEntityRateLimit(raw.rateLimit) } : {},
+      ...raw.realtime === true || raw.realtime === "full" ? { realtime: "full" } : {},
+      ...raw.realtime === "ids" ? { realtime: "ids" } : {}
     };
   });
   const entityMap = Object.fromEntries(entities.map((entity) => [entity.name, entity]));
@@ -1406,69 +1774,6 @@ function compileAppYaml(source, options = {}) {
     webhooks,
     mail
   };
-}
-function serializeAst(ast) {
-  return JSON.stringify({
-    version: ast.version,
-    appName: ast.appName,
-    appVersion: ast.appVersion,
-    appDescription: ast.appDescription,
-    branding: ast.branding,
-    runtime: redactRuntime(ast.runtime),
-    entities: ast.entities,
-    order: ast.order,
-    auth: ast.auth,
-    webhooks: ast.webhooks,
-    mail: ast.mail
-  });
-}
-function deserializeAst(raw) {
-  const parsed = JSON.parse(raw);
-  if (parsed.version !== SCHEMA_AST_VERSION) {
-    throw new SchemaError(`unsupported schema AST version ${String(parsed.version)}`);
-  }
-  parsed.entityMap = Object.fromEntries(parsed.entities.map((entity) => [entity.name, entity]));
-  for (const entity of parsed.entities) {
-    entity.fieldMap = Object.fromEntries(entity.fields.map((field) => [field.name, field]));
-    if (!entity.display) {
-      entity.display = "id";
-    }
-    if (!entity.indexes) {
-      entity.indexes = [];
-    }
-    for (const field of entity.fields) {
-      if (!field.writable) {
-        field.writable = SYSTEM_FIELDS.has(field.name) ? "none" : "any";
-      }
-    }
-  }
-  if (!parsed.auth.requireVerifiedEmail) {
-    parsed.auth.requireVerifiedEmail = false;
-  }
-  if (!parsed.runtime.appUrl) {
-    parsed.runtime.appUrl = `http://127.0.0.1:${parsed.runtime.port}`;
-  }
-  if (!parsed.runtime.files.maxBytes) {
-    parsed.runtime.files.maxBytes = 10 * 1024 * 1024;
-  }
-  if (!parsed.runtime.files.allowedMimeTypes || parsed.runtime.files.allowedMimeTypes.length === 0) {
-    parsed.runtime.files.allowedMimeTypes = [...DEFAULT_ALLOWED_MIME_TYPES];
-  }
-  if (!parsed.runtime.files.signedUrlTtlSeconds) {
-    parsed.runtime.files.signedUrlTtlSeconds = 900;
-  }
-  if (!parsed.runtime.webhooksRetainDays) {
-    parsed.runtime.webhooksRetainDays = WEBHOOK_DEFAULT_RETAIN_DAYS;
-  }
-  if (!parsed.runtime.mailRetainDays) {
-    parsed.runtime.mailRetainDays = MAIL_DEFAULT_RETAIN_DAYS;
-  }
-  parsed.mail = parsed.mail ?? [];
-  for (const hook of parsed.webhooks ?? []) {
-    hook.maxAttempts = hook.maxAttempts ?? WEBHOOK_DEFAULT_MAX_ATTEMPTS;
-    hook.timeoutMs = hook.timeoutMs ?? WEBHOOK_DEFAULT_TIMEOUT_MS;
-  }
-  return parsed;
 }
 // src/diff.ts
 var WIDENING = {
@@ -1573,7 +1878,7 @@ function describeChange(change) {
     case "add_entity":
       return `add entity ${change.entity.name}`;
     case "add_field":
-      return `add field ${change.entity}.${change.field.name} (${change.field.type})`;
+      return `add field ${change.entity}.${change.field.name} (${change.field.type}${change.field.relation?.many ? ", many" : ""})`;
     case "add_index":
       return `add index on ${change.entity} (${change.fields.join(", ")})`;
     case "rename_entity":
@@ -1709,6 +2014,14 @@ function compareField(entity, from, to, plan) {
     });
     return;
   }
+  if (from.type === "relation" && to.type === "relation" && Boolean(from.relation?.many) !== Boolean(to.relation?.many)) {
+    plan.abort.push({
+      tier: "abort",
+      kind: "breaking",
+      message: `cannot switch ${entity}.${from.name} between a single relation and many: true. Add a new field, copy the links in a script, then remove the old one`
+    });
+    return;
+  }
   if (from.type === "relation" && to.type === "relation" && from.relation?.to !== to.relation?.to) {
     plan.abort.push({
       tier: "abort",
@@ -1767,7 +2080,7 @@ function tsType(field) {
     case "enum":
       return (field.enumValues ?? []).map((value) => JSON.stringify(value)).join(" | ") || "string";
     case "relation":
-      return "string";
+      return field.relation?.many ? "string[]" : "string";
     default: {
       const _never = field.type;
       return _never;
@@ -1781,7 +2094,7 @@ function fieldLine(field) {
   if (field.secret) {
     return `  // ${field.name} is write-only and never returned`;
   }
-  const optional = field.required ? "" : "?";
+  const optional = field.required || field.relation?.many ? "" : "?";
   return `  ${field.name}${optional}: ${tsType(field)};`;
 }
 function entityInterface(entity) {
@@ -1821,6 +2134,65 @@ ${writeMap}
 }
 
 export type BakorinEntityName = keyof BakorinEntities;
+${schemaConst(ast)}`;
+}
+var SYSTEM_FIELDS2 = new Set(["id", "createdAt", "updatedAt"]);
+function ownerFieldNames(entity, authEntity) {
+  const names = new Set;
+  for (const rules of Object.values(entity.policies)) {
+    for (const rule of rules) {
+      if (rule.kind === "owner" && rule.field !== "id") {
+        names.add(rule.field);
+      }
+    }
+  }
+  for (const field of entity.fields) {
+    if (field.relation?.to === authEntity && !entity.auth) {
+      names.add(field.name);
+    }
+  }
+  return names;
+}
+function schemaConst(ast) {
+  const entities = {};
+  for (const entity of ast.entities) {
+    const owners = ownerFieldNames(entity, ast.auth.entity);
+    entities[entity.name] = {
+      name: entity.name,
+      display: entity.display,
+      fields: entity.fields.map((field) => {
+        const out = { name: field.name, type: field.type };
+        if (field.required)
+          out.required = true;
+        if (field.enumValues)
+          out.enumValues = field.enumValues;
+        if (field.relation)
+          out.relation = field.relation.many ? { to: field.relation.to, many: true } : { to: field.relation.to };
+        if (field.writable !== "any")
+          out.writable = field.writable;
+        if (field.secret)
+          out.secret = true;
+        if (field.private)
+          out.private = true;
+        if (owners.has(field.name))
+          out.owner = true;
+        if (SYSTEM_FIELDS2.has(field.name))
+          out.system = true;
+        if (field.description)
+          out.description = field.description;
+        if (field.defaultValue !== undefined && !field.secret)
+          out.defaultValue = field.defaultValue;
+        return out;
+      })
+    };
+  }
+  const value = {
+    entities,
+    auth: { entity: ast.auth.entity, identityField: ast.auth.identityField, passwordField: ast.auth.passwordField }
+  };
+  return `
+/** Field names, types, and rules for UI helpers like RecordForm in @bakorin/sdk. */
+export const bakorinSchema = ${JSON.stringify(value, null, 2)} as const;
 `;
 }
 // src/schema-graph.ts
@@ -1841,7 +2213,7 @@ function buildSchemaGraph(ast) {
       unique: field.unique,
       secret: field.secret,
       description: field.description,
-      relation: field.relation ? { to: field.relation.to, onDelete: field.relation.onDelete } : undefined
+      relation: field.relation ? { to: field.relation.to, onDelete: field.relation.onDelete, ...field.relation.many ? { many: true } : {} } : undefined
     })),
     indexes: entity.indexes,
     policies: {
@@ -1861,7 +2233,8 @@ function buildSchemaGraph(ast) {
         from: entity.name,
         field: field.name,
         to: field.relation.to,
-        onDelete: field.relation.onDelete
+        onDelete: field.relation.onDelete,
+        ...field.relation.many ? { many: true } : {}
       });
     }
   }
@@ -1893,7 +2266,7 @@ function schemaToMermaid(graph) {
       if (field.unique && field.name !== "id") {
         flags.push("UK");
       }
-      if (field.relation) {
+      if (field.relation && !field.relation.many) {
         flags.push("FK");
       }
       const type = mermaidIdent(field.displayType);
@@ -1903,6 +2276,10 @@ function schemaToMermaid(graph) {
     lines.push("  }");
   }
   for (const rel of graph.relations) {
+    if (rel.many) {
+      lines.push(`  ${mermaidIdent(rel.from)} }o--o{ ${mermaidIdent(rel.to)} : "${rel.field} many"`);
+      continue;
+    }
     const label = `${rel.field} ${rel.onDelete}`;
     lines.push(`  ${mermaidIdent(rel.from)} }o--|| ${mermaidIdent(rel.to)} : "${label}"`);
   }
@@ -1917,6 +2294,33 @@ function schemaToJson(graph) {
 function webhooksForEntity(graph, entityName) {
   return graph.webhooks.filter((hook) => hook.entity === entityName || hook.entity === "*");
 }
+// src/relations.ts
+function isManyField(field) {
+  return Boolean(field?.relation?.many);
+}
+function columnFields(entity) {
+  return entity.fields.filter((field) => !field.relation?.many);
+}
+function manyFields(entity) {
+  return entity.fields.filter((field) => field.relation?.many);
+}
+var MAX_IDENT = 63;
+function fnv(text) {
+  let hash = 2166136261;
+  for (let i = 0;i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+function joinTableName(entity, field) {
+  const name = `_bakorin_link_${entity}_${field}`;
+  if (name.length <= MAX_IDENT) {
+    return name;
+  }
+  return `_bakorin_link_${entity.slice(0, 20)}_${field.slice(0, 20)}_${fnv(`${entity}.${field}`)}`;
+}
+var MAX_LINKS_PER_FIELD = 1000;
 export {
   APP_YAML_TOP_LEVEL_KEYS,
   BRANDING_DIR,
@@ -1933,6 +2337,11 @@ export {
   IdentError,
   MAIL_DEFAULT_MAX_ATTEMPTS,
   MAIL_DEFAULT_RETAIN_DAYS,
+  MAX_LINKS_PER_FIELD,
+  MCP_DEFAULTS,
+  MIN_JWT_SECRET_LENGTH,
+  REALTIME_DEFAULTS,
+  RESERVED_ENTITY_NAMES,
   SCHEMA_AST_VERSION,
   SchemaError,
   WEBHOOK_DEFAULT_MAX_ATTEMPTS,
@@ -1941,9 +2350,11 @@ export {
   appYamlSchema,
   assertIdent,
   assertPlanApplyable,
+  assertStrongJwtSecret,
   brandName,
   brandingCss,
   buildSchemaGraph,
+  columnFields,
   compileAppYaml,
   compileBranding,
   contrastRatio,
@@ -1960,20 +2371,27 @@ export {
   interpolateEnv,
   invalidPolicyMessage,
   isAppYamlValidationError,
+  isDevMode,
   isHexColor,
   isIdent,
+  isManyField,
+  joinTableName,
+  manyFields,
   needsConfirmation,
   normalizeHex,
   parsePolicies,
   parsePolicy,
+  parseTrustProxy,
   policyRequiresAuth,
   quoteChecked,
   quoteIdent,
+  rateWindowSeconds,
   schemaToJson,
   schemaToMermaid,
   serializeAst,
   topologicalLayers,
   topologicalOrder,
   touchesExistingData,
+  weakJwtSecretReason,
   webhooksForEntity
 };

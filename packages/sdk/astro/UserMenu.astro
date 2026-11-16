@@ -1,0 +1,50 @@
+---
+/**
+ * The signed in user's name with a menu. A native details element, so it needs
+ * no JavaScript. Reads Astro.locals.user (set by requireAuth) unless you pass user.
+ */
+interface Props {
+  user?: Record<string, unknown> | null;
+  links?: { href: string; label: string }[];
+  signInHref?: string;
+  /** Where to land after signing out. Default /. */
+  afterSignOut?: string;
+  prefix?: string;
+  class?: string;
+}
+const { links = [], signInHref = "/login", afterSignOut = "/", prefix = "/api/bakorin", class: className } = Astro.props;
+const user = (Astro.props.user === undefined ? Astro.locals.user : Astro.props.user) as Record<string, unknown> | null | undefined;
+const name = user ? String(user.name ?? user.email ?? "Account") : "";
+const signOut = `${prefix}/-/logout?next=${encodeURIComponent(afterSignOut)}`;
+---
+
+{
+  user ? (
+    <details class:list={["bk-user-menu", className]}>
+      <summary class="bk-user-menu__button">
+        <span class="bk-avatar" aria-hidden="true">{name.charAt(0).toUpperCase()}</span>
+        <span class="bk-user-menu__name">{name}</span>
+      </summary>
+      <div class="bk-user-menu__panel">
+        {typeof user.email === "string" && <p class="bk-user-menu__email">{user.email}</p>}
+        <ul class="bk-user-menu__list">
+          {links.map((link) => (
+            <li>
+              <a href={link.href}>{link.label}</a>
+            </li>
+          ))}
+          <li>
+            <a href={signOut} class="bk-user-menu__signout" data-astro-reload>Sign out</a>
+          </li>
+        </ul>
+      </div>
+    </details>
+  ) : (
+    <a class:list={["bk-button bk-button--secondary", className]} href={signInHref}>Sign in</a>
+  )
+}
+
+<style is:global>
+  details.bk-user-menu > summary { list-style: none; }
+  details.bk-user-menu > summary::-webkit-details-marker { display: none; }
+</style>

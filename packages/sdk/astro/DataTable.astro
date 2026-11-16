@@ -1,0 +1,54 @@
+---
+/**
+ * A paged, sortable table rendered on the server. Paging and sorting links work
+ * without JavaScript; with it, the element pages in place, saves toggles,
+ * deletes rows, and (live) follows realtime changes.
+ */
+import { jsonForScript, renderTable, tableConfig } from "../dist/astro-render.js";
+
+interface Props {
+  /** A server client, for example api(Astro) from src/lib/bakorin.ts. */
+  client: { entity(name: string): { list(query?: any): Promise<{ data: Record<string, unknown>[]; meta: { total: number; limit: number; offset: number } }> } };
+  entity: string;
+  schema?: { entities: Record<string, any> };
+  columns?: (string | { field: string; label?: string; sortable?: boolean })[];
+  caption?: string;
+  hideCaption?: boolean;
+  limit?: number;
+  /** Default sort, for example "-createdAt". */
+  sort?: string;
+  filter?: Record<string, unknown>;
+  toggle?: string[];
+  deletable?: boolean;
+  confirmDelete?: string | null;
+  live?: boolean;
+  emptyText?: string;
+  basePath?: string;
+  id?: string;
+}
+
+const { client, entity, schema, limit = 20, filter, live = false, basePath, id = `bk-table-${entity}` } = Astro.props;
+const page = Math.max(0, Number(Astro.url.searchParams.get("page") ?? "1") - 1) || 0;
+const sort = Astro.url.searchParams.get("sort") ?? Astro.props.sort;
+const config = tableConfig(entity, schema?.entities[entity], { ...Astro.props, path: Astro.url.pathname });
+let initial = { data: [] as Record<string, unknown>[], meta: { total: 0, limit, offset: page * limit } };
+let error: string | null = null;
+try {
+  initial = await client.entity(entity).list({ limit, offset: page * limit, sort: sort ?? undefined, filter: filter as never });
+} catch (caught) {
+  error = caught instanceof Error ? caught.message : String(caught);
+}
+const state = { items: initial.data, total: initial.meta.total, limit: initial.meta.limit, offset: initial.meta.offset, sort: sort ?? undefined, error, loading: false };
+// Columns carry their field rules so the browser formats cells the same way.
+---
+
+<bakorin-data-table class="bk-table-wrap" data-live={String(live)} data-sort={sort ?? ""} data-base-path={basePath}>
+  <script type="application/json" data-bk="config" set:html={jsonForScript(config)} />
+  <script type="application/json" data-bk="initial" set:html={jsonForScript(initial)} />
+  {filter && <script type="application/json" data-bk="filter" set:html={jsonForScript(filter)} />}
+  <Fragment set:html={renderTable(config, state, id)} />
+</bakorin-data-table>
+
+<script>
+  import "../dist/elements.js";
+</script>

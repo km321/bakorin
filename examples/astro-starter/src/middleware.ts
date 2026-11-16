@@ -1,16 +1,6 @@
-import { defineMiddleware } from "astro:middleware";
-import { api } from "./lib/bakorin.ts";
+import { requireAuth } from "@bakorin/sdk/astro";
+import { bakorinUrl } from "./lib/bakorin.ts";
 
-export const onRequest = defineMiddleware(async (context, next) => {
-  if (!context.url.pathname.startsWith("/app")) {
-    return next();
-  }
-  try {
-    await api(context).me();
-    return next();
-  } catch {
-    // The refresh cookie only goes to the pass through route, so renew the session there.
-    const back = encodeURIComponent(context.url.pathname + context.url.search);
-    return context.redirect(`/api/bakorin/-/refresh?next=${back}&fail=/login`);
-  }
-});
+// Pages under /app need a session. Expired sessions renew through the pass through
+// route (the refresh cookie only goes there). Every page gets Astro.locals.user.
+export const onRequest = requireAuth({ baseUrl: bakorinUrl(), protect: ["/app"], loginPath: "/login" });

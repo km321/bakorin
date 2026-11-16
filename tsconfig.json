@@ -44,8 +44,10 @@
     "packages/core/src/**/*.ts",
     "packages/server/src/**/*.ts",
     "packages/sdk/src/**/*.ts",
+    "packages/sdk/src/**/*.tsx",
     "packages/create-bakorin/src/**/*.ts",
     "tests/**/*.ts",
+    "tests/**/*.tsx",
     "scripts/**/*.ts"
   ],
   "exclude": [

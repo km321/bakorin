@@ -1,0 +1,39 @@
+---
+import AuthForm from "./AuthForm.astro";
+import { escapeHtml } from "../dist/astro-render.js";
+import { formFields } from "../dist/headless.js";
+
+interface Props {
+  /** bakorinSchema from bakorin.gen.ts. The form asks for what the auth entity lets people set. */
+  schema?: { entities: Record<string, any>; auth?: { entity: string } };
+  /** Or list the fields yourself. */
+  fields?: { name: string; type: string; required?: boolean }[];
+  include?: string[];
+  signInHref?: string;
+  submitLabel?: string;
+  basePath?: string;
+  result?: { errors?: Record<string, string>; error?: string; message?: string; values?: Record<string, unknown> };
+}
+
+const { schema, include, signInHref, submitLabel = "Create account", basePath, result } = Astro.props;
+const authEntity = schema?.auth ? schema.entities[schema.auth.entity] : undefined;
+const fields =
+  Astro.props.fields ??
+  (authEntity
+    ? formFields(authEntity, { mode: "create", include })
+    : [
+        { name: "email", type: "email", required: true },
+        { name: "password", type: "password", required: true },
+        { name: "name", type: "text", required: true },
+      ]);
+---
+
+<AuthForm
+  mode="sign-up"
+  fields={fields}
+  submitLabel={submitLabel}
+  className="bk-sign-up"
+  basePath={basePath}
+  result={result}
+  footer={signInHref ? `<p class="bk-links">Already have an account? <a href="${escapeHtml(signInHref)}">Sign in</a></p>` : undefined}
+/>

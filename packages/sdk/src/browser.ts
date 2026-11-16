@@ -12,7 +12,7 @@ const clients = new Map<string, unknown>();
  * httpOnly cookies, so there are no tokens in JavaScript. One client (and one
  * realtime stream) is shared per tab and base path.
  */
-export function createBrowserClient<S extends Entities = Entities>(
+export function createBrowserClient<S extends object = Entities>(
   options: { basePath?: string; origin?: string } & Pick<ClientOptions, "fetch"> = {},
 ) {
   const basePath = options.basePath ?? "/api/bakorin";

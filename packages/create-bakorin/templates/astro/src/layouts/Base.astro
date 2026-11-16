@@ -1,45 +1,42 @@
 ---
+import "@bakorin/sdk/styles.css";
 import "../styles/app.css";
-import { api } from "../lib/bakorin.ts";
+import UserMenu from "@bakorin/sdk/astro/UserMenu.astro";
+import { brandingTheme } from "../lib/bakorin.ts";
 
 interface Props {
   title: string;
 }
 
 const { title } = Astro.props;
-let signedIn = false;
-try {
-  await api(Astro).me();
-  signedIn = true;
-} catch {
-  signedIn = false;
-}
+const user = Astro.locals.user;
+const theme = await brandingTheme();
 ---
 <!doctype html>
-<html lang="en">
+<html lang="en" data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{title} · Bakorin</title>
+    {theme && <style set:html={theme} />}
   </head>
   <body>
+    <a class="skip" href="#main">Skip to content</a>
     <header class="site-header">
-      <a class="brand" href={signedIn ? "/app" : "/"}>Bakorin</a>
+      <a class="brand" href={user ? "/app" : "/"}>Bakorin</a>
       <nav aria-label="Main">
-        {signedIn ? (
+        {user ? (
           <>
-            <a href="/app">App</a>
-            <a href="/api/bakorin/-/logout?next=/">Sign out</a>
+            <a href="/app">Dashboard</a>
+            <a href="/app/tasks">Tasks</a>
           </>
         ) : (
-          <>
-            <a href="/login">Sign in</a>
-            <a href="/signup">Create account</a>
-          </>
+          <a href="/signup">Create account</a>
         )}
+        <UserMenu user={user} links={[{ href: "/app", label: "Dashboard" }]} />
       </nav>
     </header>
-    <main class="wrap">
+    <main class="wrap" id="main">
       <slot />
     </main>
     <footer class="site-footer">

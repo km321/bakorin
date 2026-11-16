@@ -107,3 +107,20 @@ All subscriptions on a client share one stream, which reconnects with backoff an
 ## Generated types
 
 `bakorin typegen` writes `bakorin.gen.ts`. Pass its entity map to `createClient`, `createAstroClient`, or `createNextClient` for typed `entity()` names and records.
+
+The output also includes `bakorinSchema`, which the [components](/docs/components/) and [headless helpers](/docs/headless/) use to build forms and tables.
+
+## Components and helpers
+
+| Import | What it has |
+|---|---|
+| `@bakorin/sdk/headless` | Auth state, collections with optimistic writes, live lists, uploads, and forms. See [Headless helpers](/docs/headless/) |
+| `@bakorin/sdk/react` | React components and hooks. See [React components](/docs/components-react/) |
+| `@bakorin/sdk/astro/*.astro` | Astro components. See [Astro components](/docs/components-astro/) |
+| `@bakorin/sdk/styles.css` | Default styles. See [Styling components](/docs/components-styling/) |
+
+Each import is its own entry, so a page only loads what it uses.
+
+## Errors
+
+Failed calls throw `BakorinRequestError` with `status`, `code`, and, for a bad value, the `field` it belongs to.

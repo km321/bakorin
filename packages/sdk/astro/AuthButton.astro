@@ -1,0 +1,20 @@
+---
+/** "Sign in" when signed out, "Sign out" when signed in. Reads Astro.locals.user unless you pass user. */
+interface Props {
+  user?: Record<string, unknown> | null;
+  signInHref?: string;
+  afterSignOut?: string;
+  prefix?: string;
+  class?: string;
+}
+const { signInHref = "/login", afterSignOut = "/", prefix = "/api/bakorin", class: className } = Astro.props;
+const user = Astro.props.user === undefined ? Astro.locals.user : Astro.props.user;
+---
+
+{
+  user ? (
+    <a class:list={["bk-button bk-button--secondary", className]} href={`${prefix}/-/logout?next=${encodeURIComponent(afterSignOut)}`}>Sign out</a>
+  ) : (
+    <a class:list={["bk-button bk-button--secondary", className]} href={signInHref}>Sign in</a>
+  )
+}

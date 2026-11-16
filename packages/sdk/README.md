@@ -50,6 +50,17 @@ const api = createAstroClient({
 
 This package is published on the npm `beta` tag. See `PUBLISHING.md` in the repo root. Do not `npm publish` until you intend a public beta.
 
+## Components and helpers
+
+| Import | What it has |
+|---|---|
+| `@bakorin/sdk/headless` | Auth state, collections with pagination and optimistic writes, live lists, uploads with progress, and form helpers. No framework |
+| `@bakorin/sdk/react` | `SignInForm`, `SignUpForm`, `UserMenu`, `Gate`, `DataTable`, `RecordForm`, `FileUpload`, `LiveList`, and hooks |
+| `@bakorin/sdk/astro/*.astro` | The same components for Astro. Server rendered, enhanced in the browser, and working without JavaScript |
+| `@bakorin/sdk/styles.css` | Default styles built on `--bk-*` CSS variables |
+
+`requireAuth` (Astro) and `authMiddleware` and `requireUser` (Next.js) protect pages on the server. See the components docs on the website for details.
+
 ## License
 
 MIT. Copyright (c) 2026 Melton Studios. See `LICENSE`.

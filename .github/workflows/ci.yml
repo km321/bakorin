@@ -44,6 +44,54 @@ jobs:
         if: matrix.dialect == 'sqlite'
         run: bun run build:ui
 
+  e2e:
+    name: starters e2e (${{ matrix.frontend }}, ${{ matrix.dialect }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        frontend: [astro, next]
+        dialect: [sqlite, postgres]
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bakorin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # The runner creates and drops its own database on this server.
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/bakorin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+      - run: bun install --frozen-lockfile
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+      - name: Install the starter
+        run: bun install
+        working-directory: examples/${{ matrix.frontend }}-starter
+      - name: Sign in, protected page, CRUD, realtime, upload, accessibility
+        run: bun scripts/e2e-starters/run.ts --frontend ${{ matrix.frontend }} --dialect ${{ matrix.dialect }} --screenshots e2e-shots
+      - name: Keep screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ matrix.frontend }}-${{ matrix.dialect }}
+          path: |
+            e2e-shots
+            /tmp/bakorin-e2e-*.png
+          if-no-files-found: ignore
+
   security:
     name: dependency audit and secret scan
     runs-on: ubuntu-latest

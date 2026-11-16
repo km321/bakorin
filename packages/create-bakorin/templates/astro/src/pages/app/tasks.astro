@@ -1,0 +1,40 @@
+---
+import Layout from "../../layouts/Base.astro";
+import RecordForm from "@bakorin/sdk/astro/RecordForm.astro";
+import DataTable from "@bakorin/sdk/astro/DataTable.astro";
+import { handleRecordForm } from "@bakorin/sdk/astro";
+import { formFields } from "@bakorin/sdk/headless";
+import { api, bakorinUrl, schema } from "../../lib/bakorin.ts";
+
+// Without JavaScript the form posts here. With it, the form saves through /api/bakorin
+// and the table below shows the new row at once.
+const result = await handleRecordForm(Astro, {
+  baseUrl: bakorinUrl(),
+  entity: "tasks",
+  fields: formFields(schema.entities.tasks, { include: ["title"] }),
+  redirectTo: "/app/tasks",
+});
+if (result.response) return result.response;
+---
+<Layout title="Tasks">
+  <section class="card">
+    <h1>Your tasks</h1>
+    <p class="lede">Private to your account. Tick a task to finish it; changes show in every open tab.</p>
+    <RecordForm entity="tasks" schema={schema} include={["title"]} submitLabel="Add task" labels={{ title: "New task" }} result={result} />
+  </section>
+  <section class="card">
+    <DataTable
+      client={api(Astro)}
+      entity="tasks"
+      schema={schema}
+      columns={["title", "done", "createdAt"]}
+      toggle={["done"]}
+      deletable
+      live
+      sort="-createdAt"
+      limit={10}
+      caption="Tasks"
+      hideCaption
+    />
+  </section>
+</Layout>

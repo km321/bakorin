@@ -1,0 +1,166 @@
+---
+title: Headless helpers
+description: Framework free state for auth, collections, realtime lists, uploads, and forms in @bakorin/sdk/headless.
+---
+
+`@bakorin/sdk/headless` is the logic behind the components, with no markup and no framework. Each helper returns a small store you can subscribe to, so it works with React, Svelte, Vue, plain DOM code, or a test.
+
+```ts
+import { createBrowserClient } from "@bakorin/sdk/browser";
+import { createAuth, createCollection } from "@bakorin/sdk/headless";
+
+// Calls /api/bakorin on your own site, so the session stays in httpOnly cookies.
+const client = createBrowserClient();
+const auth = createAuth(client);
+const unsubscribe = auth.store.subscribe(() => render(auth.store.get()));
+```
+
+Every store has `get()`, `set()`, and `subscribe(listener)`, which returns an unsubscribe function.
+
+## Auth
+
+`createAuth(client, { initialUser })` tracks the signed in user.
+
+| Member | What it does |
+|---|---|
+| `store` | `{ status: "loading" \| "signed-in" \| "signed-out", user, error, pending }` |
+| `refresh()` | Loads the current user |
+| `signIn(credentials)` | Signs in. Resolves to the user, or `null` with `error` set |
+| `signUp(fields)` | Creates an account. It never signs in: the person confirms their email first |
+| `signOut({ all })` | Ends the session, or every session with `all: true` |
+| `forgotPassword(email)` | Sends the reset email. Resolves to `true` when the request went through |
+| `resetPassword(token, password)` | Sets a new password from the emailed link |
+| `setUser(user)` | Sets the user yourself, for example after a server action |
+
+Pass `initialUser` when the server already loaded the user (`Astro.locals.user`, or a Next.js server component) so there is no loading flash.
+
+## Protect pages on the server
+
+Astro middleware:
+
+```ts title="src/middleware.ts"
+import { requireAuth } from "@bakorin/sdk/astro";
+
+export const onRequest = requireAuth({
+  baseUrl: process.env.BAKORIN_URL ?? "http://127.0.0.1:4371",
+  protect: ["/app"],
+  loginPath: "/login",
+  // roles: ["admin"],
+});
+```
+
+It sets `Astro.locals.user` on every page. A signed out visitor on a protected page goes to the login page with a `next` value to come back to. An expired session is renewed through the pass through route first, because the refresh cookie is only sent there. With `roles`, a signed in user without one of the roles gets a 403.
+
+Next.js middleware and server components:
+
+```ts title="middleware.ts"
+import { NextResponse } from "next/server";
+import { authMiddleware } from "@bakorin/sdk/next";
+
+const guard = authMiddleware({ baseUrl: process.env.BAKORIN_URL!, protect: ["/app"], loginPath: "/login" });
+
+export async function middleware(request: Request) {
+  return (await guard(request)) ?? NextResponse.next();
+}
+
+export const config = { matcher: ["/app/:path*"] };
+```
+
+```tsx title="app/app/page.tsx"
+import { redirect } from "next/navigation";
+import { requireUser } from "@bakorin/sdk/next";
+import { api } from "../../lib/bakorin";
+
+export default async function Dashboard() {
+  const user = await requireUser(await api(), { redirect, loginPath: "/login", next: "/app" });
+  return <h1>Hello {String(user.name)}</h1>;
+}
+```
+
+`authMiddleware` answers 403 when `roles` is set and the user has none of them. `requireUser` sends that user to the login page instead. `isProtected(path, rules)`, `refreshUrl(next, options)`, and `hasRole(user, roles)` are exported too if you write your own guard. Protection rules match whole path segments, so `/app` covers `/app` and `/app/tasks` but not `/apple`.
+
+## Collections
+
+`createCollection(client, entity, options)` holds one page of records.
+
+```ts
+const tasks = createCollection(client, "tasks", { sort: "-createdAt", limit: 20 });
+await tasks.load();
+const stop = tasks.live(); // apply realtime changes until stop()
+
+await tasks.create({ title: "Write the launch post" }); // shows at once, then swaps in the saved row
+await tasks.update(id, { done: true }); // applied at once
+await tasks.remove(id); // removed at once
+```
+
+| Member | What it does |
+|---|---|
+| `store` | `{ items, total, limit, offset, sort, filter, loading, error, live }` |
+| `load()` | Fetches the current page |
+| `setPage(n)`, `next()`, `previous()` | Pagination, zero based |
+| `setSort("title")`, `setSort("-title")` | Sort ascending or descending, back to the first page |
+| `setFilter(filter)` | Same filters as `list()`, back to the first page |
+| `create`, `update`, `remove` | Optimistic writes. On an error the change is rolled back and the error is thrown |
+| `live()` | Subscribes to realtime changes for the entity |
+
+Writes and realtime events are merged, so a row you create does not show twice when its realtime event arrives first. `pageInfo(state)` gives the page, page count, whether there is a previous or next page, and the one based `from` and `to` numbers for a label such as "1 to 20 of 45". Pass `initial` with a page the server already loaded to skip the first fetch.
+
+## Uploads
+
+```ts
+import { createUpload, uploadFile, signedFileUrl } from "@bakorin/sdk/headless";
+
+const file = await uploadFile(blob, {
+  maxBytes: 10 * 1024 * 1024,
+  accept: ["image/*", "application/pdf"],
+  onProgress: (fraction) => bar.style.setProperty("--progress", String(fraction)),
+});
+// file.url is a signed link through your own site
+
+const url = await signedFileUrl(client, file.id); // a fresh signed link later
+```
+
+`createUpload(options)` wraps the same thing in a store with `status`, `progress`, `file`, and `error`, plus `upload(file)`, `cancel()`, and `reset()`. Size and type are checked before anything is sent, so people see a clear message instead of a 413 or 415. `formatBytes(n)` and `checkFile(file, options)` are exported too.
+
+## Forms
+
+`createForm({ fields, initial, submit })` handles values, validation, and server errors.
+
+```ts
+import { createForm, formFields } from "@bakorin/sdk/headless";
+import { bakorinSchema } from "./bakorin.gen";
+
+const form = createForm({
+  fields: formFields(bakorinSchema.entities.tasks, { include: ["title", "done"] }),
+  initial: task, // leave out for a create form
+  submit: (values, mode) => (mode === "create" ? tasks.create(values) : tasks.update(task.id, values)),
+});
+
+form.setValue("title", input.value);
+const saved = await form.submit();
+```
+
+- Values are coerced by field type: numbers, booleans, dates, enums, and relation lists.
+- `validate()` checks required fields, types, and minimum lengths before anything is sent.
+- On update, `submit` receives only the fields that changed (`changedFields(initial, values)`), so a PATCH never overwrites what someone else edited.
+- When the server rejects a value, `fieldErrorsFrom(error)` puts the message on that field. Other errors become the form error.
+- Editing a field clears its error.
+
+## Schema
+
+`bakorin typegen` writes `bakorinSchema` next to the types in `bakorin.gen.ts`. It lists each entity's fields with their type, whether they are required, enum values, relations, and which ones people can write.
+
+- `formFields(entity, { mode, include, exclude, isAdmin })` gives the fields a form should show. System, owner, secret, and read only fields are left out.
+- `columnFields(entity, include)` gives the fields for a table.
+- `fieldLabel("createdAt")` gives "Created at".
+- `formatValue(field, value)` formats a cell: dates, booleans, numbers, and lists.
+
+After you change `app.yaml`, run the typegen again from the project folder:
+
+```bash
+bunx bakorin typegen -o web/src/lib/bakorin.gen.ts
+```
+
+## Errors
+
+Failed calls throw `BakorinRequestError` with `status`, `code`, and, when the server names one, `field`. Use `isRequestError(error)` to check it across bundles.

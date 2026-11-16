@@ -7,7 +7,7 @@ type Entities = Record<string, Record<string, unknown>>;
  * httpOnly cookies, so there are no tokens in JavaScript. One client (and one
  * realtime stream) is shared per tab and base path.
  */
-export declare function createBrowserClient<S extends Entities = Entities>(options?: {
+export declare function createBrowserClient<S extends object = Entities>(options?: {
     basePath?: string;
     origin?: string;
 } & Pick<ClientOptions, "fetch">): {
@@ -15,7 +15,7 @@ export declare function createBrowserClient<S extends Entities = Entities>(optio
     closeRealtime(): void;
     signup(body: Record<string, unknown>): Promise<import("./index.ts").SignupResult>;
     login(body: Record<string, unknown>): Promise<{
-        user: S[string];
+        user: S[keyof S];
         accessToken: string;
         refreshToken: string;
         expiresIn: number;
@@ -23,7 +23,7 @@ export declare function createBrowserClient<S extends Entities = Entities>(optio
     logout(refreshToken?: string, logoutOptions?: {
         all?: boolean;
     }): Promise<void>;
-    me(): Promise<S[string]>;
+    me(): Promise<S[keyof S]>;
     forgotPassword(body: {
         email: string;
     }): Promise<{
@@ -45,7 +45,7 @@ export declare function createBrowserClient<S extends Entities = Entities>(optio
         password: string;
         name?: string;
     }): Promise<{
-        user: S[string];
+        user: S[keyof S];
         accessToken: string;
         refreshToken: string;
         expiresIn: number;
@@ -55,7 +55,7 @@ export declare function createBrowserClient<S extends Entities = Entities>(optio
         role?: string;
         name?: string;
     }): Promise<{
-        user: S[string];
+        user: S[keyof S];
         email: string;
         role: string;
     }>;
@@ -65,6 +65,14 @@ export declare function createBrowserClient<S extends Entities = Entities>(optio
     }): Promise<{
         ok: boolean;
     }>;
+    files: {
+        upload(file: Blob, filename?: string): Promise<import("./index.ts").UploadedFile>;
+        sign(id: string): Promise<{
+            url: string;
+            expiresAt: number;
+        }>;
+    };
+    apiUrl(path?: string): string;
     entity<K extends keyof S & string>(name: K): {
         list(query?: import("./index.ts").Query): Promise<import("./index.ts").ListResult<S[K]>>;
         get(id: string, expand?: string): Promise<S[K]>;

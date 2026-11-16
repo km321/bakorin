@@ -30,3 +30,4 @@ examples/**/.next
 release
 bench/k6-*.json
 .netlify
+examples/**/next-env.d.ts

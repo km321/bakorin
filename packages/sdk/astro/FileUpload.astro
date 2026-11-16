@@ -1,0 +1,23 @@
+---
+/** A drop zone that is also a normal file input. Uploads go through the pass through route with progress. */
+import { renderDropzone } from "../dist/astro-render.js";
+
+interface Props {
+  label?: string;
+  accept?: string;
+  maxBytes?: number;
+  hint?: string;
+  /** Hidden input that holds the uploaded file id, for use inside a form. */
+  name?: string;
+  basePath?: string;
+  id?: string;
+}
+const { id = "bk-upload", ...rest } = Astro.props;
+const html = renderDropzone({ idPrefix: id, ...rest });
+---
+
+<Fragment set:html={html} />
+
+<script>
+  import "../dist/elements.js";
+</script>

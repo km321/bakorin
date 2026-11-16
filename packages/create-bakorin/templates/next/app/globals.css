@@ -12,7 +12,28 @@
   --sans: "Segoe UI", system-ui, sans-serif;
 }
 
+/* The Bakorin components read --bk-* variables. Map them to this site's palette.
+   Brand colors from app.yaml (loaded in layout.tsx) come later and win. */
+:root {
+  --bk-text: var(--ink);
+  --bk-muted: var(--muted);
+  --bk-surface: #fff;
+  --bk-surface-alt: var(--bg);
+  --bk-border: #8c8276;
+  --bk-border-soft: var(--line);
+  --bk-accent: var(--accent);
+  --bk-accent-fg: var(--accent-ink);
+  --bk-accent-soft: #f3e3d3;
+  --bk-focus: var(--focus);
+  --bk-danger: var(--danger);
+  --bk-radius: 8px;
+}
+
 * { box-sizing: border-box; }
+.skip { position: absolute; left: 8px; top: -48px; padding: 8px 12px; background: var(--paper); border-radius: 8px; }
+.skip:focus { top: 8px; }
+.card + .card { margin-top: 24px; }
+h2 { margin: 0 0 8px; font-size: 1.25rem; }
 html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.5; }
 a { color: var(--accent); }
 a:focus-visible, button:focus-visible, input:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
@@ -24,11 +45,11 @@ nav { display: flex; flex-wrap: wrap; gap: 12px; }
 .card { background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px; }
 h1 { margin: 0 0 8px; font-size: 1.75rem; }
 .lede { margin: 0 0 24px; color: var(--muted); }
-label { display: grid; gap: 6px; margin-bottom: 16px; font-weight: 600; }
-input[type="email"], input[type="password"], input[type="text"] { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
+label:not([class*="bk-"]) { display: grid; gap: 6px; margin-bottom: 16px; font-weight: 600; }
+input[type="email"]:not(.bk-input), input[type="password"]:not(.bk-input), input[type="text"]:not(.bk-input) { width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; font: inherit; background: #fff; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
-button, .button { appearance: none; border: 0; background: var(--accent); color: var(--accent-ink); padding: 10px 16px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; }
-button.secondary, .button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
+button:not([class*="bk-"]), .button { appearance: none; border: 0; background: var(--accent); color: var(--accent-ink); padding: 10px 16px; border-radius: 8px; font: inherit; font-weight: 600; cursor: pointer; text-decoration: none; display: inline-flex; }
+button.secondary:not([class*="bk-"]), .button.secondary { background: transparent; color: var(--ink); border: 1px solid var(--line); }
 .error { background: #f8e4e0; color: var(--danger); padding: 12px; border-radius: 8px; margin-bottom: 16px; }
 .empty { color: var(--muted); }
 .list { list-style: none; padding: 0; margin: 0 0 24px; }

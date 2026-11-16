@@ -1,0 +1,134 @@
+---
+title: Astro components
+description: Server rendered SignInForm, UserMenu, Gate, DataTable, RecordForm, FileUpload, and LiveList for Astro, enhanced in the browser and working without JavaScript.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+The Astro components live in `@bakorin/sdk/astro/` as `.astro` files. Each one renders full HTML on the server, then a small custom element (an island) takes over in the browser for inline errors, optimistic updates, progress, and realtime. Forms still work when JavaScript is off.
+
+They need the pass through route at `src/pages/api/bakorin/[...path].ts`; see [Astro browser calls](/docs/astro/#browser-calls-and-live-updates).
+
+## Protect pages
+
+```ts title="src/middleware.ts"
+import { requireAuth } from "@bakorin/sdk/astro";
+
+export const onRequest = requireAuth({
+  baseUrl: import.meta.env.BAKORIN_URL ?? "http://127.0.0.1:4371",
+  protect: ["/app"],
+  loginPath: "/login",
+});
+```
+
+Every page then has `Astro.locals.user` (or `null`). Add it to `src/env.d.ts`:
+
+```ts title="src/env.d.ts"
+declare namespace App {
+  interface Locals {
+    user: Record<string, unknown> | null;
+  }
+}
+```
+
+## Sign in, sign up, and reset
+
+```astro title="src/pages/login.astro"
+---
+import SignInForm from "@bakorin/sdk/astro/SignInForm.astro";
+import { handleAuthForm } from "@bakorin/sdk/astro";
+
+// Without JavaScript the form posts here. With it, the form signs in through /api/bakorin.
+const result = await handleAuthForm(Astro, { baseUrl: import.meta.env.BAKORIN_URL, mode: "sign-in", redirectTo: "/app" });
+if (result.response) return result.response;
+---
+<SignInForm redirectTo="/app" forgotPasswordHref="/forgot-password" signUpHref="/signup" result={result} />
+```
+
+`handleAuthForm` takes `mode`: `"sign-in"`, `"sign-up"`, `"forgot"`, or `"reset"`. On a successful post it answers with a redirect. Otherwise it returns `errors`, `error`, `message`, and the entered `values` (never the password) for the component to show.
+
+| Component | Props |
+|---|---|
+| `SignInForm.astro` | `redirectTo`, `identityField`, `forgotPasswordHref`, `signUpHref`, `submitLabel`, `result` |
+| `SignUpForm.astro` | `schema` or `fields`, `include`, `signInHref`, `submitLabel`, `result` |
+| `ForgotPasswordForm.astro` | `signInHref`, `result` |
+| `ResetPasswordForm.astro` | `result`. Reads the token from `?token=` |
+| `UserMenu.astro` | `user`, `links`, `signInHref`, `afterSignOut` |
+| `AuthButton.astro` | `user`, `signInHref`, `afterSignOut` |
+| `Gate.astro` | `user`, `roles`, and a `fallback` slot |
+
+```astro
+---
+import UserMenu from "@bakorin/sdk/astro/UserMenu.astro";
+import Gate from "@bakorin/sdk/astro/Gate.astro";
+const user = Astro.locals.user;
+---
+<UserMenu user={user} links={[{ href: "/app", label: "Dashboard" }]} />
+<Gate user={user} roles={["admin"]}>
+  <a href="/app/reports">Reports</a>
+  <p slot="fallback">Only admins can see reports.</p>
+</Gate>
+```
+
+The user menu is a native disclosure, so it opens and signs out without JavaScript.
+
+## Data table and record form
+
+```astro title="src/pages/app/tasks.astro"
+---
+import RecordForm from "@bakorin/sdk/astro/RecordForm.astro";
+import DataTable from "@bakorin/sdk/astro/DataTable.astro";
+import { handleRecordForm } from "@bakorin/sdk/astro";
+import { formFields } from "@bakorin/sdk/headless";
+import { api, bakorinUrl, schema } from "../../lib/bakorin";
+
+const result = await handleRecordForm(Astro, {
+  baseUrl: bakorinUrl(),
+  entity: "tasks",
+  fields: formFields(schema.entities.tasks, { include: ["title"] }),
+  redirectTo: "/app/tasks",
+});
+if (result.response) return result.response;
+---
+<RecordForm entity="tasks" schema={schema} include={["title"]} submitLabel="Add task" result={result} />
+<DataTable
+  client={api(Astro)}
+  entity="tasks"
+  schema={schema}
+  columns={["title", "done", "createdAt"]}
+  toggle={["done"]}
+  deletable
+  live
+  sort="-createdAt"
+  limit={10}
+  caption="Tasks"
+/>
+```
+
+`DataTable.astro` loads the first page on the server. In the browser it handles paging, sorting, toggles, deletes, and live changes, and it adds rows saved by a `RecordForm` for the same entity on the same page. Without JavaScript, the page and sort links still work.
+
+`RecordForm.astro` builds inputs from the schema: text, numbers, checkboxes, dates, enum selects, and relation pickers. Pass `record` to edit one; only changed fields are sent. For relation fields pass `relationOptions`, or `client` to load up to 100 related records on the server.
+
+`handleRecordForm` handles the no JavaScript post: it validates, creates or updates, maps server errors onto fields, and redirects with 303 on success. It only acts on posts from a `RecordForm`, so other forms on the page are left alone.
+
+## File upload and live list
+
+```astro
+---
+import FileUpload from "@bakorin/sdk/astro/FileUpload.astro";
+import LiveList from "@bakorin/sdk/astro/LiveList.astro";
+import { api, schema } from "../../lib/bakorin";
+---
+<FileUpload accept="image/*,application/pdf" maxBytes={10485760} hint="Up to 10 MB." />
+<LiveList client={api(Astro)} entity="tasks" schema={schema} sort="-createdAt" limit={5} label="Latest tasks" />
+```
+
+`FileUpload.astro` takes `name` to add a hidden input with the uploaded file id, so it can sit inside a `RecordForm` or any form. When an upload finishes it fires a `bakorin:uploaded` event with the file in `detail`.
+
+<Aside type="note" title="What needs JavaScript">
+Uploading, live changes, toggles, and deletes run in the browser. Without JavaScript the table and list still show the server rendered page, and paging and sorting still work through links.
+</Aside>
+
+## Without the .astro files
+
+The renderers behind the components are in `@bakorin/sdk/astro-render` (`renderForm`, `renderTable`, `renderDropzone`, and friends). They return HTML strings, so you can use them in an endpoint or another framework. The browser side is `@bakorin/sdk/elements`, which registers `bakorin-auth-form`, `bakorin-record-form`, `bakorin-data-table`, `bakorin-live-list`, and `bakorin-file-upload`.

@@ -74,5 +74,62 @@ ${writeMap}
 }
 
 export type BakorinEntityName = keyof BakorinEntities;
+${schemaConst(ast)}`;
+}
+
+const SYSTEM_FIELDS = new Set(["id", "createdAt", "updatedAt"]);
+
+/** Fields the server fills from the signed in user, like ownerId. Mirrors ownedByFields on the server. */
+function ownerFieldNames(entity: EntityAST, authEntity: string): Set<string> {
+  const names = new Set<string>();
+  for (const rules of Object.values(entity.policies)) {
+    for (const rule of rules) {
+      if (rule.kind === "owner" && rule.field !== "id") {
+        names.add(rule.field);
+      }
+    }
+  }
+  for (const field of entity.fields) {
+    if (field.relation?.to === authEntity && !entity.auth) {
+      names.add(field.name);
+    }
+  }
+  return names;
+}
+
+/**
+ * A runtime description of the schema for UI helpers (RecordForm, DataTable in
+ * @bakorin/sdk). Field names, types, and rules only: no data and no secrets.
+ */
+function schemaConst(ast: SchemaAST): string {
+  const entities: Record<string, unknown> = {};
+  for (const entity of ast.entities) {
+    const owners = ownerFieldNames(entity, ast.auth.entity);
+    entities[entity.name] = {
+      name: entity.name,
+      display: entity.display,
+      fields: entity.fields.map((field) => {
+        const out: Record<string, unknown> = { name: field.name, type: field.type };
+        if (field.required) out.required = true;
+        if (field.enumValues) out.enumValues = field.enumValues;
+        if (field.relation) out.relation = field.relation.many ? { to: field.relation.to, many: true } : { to: field.relation.to };
+        if (field.writable !== "any") out.writable = field.writable;
+        if (field.secret) out.secret = true;
+        if (field.private) out.private = true;
+        if (owners.has(field.name)) out.owner = true;
+        if (SYSTEM_FIELDS.has(field.name)) out.system = true;
+        if (field.description) out.description = field.description;
+        if (field.defaultValue !== undefined && !field.secret) out.defaultValue = field.defaultValue;
+        return out;
+      }),
+    };
+  }
+  const value = {
+    entities,
+    auth: { entity: ast.auth.entity, identityField: ast.auth.identityField, passwordField: ast.auth.passwordField },
+  };
+  return `
+/** Field names, types, and rules for UI helpers like RecordForm in @bakorin/sdk. */
+export const bakorinSchema = ${JSON.stringify(value, null, 2)} as const;
 `;
 }

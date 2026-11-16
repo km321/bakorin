@@ -1,0 +1,80 @@
+---
+/**
+ * A create or edit form built from bakorinSchema. Posts to the page without
+ * JavaScript (handle it with handleRecordForm); with JavaScript it saves through
+ * the pass through route, shows errors next to fields, and fires bakorin:saved.
+ */
+import { jsonForScript, renderForm } from "../dist/astro-render.js";
+import { formFields } from "../dist/headless.js";
+
+interface Props {
+  entity: string;
+  schema: { entities: Record<string, any> };
+  /** The record to edit. Leave out to create one. */
+  record?: Record<string, unknown> & { id?: unknown };
+  include?: string[];
+  exclude?: string[];
+  isAdmin?: boolean;
+  submitLabel?: string;
+  labels?: Record<string, string>;
+  hints?: Record<string, string>;
+  /** Choices for relation fields. A server client loads up to 100 related records when you pass client instead. */
+  relationOptions?: Record<string, { value: string; label: string }[]>;
+  client?: { entity(name: string): { list(query?: any): Promise<{ data: Record<string, unknown>[] }> } };
+  /** From handleRecordForm. */
+  result?: { errors?: Record<string, string>; error?: string; message?: string; values?: Record<string, unknown> };
+  /** Go here after a save with JavaScript. */
+  redirectTo?: string;
+  successMessage?: string;
+  basePath?: string;
+  id?: string;
+}
+
+const { entity, schema, record, include, exclude, isAdmin, labels, hints, client, result = {}, redirectTo, successMessage, basePath } = Astro.props;
+const entitySchema = schema.entities[entity];
+const fields = entitySchema ? formFields(entitySchema, { mode: record ? "update" : "create", include, exclude, isAdmin }) : [];
+const relationOptions = { ...(Astro.props.relationOptions ?? {}) };
+if (client) {
+  for (const field of fields) {
+    if (field.relation && !relationOptions[field.name]) {
+      const display = schema.entities[field.relation.to]?.display ?? "id";
+      try {
+        const rows = await client.entity(field.relation.to).list({ limit: 100, sort: display });
+        relationOptions[field.name] = rows.data.map((row) => ({ value: String(row.id), label: String(row[display] ?? row.id) }));
+      } catch {
+        // leave the field as a plain id input
+      }
+    }
+  }
+}
+const id = Astro.props.id ?? `bk-form-${entity}`;
+const html = renderForm({
+  idPrefix: id,
+  fields,
+  values: result.values ?? record,
+  errors: result.errors,
+  formError: result.error,
+  success: result.message,
+  submitLabel: Astro.props.submitLabel ?? (record ? "Save changes" : "Create"),
+  className: "bk-record-form",
+  labels,
+  hints,
+  relationOptions,
+  hidden: { _bakorin_form: entity },
+});
+---
+
+<bakorin-record-form
+  data-entity={entity}
+  data-id={record?.id ? String(record.id) : undefined}
+  data-redirect={redirectTo}
+  data-success={successMessage}
+  data-base-path={basePath}
+>
+  <script type="application/json" data-bk="fields" set:html={jsonForScript(fields)} />
+  <Fragment set:html={html} />
+</bakorin-record-form>
+
+<script>
+  import "../dist/elements.js";
+</script>

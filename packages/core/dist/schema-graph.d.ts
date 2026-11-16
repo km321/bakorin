@@ -10,6 +10,7 @@ export interface SchemaGraphField {
     relation?: {
         to: string;
         onDelete: OnDelete;
+        many?: boolean;
     };
 }
 export interface SchemaGraphEntity {
@@ -28,6 +29,8 @@ export interface SchemaGraphRelation {
     field: string;
     to: string;
     onDelete: OnDelete;
+    /** Many to many (a join table), not a column. */
+    many?: boolean;
 }
 export interface SchemaGraphWebhook {
     id: string;

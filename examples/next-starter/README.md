@@ -1,6 +1,8 @@
 # Bakorin Next.js starter
 
-App Router pages for signup, login, logout, forgot/reset password, accept invite, and a protected `/app` list.
+App Router pages for sign up, sign in, sign out, forgot and reset password, accept
+invite, a protected `/app` dashboard, and a `/app/tasks` page to create, finish, and
+delete tasks. The pages use the components from `@bakorin/sdk/react`.
 
 ```bash
 bunx bakorin dev
@@ -11,14 +13,33 @@ bun run dev
 
 `BAKORIN_URL` defaults to `http://127.0.0.1:4371`. Open http://127.0.0.1:3000.
 
+## Components
+
+| Page | Components |
+| --- | --- |
+| `/login`, `/signup`, `/forgot-password`, `/reset-password` | `SignInForm`, `SignUpForm`, `ForgotPasswordForm`, `ResetPasswordForm` |
+| Header | `UserMenu` |
+| `/app` | `Gate`, `LiveList`, `FileUpload` |
+| `/app/tasks` | `RecordForm` and `DataTable` sharing one `useCollection` |
+
+`app/providers.tsx` wraps the app in `BakorinProvider` with the signed in user from
+the server and `bakorinSchema`. `middleware.ts` uses `authMiddleware` to protect
+`/app`, and `app/app/page.tsx` calls `requireUser`. `lib/bakorin.gen.ts` holds the
+types and `bakorinSchema` for the todo schema. After you change `app.yaml`, run
+`bunx bakorin typegen -o web/lib/bakorin.gen.ts` from the project folder.
+
+The components use `--bk-*` CSS variables from `@bakorin/sdk/styles.css`.
+`app/globals.css` maps them to this site's colors, and the brand colors from the
+`branding` section of `app.yaml` load in `app/layout.tsx`.
+
 ## Browser calls and live updates
 
 `app/api/bakorin/[...path]/route.ts` is a pass through route: client components
 call `/api/bakorin/...` on this site, and the route forwards to Bakorin with the
 httpOnly session cookies. It refreshes expired tokens, refuses cross-site writes,
-and streams realtime events. `app/app/live-tasks.tsx` uses it with
-`createBrowserClient()` from `@bakorin/sdk/browser` to keep the list live. The
-todo schema turns this on with `realtime: true` on `tasks`.
+and streams realtime events. `BakorinProvider` uses it through
+`createBrowserClient()` from `@bakorin/sdk/browser`, so `LiveList` and `DataTable`
+stay live. The todo schema turns this on with `realtime: true` on `tasks`.
 
 ## In production: set BAKORIN_PROXY_SECRET
 

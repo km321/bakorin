@@ -1,8 +1,10 @@
 import type { ReactNode } from "react";
-import { cookies } from "next/headers";
 import Link from "next/link";
+import { UserMenu } from "@bakorin/sdk/react";
+import "@bakorin/sdk/styles.css";
 import "./globals.css";
-import { bakorinUrl } from "../lib/bakorin.ts";
+import { brandingTheme, currentUser } from "../lib/bakorin.ts";
+import { Providers } from "./providers.tsx";
 
 export const metadata = {
   title: "Bakorin",
@@ -10,40 +12,38 @@ export const metadata = {
 };
 
 export default async function RootLayout({ children }: { children: ReactNode }) {
-  const token = (await cookies()).get("bakorin_access")?.value;
-  let signedIn = false;
-  if (token) {
-    const me = await fetch(new URL("/api/v1/auth/me", bakorinUrl()), {
-      headers: { authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    signedIn = me.ok;
-  }
+  const [user, theme] = await Promise.all([currentUser(), brandingTheme()]);
   return (
-    <html lang="en">
+    <html lang="en" data-theme="light">
+      <head>{theme ? <style dangerouslySetInnerHTML={{ __html: theme }} /> : null}</head>
       <body>
-        <header className="site-header">
-          <Link className="brand" href={signedIn ? "/app" : "/"}>
-            Bakorin
-          </Link>
-          <nav aria-label="Main">
-            {signedIn ? (
-              <>
-                <Link href="/app">App</Link>
-                <a href="/api/bakorin/-/logout?next=/">Sign out</a>
-              </>
-            ) : (
-              <>
-                <Link href="/login">Sign in</Link>
+        <Providers user={user}>
+          <a className="skip" href="#main">
+            Skip to content
+          </a>
+          <header className="site-header">
+            <Link className="brand" href={user ? "/app" : "/"}>
+              Bakorin
+            </Link>
+            <nav aria-label="Main">
+              {user ? (
+                <>
+                  <Link href="/app">Dashboard</Link>
+                  <Link href="/app/tasks">Tasks</Link>
+                </>
+              ) : (
                 <Link href="/signup">Create account</Link>
-              </>
-            )}
-          </nav>
-        </header>
-        <main className="wrap">{children}</main>
-        <footer className="site-footer">
-          <span>Self-hosted backend for your site.</span>
-        </footer>
+              )}
+              <UserMenu links={[{ href: "/app", label: "Dashboard" }]} afterSignOut="/" />
+            </nav>
+          </header>
+          <main className="wrap" id="main">
+            {children}
+          </main>
+          <footer className="site-footer">
+            <span>Self-hosted backend for your site.</span>
+          </footer>
+        </Providers>
       </body>
     </html>
   );

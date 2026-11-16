@@ -1,0 +1,49 @@
+---
+/**
+ * The markup shared by SignInForm, SignUpForm, ForgotPasswordForm, and ResetPasswordForm.
+ * Works without JavaScript (the form posts to the page; use handleAuthForm there),
+ * and signs in through the pass through route when the element loads.
+ */
+import { jsonForScript, renderForm } from "../dist/astro-render.js";
+
+interface Props {
+  mode: "sign-in" | "sign-up" | "forgot" | "reset";
+  fields: { name: string; type: string; required?: boolean; description?: string }[];
+  submitLabel: string;
+  className: string;
+  redirectTo?: string;
+  basePath?: string;
+  action?: string;
+  /** From handleAuthForm. */
+  result?: { errors?: Record<string, string>; error?: string; message?: string; values?: Record<string, unknown> };
+  autocomplete?: Record<string, string>;
+  labels?: Record<string, string>;
+  footer?: string;
+  id?: string;
+}
+
+const { mode, fields, submitLabel, className, redirectTo, basePath, action, result = {}, autocomplete, labels, footer, id = `bk-${mode}` } = Astro.props;
+const html = renderForm({
+  idPrefix: id,
+  fields: fields as never,
+  values: result.values,
+  errors: result.errors,
+  formError: result.error,
+  success: result.message,
+  submitLabel,
+  action,
+  className,
+  autocomplete,
+  labels,
+  footer,
+});
+---
+
+<bakorin-auth-form data-mode={mode} data-redirect={redirectTo} data-base-path={basePath}>
+  <script type="application/json" data-bk="fields" set:html={jsonForScript(fields)} />
+  <Fragment set:html={html} />
+</bakorin-auth-form>
+
+<script>
+  import "../dist/elements.js";
+</script>

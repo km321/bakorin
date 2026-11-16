@@ -1,53 +1,16 @@
 ---
 import Layout from "../layouts/Base.astro";
-import { api } from "../lib/bakorin.ts";
+import SignUpForm from "@bakorin/sdk/astro/SignUpForm.astro";
+import { handleAuthForm } from "@bakorin/sdk/astro";
+import { bakorinUrl, schema } from "../lib/bakorin.ts";
 
-let error = "";
-let sent = "";
-if (Astro.request.method === "POST") {
-  const form = await Astro.request.formData();
-  try {
-    // Signup never signs you in and answers the same way for a new or a taken email.
-    const result = await api(Astro).signup({
-      email: String(form.get("email") ?? ""),
-      password: String(form.get("password") ?? ""),
-      name: String(form.get("name") ?? ""),
-    });
-    sent = result.message;
-  } catch (err) {
-    error = err instanceof Error ? err.message : "Could not create the account";
-  }
-}
+// Signup never signs you in and answers the same way for a new or a taken email.
+const result = await handleAuthForm(Astro, { baseUrl: bakorinUrl(), mode: "sign-up" });
 ---
 <Layout title="Create account">
   <section class="card">
     <h1>Create account</h1>
-    <p class="lede">Use an email and a password of at least 8 characters.</p>
-    {error ? <div class="error" role="alert">{error}</div> : null}
-    {sent ? (
-      <>
-        <div class="banner" role="status">{sent}</div>
-        <p>Check the API logs when MAIL_DRIVER=log. <a href="/login">Go to sign in</a></p>
-      </>
-    ) : (
-      <form method="post">
-        <label>
-          Name
-          <input type="text" name="name" autocomplete="name" required />
-        </label>
-        <label>
-          Email
-          <input type="email" name="email" autocomplete="email" required />
-        </label>
-        <label>
-          Password
-          <input type="password" name="password" autocomplete="new-password" minlength="8" required />
-        </label>
-        <div class="actions">
-          <button type="submit">Create account</button>
-          <a href="/login">Already have an account?</a>
-        </div>
-      </form>
-    )}
+    <p class="lede">Use an email and a password of at least 8 characters. Check the API logs for the email when MAIL_DRIVER=log.</p>
+    <SignUpForm schema={schema} signInHref="/login" result={result} />
   </section>
 </Layout>

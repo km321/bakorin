@@ -12,8 +12,47 @@
   --sans: "Segoe UI", system-ui, sans-serif;
 }
 
+/* The Bakorin components read --bk-* variables. Map them to this site's palette.
+   Brand colors from app.yaml (loaded in Base.astro) come later and win. */
+:root {
+  --bk-text: var(--ink);
+  --bk-muted: var(--muted);
+  --bk-surface: #fff;
+  --bk-surface-alt: var(--bg);
+  --bk-border: #8c8276;
+  --bk-border-soft: var(--line);
+  --bk-accent: var(--accent);
+  --bk-accent-fg: var(--accent-ink);
+  --bk-accent-soft: #f3e3d3;
+  --bk-focus: var(--focus);
+  --bk-danger: var(--danger);
+  --bk-radius: 8px;
+}
+
 * {
   box-sizing: border-box;
+}
+
+.skip {
+  position: absolute;
+  left: 8px;
+  top: -48px;
+  padding: 8px 12px;
+  background: var(--paper);
+  border-radius: 8px;
+}
+
+.skip:focus {
+  top: 8px;
+}
+
+.card + .card {
+  margin-top: 24px;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 1.25rem;
 }
 
 html,
@@ -92,16 +131,17 @@ h1 {
   color: var(--muted);
 }
 
-label {
+/* Plain forms (verify email, accept invite). The Bakorin components bring their own bk- styles. */
+label:not([class*="bk-"]) {
   display: grid;
   gap: 6px;
   margin-bottom: 16px;
   font-weight: 600;
 }
 
-input[type="email"],
-input[type="password"],
-input[type="text"] {
+input[type="email"]:not(.bk-input),
+input[type="password"]:not(.bk-input),
+input[type="text"]:not(.bk-input) {
   width: 100%;
   padding: 10px 12px;
   border: 1px solid var(--line);
@@ -117,7 +157,7 @@ input[type="text"] {
   align-items: center;
 }
 
-button,
+button:not([class*="bk-"]),
 .button {
   appearance: none;
   border: 0;
@@ -132,7 +172,7 @@ button,
   display: inline-flex;
 }
 
-button.secondary,
+button.secondary:not([class*="bk-"]),
 .button.secondary {
   background: transparent;
   color: var(--ink);

@@ -22,8 +22,9 @@ import {
   stripDisallowedWrites,
 } from "./write-guards.ts";
 
-function jsonError(code: string, message: string, status: number) {
-  return Response.json({ error: { code, message } }, { status });
+function jsonError(code: string, message: string, status: number, field?: string) {
+  // field names the input that failed, so forms can show the message next to it.
+  return Response.json({ error: field ? { code, message, field } : { code, message } }, { status });
 }
 
 function changeMeta(c: Context): ChangeMeta {
@@ -324,7 +325,7 @@ export function createCrudRouter(): Hono {
         return jsonError("forbidden", error.message, 403);
       }
       const message = error instanceof InputError ? error.message : "invalid body";
-      return jsonError("invalid_input", message, 400);
+      return jsonError("invalid_input", message, 400, error instanceof InputError ? error.field : undefined);
     }
     body = stripClientOwnership(entity, ctx.ast.auth.entity, body, actor, decision.bypass, "create");
     body = await runBefore(ctx, entity.name, "beforeCreate", body, actor);
@@ -400,7 +401,7 @@ export function createCrudRouter(): Hono {
         return jsonError("forbidden", error.message, 403);
       }
       const message = error instanceof InputError ? error.message : "invalid body";
-      return jsonError("invalid_input", message, 400);
+      return jsonError("invalid_input", message, 400, error instanceof InputError ? error.field : undefined);
     }
     body = stripClientOwnership(entity, ctx.ast.auth.entity, body, actor, decision.bypass, "update");
     body = await runBefore(ctx, entity.name, "beforeUpdate", body, actor, before);

@@ -1,0 +1,139 @@
+---
+title: React components
+description: SignInForm, UserMenu, Gate, DataTable, RecordForm, FileUpload, LiveList, and hooks from @bakorin/sdk/react for Next.js and other React apps.
+---
+
+import { Aside } from "@astrojs/starlight/components";
+
+`@bakorin/sdk/react` has client components and hooks for React 18 and 19. They call your site's pass through route (`/api/bakorin`), so add it first: see [Next.js browser calls](/docs/nextjs/#browser-calls-and-live-updates).
+
+## Set up the provider
+
+```tsx title="app/providers.tsx"
+"use client";
+
+import type { ReactNode } from "react";
+import { BakorinProvider } from "@bakorin/sdk/react";
+import { bakorinSchema, type Users } from "../lib/bakorin.gen";
+
+export function Providers({ user, children }: { user: Users | null; children: ReactNode }) {
+  return (
+    <BakorinProvider initialUser={user} schema={bakorinSchema}>
+      {children}
+    </BakorinProvider>
+  );
+}
+```
+
+```tsx title="app/layout.tsx"
+import "@bakorin/sdk/styles.css";
+import { UserMenu } from "@bakorin/sdk/react";
+import { currentUser } from "../lib/bakorin";
+import { Providers } from "./providers";
+
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const user = await currentUser();
+  return (
+    <html lang="en">
+      <body>
+        <Providers user={user}>
+          <header>
+            <UserMenu links={[{ href: "/app", label: "Dashboard" }]} afterSignOut="/" />
+          </header>
+          <main>{children}</main>
+        </Providers>
+      </body>
+    </html>
+  );
+}
+```
+
+Passing the user your server component loaded means there is no loading flash. Props on `BakorinProvider`: `initialUser`, `schema`, `basePath` (default `/api/bakorin`), and `client` to use your own.
+
+## Auth screens
+
+```tsx title="app/login/page.tsx"
+import { SignInForm } from "@bakorin/sdk/react";
+
+export default function LoginPage() {
+  return <SignInForm redirectTo="/app" forgotPasswordHref="/forgot-password" signUpHref="/signup" />;
+}
+```
+
+| Component | Props |
+|---|---|
+| `SignInForm` | `redirectTo`, `onSuccess`, `identityField`, `forgotPasswordHref`, `signUpHref`, `submitLabel` |
+| `SignUpForm` | `fields` or `include`, `signInHref`, `onSuccess`, `submitLabel`. Without `fields` it asks for what the auth entity lets people set |
+| `ForgotPasswordForm` | `signInHref` |
+| `ResetPasswordForm` | `token` (read from `?token=` when left out), `signInHref` |
+| `UserMenu` | `links`, `signInHref`, `afterSignOut`. Shows a sign in link when signed out |
+| `AuthButton` | `signInHref`, `afterSignOut`. A single sign in or sign out button |
+| `Gate` | `roles`, `fallback`, `loading`, `redirectTo` |
+
+The forms use `method="post"`, so a click before the page hydrates never puts a password in the address bar.
+
+```tsx
+<Gate roles={["admin"]} fallback={<p>Only admins can see reports.</p>}>
+  <Reports />
+</Gate>
+```
+
+<Aside type="caution" title="Gate is for display">
+`Gate` decides what to show. Protect the data on the server with `authMiddleware` or `requireUser` (see [Headless helpers](/docs/headless/#protect-pages-on-the-server)) and with permissions in `app.yaml`.
+</Aside>
+
+## Data table and record form
+
+Share one collection between a form and a table so new rows show at once:
+
+```tsx title="app/app/tasks/tasks-crud.tsx"
+"use client";
+
+import type { ListResult } from "@bakorin/sdk";
+import { DataTable, RecordForm, useCollection } from "@bakorin/sdk/react";
+import type { Tasks } from "../../../lib/bakorin.gen";
+
+export function TasksCrud({ initial }: { initial: ListResult<Tasks> }) {
+  const tasks = useCollection<Tasks>("tasks", { sort: "-createdAt", limit: 10, initial, live: true });
+  return (
+    <>
+      <RecordForm entity="tasks" include={["title"]} submitLabel="Add task" collection={tasks} />
+      <DataTable<Tasks>
+        entity="tasks"
+        collection={tasks}
+        columns={["title", "done", "createdAt"]}
+        toggle={["done"]}
+        deletable
+        caption="Tasks"
+      />
+    </>
+  );
+}
+```
+
+`DataTable` props: `columns` (names or `{ field, label, sortable, render }`), `caption` and `hideCaption`, `toggle` for boolean fields that save on change, `deletable` and `confirmDelete`, `actions(row, collection)` for extra cells, `emptyText`, and the `useCollection` options (`limit`, `sort`, `filter`, `expand`, `initial`, `live`) when you do not pass `collection`.
+
+`RecordForm` props: `entity`, `record` to edit (leave out to create), `include` or `exclude`, `labels`, `hints`, `relationOptions`, `submitLabel`, `successMessage`, `resetOnCreate`, `onSuccess`, and `collection`. Without `relationOptions` it loads up to 100 related records for each relation field. Edits send only the changed fields.
+
+## File upload and live list
+
+```tsx
+<FileUpload accept="image/*,application/pdf" maxBytes={10 * 1024 * 1024} onUploaded={(file) => setAttachment(file.id)} />
+<LiveList entity="tasks" sort="-createdAt" limit={5} label="Latest tasks" />
+```
+
+`FileUpload` also takes `name`, which adds a hidden input with the file id for a plain form. `LiveList` takes `renderItem(row)`; by default it shows the entity's display field.
+
+## Hooks
+
+| Hook | Returns |
+|---|---|
+| `useAuth()` | The auth state plus `signIn`, `signUp`, `signOut`, `forgotPassword`, `resetPassword`, `refresh` |
+| `useCollection(entity, options)` | The collection state plus `load`, `setPage`, `next`, `previous`, `setSort`, `setFilter`, `create`, `update`, `remove` |
+| `useLiveList(entity, options)` | `useCollection` with `live: true` |
+| `useUpload(options)` | Upload state plus `upload(file)`, `cancel`, `reset` |
+| `useRecordForm(options)` | Form state plus `setValue`, `validate`, `submit`, `reset`, `fields` |
+| `useRelationOptions(field)` | Choices for a relation field |
+| `useBakorin()` | `{ client, auth, schema, basePath }` from the provider |
+
+They are built on the [headless helpers](/docs/headless/), so the same rules apply: optimistic writes roll back on errors, and server errors land on the field they name.

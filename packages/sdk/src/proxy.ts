@@ -60,6 +60,9 @@ const FORWARD_RESPONSE_HEADERS = [
   "content-type",
   "cache-control",
   "content-disposition",
+  // File downloads keep Bakorin's sandbox and nosniff headers through the site.
+  "content-security-policy",
+  "x-content-type-options",
   "etag",
   "last-modified",
   "retry-after",

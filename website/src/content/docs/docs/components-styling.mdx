@@ -1,0 +1,85 @@
+---
+title: Styling components
+description: Theme Bakorin components with CSS variables, map your branding colors onto them, or skip the styles and use the class hooks.
+---
+
+## Use the default styles
+
+```ts
+import "@bakorin/sdk/styles.css";
+```
+
+The file is small and has no dependencies. Every color, size, and radius is a `--bk-*` variable. Light and dark mode follow `prefers-color-scheme`, and you can pin one with `data-theme="light"` or `data-theme="dark"` on `<html>`.
+
+| Variable | Used for |
+|---|---|
+| `--bk-font` | Font family. Default: inherits your site's |
+| `--bk-text`, `--bk-muted` | Body text and secondary text |
+| `--bk-surface`, `--bk-surface-alt` | Inputs, table rows, the menu panel, and the drop area |
+| `--bk-border`, `--bk-border-soft` | Input borders and dividers |
+| `--bk-accent`, `--bk-accent-fg`, `--bk-accent-soft` | Primary buttons, links, and selected states |
+| `--bk-focus` | Focus rings |
+| `--bk-danger`, `--bk-danger-soft` | Errors and delete buttons |
+| `--bk-success`, `--bk-success-soft` | Success messages and the live dot |
+| `--bk-radius`, `--bk-gap`, `--bk-control-height` | Corners, spacing, and the height of inputs and buttons |
+
+Set them on `:root` or on any wrapper to match your site:
+
+```css
+:root {
+  --bk-accent: #8a5a2b;
+  --bk-accent-fg: #ffffff;
+  --bk-radius: 0.375rem;
+  --bk-font: "Inter", system-ui, sans-serif;
+}
+```
+
+If you change colors, keep text at 4.5:1 against its background and focus rings and borders at 3:1.
+
+## Use your branding colors
+
+When `app.yaml` has a [branding](/docs/branding/) section, Bakorin serves its colors at `/branding/theme.css`. `loadBrandingTheme(baseUrl)` fetches that file on the server and turns it into `--bk-accent`, `--bk-accent-fg`, `--bk-accent-soft`, and `--bk-focus` rules, in light and dark mode. Only plain color values are copied, so nothing else from the file reaches your page. Without branding it returns an empty string.
+
+Astro:
+
+```astro title="src/layouts/Base.astro"
+---
+import "@bakorin/sdk/styles.css";
+import { loadBrandingTheme } from "@bakorin/sdk/astro";
+const theme = await loadBrandingTheme(import.meta.env.BAKORIN_URL);
+---
+<head>
+  {theme && <style set:html={theme} />}
+</head>
+```
+
+Next.js:
+
+```tsx title="app/layout.tsx"
+import { loadBrandingTheme } from "@bakorin/sdk/next";
+
+const theme = await loadBrandingTheme(process.env.BAKORIN_URL!);
+// in <head>:
+{theme ? <style dangerouslySetInnerHTML={{ __html: theme }} /> : null}
+```
+
+The starters cache the result for five minutes so pages do not wait on it.
+
+## Bring your own styles
+
+Leave out `styles.css` and the components render plain, semantic HTML. Every element keeps a `bk-` class you can target:
+
+| Class | Element |
+|---|---|
+| `bk-form`, `bk-field`, `bk-label`, `bk-input`, `bk-hint`, `bk-error`, `bk-required` | Forms and fields |
+| `bk-field--invalid`, `bk-field--check` | A field with an error, and a checkbox field |
+| `bk-alert`, `bk-alert--success` | Form messages |
+| `bk-button`, `bk-button--secondary`, `bk-button--danger`, `bk-button--small` | Buttons |
+| `bk-table-wrap`, `bk-table`, `bk-table__caption`, `bk-sort`, `bk-table__actions`, `bk-row--pending` | Data tables. Pending rows are saving |
+| `bk-pager`, `bk-pager__status` | Page controls |
+| `bk-live-list`, `bk-live`, `bk-live--open`, `bk-list`, `bk-list__item`, `bk-empty` | Live lists and the realtime status |
+| `bk-dropzone`, `bk-dropzone--active`, `bk-progress` | File upload |
+| `bk-user-menu`, `bk-user-menu__button`, `bk-user-menu__panel`, `bk-avatar` | The user menu |
+| `bk-visually-hidden` | Text for screen readers only |
+
+The React components also take `className`, and the state attributes you would style against are standard: `aria-invalid`, `aria-sort`, `aria-expanded`, `aria-busy`, `disabled`, and `aria-disabled`.

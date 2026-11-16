@@ -1,0 +1,78 @@
+---
+title: Components
+description: Sign in, sign up, user menu, gate, data table, record form, file upload, and live list for Astro and Next.js, styled with CSS variables or used headless.
+---
+
+import { Image } from "astro:assets";
+import tasks from "../../../assets/screens/sdk-tasks.webp";
+import signUp from "../../../assets/screens/sdk-sign-up.webp";
+import signInError from "../../../assets/screens/sdk-sign-in-error.webp";
+import userMenu from "../../../assets/screens/sdk-user-menu.webp";
+import dataTable from "../../../assets/screens/sdk-data-table.webp";
+import recordForm from "../../../assets/screens/sdk-record-form.webp";
+import liveList from "../../../assets/screens/sdk-live-list.webp";
+import fileUpload from "../../../assets/screens/sdk-file-upload.webp";
+
+`@bakorin/sdk` ships ready made pieces for the common parts of an app: auth screens, a user menu, gated content, a data table, forms built from your schema, file upload, and a live list. Each one comes in three layers, so you can take as much or as little as you want.
+
+| Layer | Import | Use it when |
+|---|---|---|
+| [Headless helpers](/docs/headless/) | `@bakorin/sdk/headless` | You want the state and logic with your own markup, in any framework |
+| [React components](/docs/components-react/) | `@bakorin/sdk/react` | You build with Next.js or another React app |
+| [Astro components](/docs/components-astro/) | `@bakorin/sdk/astro/*.astro` | You build with Astro. They render on the server and work without JavaScript |
+| [Styles](/docs/components-styling/) | `@bakorin/sdk/styles.css` | You want the default look, themed from your `branding` section |
+
+Every browser call goes through the pass through route on your own site (`/api/bakorin`), so sessions stay in httpOnly cookies and tokens never reach JavaScript.
+
+<Image src={tasks} alt="A tasks page built with RecordForm and DataTable: a New task field with an Add task button, and a table of three tasks with Done checkboxes, created dates, Delete buttons, and Previous and Next page buttons" />
+
+## What is included
+
+- **Sign in form**: Email and password, with field and server errors. React: `SignInForm`. Astro: `SignInForm.astro`.
+- **Sign up form**: Asks for what the auth entity lets people set. React: `SignUpForm`. Astro: `SignUpForm.astro`.
+- **Forgot and reset password**: The reset email flow. React: `ForgotPasswordForm`, `ResetPasswordForm`. Astro: `ForgotPasswordForm.astro`, `ResetPasswordForm.astro`.
+- **User menu**: Shows the signed in user with links and sign out, or a sign in link. React: `UserMenu`, `AuthButton`. Astro: `UserMenu.astro`, `AuthButton.astro`.
+- **Gate**: Shows content only to signed in users, optionally with a role. React: `Gate`. Astro: `Gate.astro`.
+- **Data table**: Pagination, sortable columns, toggles, delete, and live updates. React: `DataTable`, `Pager`. Astro: `DataTable.astro`.
+- **Record form**: Create and edit forms built from the schema. React: `RecordForm`. Astro: `RecordForm.astro`.
+- **File upload**: Drag and drop or pick a file, with progress and size and type checks. React: `FileUpload`. Astro: `FileUpload.astro`.
+- **Live list**: A list that updates as records change in any tab. React: `LiveList`. Astro: `LiveList.astro`.
+
+## Screens
+
+These are from the Astro and Next.js starters with the default styles.
+
+<Image src={signUp} alt="Sign up form with Email, Password, and Name fields. The email and name are filled in, and the password field shows Password is required" />
+
+Errors show under each field and clear as soon as that field is edited. Focus moves to the first field with a problem.
+
+<Image src={signInError} alt="Sign in form showing an invalid credentials alert above the Email and Password fields" />
+
+<Image src={userMenu} alt="An open user menu under a Kit Example button, with the account email, a Dashboard link, and Sign out" />
+
+<Image src={recordForm} alt="A New task field with an Add task button" />
+
+<Image src={dataTable} alt="A table of tasks with Title, Done, and Created at columns, sorted by Created at, with Delete buttons and page controls" />
+
+<Image src={liveList} alt="A live list with a green Live status and three tasks, the first one added from another tab" />
+
+<Image src={fileUpload} alt="An upload drop area that says Upload a file or drop it here, up to 10 MB, showing that hello.txt was uploaded" />
+
+## Accessibility
+
+The components aim for WCAG 2.2 AA, and the starters are checked with axe in CI.
+
+- Every input has a visible label. Required fields are marked, and hints and errors are tied to the input with `aria-describedby`.
+- Invalid fields get `aria-invalid`, and focus moves to the first one on submit. Form level errors use an alert region.
+- Tables have a caption (it can be visually hidden), sortable headers are buttons with `aria-sort`, and the page status is announced.
+- The user menu is a disclosure button that closes on Escape and returns focus.
+- Focus rings are always visible, and the default colors meet 4.5:1 for text in light and dark mode.
+
+## Try them
+
+Both starters use the components for sign in, a protected dashboard, and a tasks page with create, toggle, delete, and live updates. From a checkout of the repository:
+
+```bash
+bun run create my-app --frontend astro --schema todo --yes
+bun run create my-app --frontend next --schema todo --yes
+```

@@ -1,0 +1,47 @@
+---
+/** A list rendered on the server that follows realtime changes in the browser (the entity needs realtime: true). */
+import { jsonForScript, renderListItems, renderLiveStatus } from "../dist/astro-render.js";
+
+interface Props {
+  client: { entity(name: string): { list(query?: any): Promise<{ data: Record<string, unknown>[]; meta: { total: number; limit: number; offset: number } }> } };
+  entity: string;
+  schema?: { entities: Record<string, any> };
+  /** Field to show. Default: the entity's display field. */
+  display?: string;
+  label?: string;
+  limit?: number;
+  sort?: string;
+  emptyText?: string;
+  basePath?: string;
+}
+
+const { client, entity, schema, limit = 20, sort, emptyText = "Nothing here yet.", basePath } = Astro.props;
+const display = Astro.props.display ?? schema?.entities[entity]?.display ?? "id";
+const label = Astro.props.label ?? entity.charAt(0).toUpperCase() + entity.slice(1);
+let initial: { data: Record<string, unknown>[]; meta: { total: number; limit: number; offset: number } } | null = null;
+try {
+  initial = await client.entity(entity).list({ limit, sort });
+} catch {
+  initial = null;
+}
+---
+
+<bakorin-live-list
+  class="bk-live-list"
+  data-entity={entity}
+  data-display={display}
+  data-limit={String(limit)}
+  data-sort={sort}
+  data-empty={emptyText}
+  data-base-path={basePath}
+>
+  <section aria-label={label}>
+    {initial && <script type="application/json" data-bk="initial" set:html={jsonForScript(initial)} />}
+    <p class="bk-live bk-live--off" role="status" set:html={renderLiveStatus("off")} />
+    <ul class="bk-list" set:html={renderListItems(initial?.data ?? [], display, emptyText)} />
+  </section>
+</bakorin-live-list>
+
+<script>
+  import "../dist/elements.js";
+</script>
