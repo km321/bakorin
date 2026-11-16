@@ -51,6 +51,31 @@ describe("config builder", () => {
     }
   });
 
+  test("many to many, realtime, and the MCP switch round-trip through the builder", async () => {
+    const original = (await Bun.file(join(ROOT, "scripts/screenshots/demo/app.yaml")).text()).replace(/\nwebhooks:[\s\S]*$/, "\n");
+    const { config, warnings } = importAppYaml(original);
+    expect(warnings).toEqual([]);
+    const projects = config.entities.find((entity) => entity.name === "projects")!;
+    expect(projects.realtime).toBe("full");
+    expect(projects.fields.find((field) => field.name === "tagIds")?.many).toBe(true);
+    const result = validateConfig(config);
+    expect(result.issues.filter((issue) => issue.severity === "error")).toEqual([]);
+    expect(serializeAst(compileAppYaml(result.yaml, ENV))).toBe(serializeAst(compileAppYaml(original, ENV)));
+    expect(result.yaml).toContain("many: true");
+    expect(result.yaml).toContain("realtime: true");
+    expect(result.yaml).toContain("mcp: true");
+
+    // Switching a field to many from the form drops onDelete, which many fields do not take.
+    const edited = structuredClone(config);
+    const assignee = edited.entities.find((entity) => entity.name === "tasks")!.fields.find((field) => field.name === "assigneeId")!;
+    assignee.many = true;
+    assignee.onDelete = "cascade";
+    const editedResult = validateConfig(edited);
+    expect(editedResult.issues.filter((issue) => issue.severity === "error")).toEqual([]);
+    const tasks = compileAppYaml(editedResult.yaml, ENV).entities.find((entity) => entity.name === "tasks")!;
+    expect(tasks.fields.find((field) => field.name === "assigneeId")?.relation?.many).toBe(true);
+  });
+
   test("errors point at the form field that caused them", () => {
     const { config } = importAppYaml(
       `app: { name: demo }\nentities:\n  users:\n    auth: true\n    fields:\n      email: { type: email, required: true }\n      password: { type: password, required: true }\n      role: { type: enum, values: [user, admin] }\n  posts:\n    fields:\n      title: { type: text }\n      authorId: { type: relation, to: users }\n    policies:\n      update: owner(authorId)\n`,
