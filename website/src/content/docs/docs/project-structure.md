@@ -27,7 +27,7 @@ A project scaffolded with `create-bakorin` also contains:
 - `README.md` with run instructions for that project
 - `.env.example` and `.gitignore`
 - `Dockerfile`, `.dockerignore`, and `docker-compose.yml`
-- `railway.json` and `railway.toml` (health check path `/health`)
+- `.railway/railway.ts`: Railway Infrastructure as Code with the Dockerfile build, the `/health` check, restart on failure, and the `/data` volume
 - `web/` with the Astro or Next.js starter, unless you pass `--frontend none`
 - `.bakorin/` with a vendored copy of the runtime when you scaffold from a checkout with `--sdk local`
 

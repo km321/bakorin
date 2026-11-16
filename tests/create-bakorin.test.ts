@@ -37,8 +37,19 @@ describe("create-bakorin", () => {
     const yaml = await Bun.file(join(dir, "app.yaml")).text();
     expect(yaml).toContain("name: demo");
     expect(yaml).toContain("tasks:");
-    expect(await Bun.file(join(dir, "railway.json")).exists()).toBe(true);
-    expect(await Bun.file(join(dir, "railway.toml")).exists()).toBe(true);
+    // Railway Infrastructure as Code replaces railway.json and railway.toml (not read after 2026-12-01).
+    expect(await Bun.file(join(dir, "railway.json")).exists()).toBe(false);
+    expect(await Bun.file(join(dir, "railway.toml")).exists()).toBe(false);
+    const railway = await Bun.file(join(dir, ".railway", "railway.ts")).text();
+    expect(railway).toContain('from "railway/iac"');
+    expect(railway).toContain('builder: "DOCKERFILE"');
+    expect(railway).toContain('healthcheck: "/health"');
+    expect(railway).toContain('restartPolicyType: "ON_FAILURE", restartPolicyMaxRetries: 5');
+    expect(railway).toContain('volumeMounts: { "/data": data }');
+    expect(railway).toContain("variables: { managed: false }");
+    expect(railway).toContain('service("demo"');
+    expect(railway).not.toContain("{{APP_NAME}}");
+    expect(await Bun.file(join(dir, ".railway", "README.md")).exists()).toBe(true);
     expect(await Bun.file(join(dir, "Dockerfile")).exists()).toBe(true);
     expect(await Bun.file(join(dir, ".env.example")).exists()).toBe(true);
     expect(await Bun.file(join(dir, "docker-compose.yml")).exists()).toBe(true);

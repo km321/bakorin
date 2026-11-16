@@ -13,7 +13,7 @@ A one click Railway template is <span class="planned-badge">Planned</span>. Toda
 
 ## What to attach
 
-1. One Railway service from the generated `Dockerfile`. `railway.json` and `railway.toml` already set the health check path to `/health`.
+1. One Railway service from the generated `Dockerfile`. `.railway/railway.ts` (Railway Infrastructure as Code) sets the Dockerfile build, the `/health` check, restart on failure (5 tries), and the `/data` volume. Preview it with `railway config plan` and apply it with `railway config apply`.
 2. A volume mounted at `/data`, with `BAKORIN_DATA_DIR=/data`.
 3. Optional: an S3 compatible Railway bucket for uploads and scheduled backups.
 
@@ -33,6 +33,7 @@ SQLite on the volume is the default. Postgres is optional: set `runtime.dialect:
    |---|---|
    | `JWT_SECRET` | Required. Run `openssl rand -base64 48` and paste the output. `bakorin start` refuses to boot without a strong secret |
    | `TRUST_PROXY` | `1`. Railway's edge proxy sits in front, so this lets rate limits see each visitor's IP |
+   | `BAKORIN_PROXY_SECRET` | With an Astro or Next.js site: 32 or more random characters, the same value on the site. Lockouts and rate limits then apply per visitor, not to the whole site |
    | `BAKORIN_DATA_DIR` | `/data` |
    | `CORS_ORIGINS` | Your Astro or Next.js origin. Comma separated if more than one |
    | `APP_URL` | Public URL of the front end |
@@ -70,3 +71,11 @@ The full list is on [Configuration](/docs/configuration/).
 <Aside type="caution">
 Railway volume snapshots are a second copy, not a substitute for `bakorin backup` or scheduled S3 backups. See [Backup and restore](/docs/backups/).
 </Aside>
+
+## Moving off railway.json
+
+<Aside type="caution">
+Railway stops reading `railway.json` and `railway.toml` on 2026-12-01. New `create-bakorin` projects ship `.railway/railway.ts` instead.
+</Aside>
+
+For a project that still has the old files: copy `.railway/railway.ts` from a new `create-bakorin` project (or run `railway config migrate --show`), delete `railway.json` and `railway.toml`, then run `railway config plan`. Apply only when the plan shows no volume or variable deletes. `railway config migrate status` shows which services still read the old files.

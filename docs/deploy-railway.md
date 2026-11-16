@@ -4,7 +4,7 @@ Use this for a project scaffolded by `create-bakorin` (or a folder with `app.yam
 
 ## What to attach
 
-1. One Railway service from the generated `Dockerfile` (`railway.json` / `railway.toml` already set `healthcheckPath` to `/health`).
+1. One Railway service from the generated `Dockerfile`. `.railway/railway.ts` (Railway Infrastructure as Code) sets the Dockerfile build, the `/health` check, restart on failure (5 tries), and the `/data` volume. Run `railway config plan`, then `railway config apply`. It replaces `railway.json` and `railway.toml`, which Railway stops reading on 2026-12-01.
 2. A volume mounted at `/data`. Set `BAKORIN_DATA_DIR=/data`.
 3. Optional: an S3-compatible bucket for uploads and scheduled backups.
 
@@ -16,6 +16,7 @@ SQLite on the volume is the default. A Postgres plugin is optional (`DATABASE_UR
 |---|---|
 | `JWT_SECRET` | required: output of `openssl rand -base64 48`. `bakorin start` refuses to boot without a strong secret |
 | `TRUST_PROXY` | `1` (Railway's edge proxy is in front, so rate limits see each visitor's IP) |
+| `BAKORIN_PROXY_SECRET` | with an Astro or Next site: 32+ random characters, the same value on the site. Lockouts and rate limits then apply per visitor, not to the whole site |
 | `BAKORIN_DATA_DIR` | `/data` |
 | `CORS_ORIGINS` | your Astro/Next origin, comma-separated if more than one |
 | `APP_URL` | public URL of the front end |
@@ -65,3 +66,7 @@ docker run --rm -p 4371:4371 \
 ```
 
 Or `docker compose up --build` using the generated `docker-compose.yml`.
+
+## Moving an existing service off railway.json
+
+Railway stops reading `railway.json` and `railway.toml` on 2026-12-01. For a service that still uses them: add `.railway/railway.ts` (copy it from a new `create-bakorin` project, or run `railway config migrate --show`), delete the two old files, run `railway config plan`, and apply only when the plan shows no volume or variable deletes. `railway config migrate status` shows which services still read the old files.

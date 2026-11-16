@@ -267,6 +267,11 @@ async function copyDir(from: string, to: string): Promise<void> {
   }
 }
 
+/** A Railway service and volume name: lower case letters, digits, and single hyphens. */
+export function railwayName(appName: string): string {
+  return appName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "app";
+}
+
 async function writeTemplated(src: string, dest: string, name: string): Promise<void> {
   const text = (await readFile(src, "utf8")).replaceAll("{{APP_NAME}}", name);
   await writeFile(dest, text);
@@ -470,8 +475,10 @@ export async function run(options: Options): Promise<void> {
   }
   await writeFile(join(dest, "Dockerfile"), dockerfileFor(sdk));
   await writeFile(join(dest, ".dockerignore"), dockerignore());
-  await cp(join(TEMPLATES, "railway.json"), join(dest, "railway.json"));
-  await cp(join(TEMPLATES, "railway.toml"), join(dest, "railway.toml"));
+  // Railway Infrastructure as Code (railway.json and railway.toml stop being read on 2026-12-01).
+  await mkdir(join(dest, ".railway"), { recursive: true });
+  await writeTemplated(join(TEMPLATES, "railway.ts"), join(dest, ".railway", "railway.ts"), railwayName(appName));
+  await cp(join(TEMPLATES, "railway-README.md"), join(dest, ".railway", "README.md"));
   await cp(join(TEMPLATES, "docker-compose.yml"), join(dest, "docker-compose.yml"));
   await writeFile(join(dest, "README.md"), projectReadme(appName, options, sdk));
   await mkdir(join(dest, "mail"), { recursive: true });
