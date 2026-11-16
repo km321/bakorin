@@ -146,8 +146,9 @@ describe("realtime: per reader filtering", () => {
     const sa = (await stream(runtime, "items", a.token)).sse!;
     const sb = (await stream(runtime, "items", b.token)).sse!;
     expect((await call(runtime, "PATCH", `/api/v1/items/${id}`, { ownerId: b.id }, boss.token)).status).toBe(200);
-    expect((await sa.next((event) => event.event === "change")).data).toMatchObject({ op: "delete", id });
-    expect((await sb.next((event) => event.event === "change")).data).toMatchObject({ op: "update", id, record: { ownerId: b.id } });
+    // The create can still reach a stream opened just after it (the hub had not pumped it yet), so wait for the op.
+    expect((await sa.next((event) => event.event === "change" && event.data?.op !== "create")).data).toMatchObject({ op: "delete", id });
+    expect((await sb.next((event) => event.event === "change" && event.data?.op !== "create")).data).toMatchObject({ op: "update", id, record: { ownerId: b.id } });
   });
 
   test("public entities reach signed out readers, private fields stay private, ids mode sends no record", async () => {
