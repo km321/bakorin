@@ -138,6 +138,12 @@ export function openSqlite(path: string): { db: BakorinDb; raw: Database } {
 
 export function openPostgres(url: string): { db: BakorinDb; pool: Pool } {
   const pool = new Pool({ connectionString: url, max: 8 });
+  // An idle client can die when Postgres restarts, fails over, or terminates the
+  // backend. pg emits that on the pool, and an unhandled 'error' event would
+  // take the whole process down. The pool replaces the client on next use.
+  pool.on("error", (error) => {
+    console.error(`[bakorin] postgres idle connection error: ${error instanceof Error ? error.message : String(error)}`);
+  });
   const db = new Kysely<Record<string, Record<string, unknown>>>({
     dialect: new PostgresDialect({ pool }),
   });

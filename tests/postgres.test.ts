@@ -209,3 +209,21 @@ webhooks:
     });
   });
 });
+
+describe.skipIf(!url)("postgres: idle connection errors", () => {
+  test("a terminated idle connection is logged, not fatal", async () => {
+    const { openPostgres } = await import("../packages/server/src/db/dialects.ts");
+    const { db, pool } = openPostgres(url!);
+    await pool.query("select 1");
+    const idle = pool.idleCount;
+    expect(idle).toBeGreaterThan(0);
+    expect(pool.listenerCount("error")).toBeGreaterThan(0);
+    // Simulate Postgres killing the idle backend.
+    const admin = openPostgres(url!);
+    await admin.pool.query("select pg_terminate_backend(pid) from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid() and state = 'idle'");
+    await Bun.sleep(200);
+    expect((await pool.query("select 1 as ok")).rows[0].ok).toBe(1);
+    await db.destroy();
+    await admin.db.destroy();
+  });
+});
