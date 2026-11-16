@@ -18,8 +18,6 @@ and whether you used SQLite or Postgres. A short proof of concept helps.
 
 ## What to expect
 
-(Proposed response times: Melton Studios to confirm before beta.)
-
 - We confirm we received your report within 3 business days.
 - We send a first assessment, with a severity and next steps, within 10 business days.
 - We tell you when a fix ships and credit you in the release notes, unless you
