@@ -10,9 +10,8 @@ request, or discussion for them.
 - **GitHub private vulnerability reporting:** on the repository, open the
   **Security** tab and choose **Report a vulnerability**. This works once private
   vulnerability reporting is turned on for the repository.
-- **While the repository is private:** contact the maintainers at
-  `SECURITY_CONTACT_TO_BE_CONFIRMED` (placeholder: Melton Studios to add a monitored
-  address before beta testers get access).
+- **Email:** kyle@meltonstudios.com. Use this while the repository is private,
+  or if you prefer email.
 
 Include what you found, the steps to reproduce it, the Bakorin version or commit,
 and whether you used SQLite or Postgres. A short proof of concept helps.
