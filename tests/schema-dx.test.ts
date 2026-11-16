@@ -92,10 +92,15 @@ describe("dev watcher debounce", () => {
     debounced.trigger();
     debounced.trigger();
     expect(count).toBe(0);
-    await Bun.sleep(80);
+    // Timers can fire late on a busy runner: wait for the run, then check it ran once.
+    const waitForCount = async (target: number) => {
+      for (let i = 0; i < 200 && count < target; i += 1) await Bun.sleep(10);
+    };
+    await waitForCount(1);
+    await Bun.sleep(60);
     expect(count).toBe(1);
     debounced.trigger();
-    await Bun.sleep(80);
+    await waitForCount(2);
     expect(count).toBe(2);
     debounced.cancel();
   });

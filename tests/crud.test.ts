@@ -62,8 +62,9 @@ describe("crud", () => {
     });
     const token = (await signup.json()).data.accessToken as string;
     await client(runtime, token).fetch("/api/v1/items", { method: "POST", body: JSON.stringify({ title: "Hooked" }) });
-    await Bun.sleep(40);
     const hooks = runtime.context.hooks as { entities?: { items?: { afterCreate?: unknown } }; seenEvents?: string[] };
+    // After hooks run after the response; wait for this one instead of a fixed sleep.
+    for (let i = 0; i < 200 && (hooks.seenEvents?.length ?? 0) === 0; i += 1) await Bun.sleep(10);
     expect(hooks.entities?.items?.afterCreate).toBeTypeOf("function");
     expect(hooks.seenEvents).toEqual(["Hooked"]);
     await runtime.close();

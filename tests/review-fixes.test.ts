@@ -218,7 +218,9 @@ describe("H2: a failing after hook never crashes the process", () => {
       { authorization: `Bearer ${user.json.data.accessToken}`, "x-request-id": "req-hook-1" },
     );
     expect(created.status).toBe(201);
-    await Bun.sleep(50);
+    for (let i = 0; i < 200 && !runtime.context.monitor.recentErrors().some((error) => error.source === "hook"); i += 1) {
+      await Bun.sleep(10);
+    }
     const errors = runtime.context.monitor.recentErrors();
     const hookError = errors.find((error) => error.source === "hook");
     expect(hookError?.message).toContain("hook boom");

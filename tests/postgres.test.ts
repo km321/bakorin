@@ -168,8 +168,9 @@ webhooks:
         expect(await count(runtime, WEBHOOK_OUTBOX_TABLE)).toBe(3);
         expect((await count(runtime, AUDIT_TABLE)) - auditBefore).toBe(3);
         // The throwing afterCreate was reported, not fatal.
-        await Bun.sleep(50);
-        expect(runtime.context.monitor.recentErrors().some((error) => error.source === "hook")).toBe(true);
+        const hookReported = () => runtime.context.monitor.recentErrors().some((error) => error.source === "hook");
+        for (let i = 0; i < 200 && !hookReported(); i += 1) await Bun.sleep(10);
+        expect(hookReported()).toBe(true);
         expect((await client(runtime).fetch("/health")).status).toBe(200);
       } finally {
         await runtime.close();
@@ -221,8 +222,13 @@ describe.skipIf(!url)("postgres: idle connection errors", () => {
     // Simulate Postgres killing the idle backend.
     const admin = openPostgres(url!);
     await admin.pool.query("select pg_terminate_backend(pid) from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid() and state = 'idle'");
-    await Bun.sleep(200);
-    expect((await pool.query("select 1 as ok")).rows[0].ok).toBe(1);
+    // The pool drops the killed connection when its error arrives; retry until a fresh one answers.
+    let ok: unknown = null;
+    for (let i = 0; i < 100 && ok === null; i += 1) {
+      await Bun.sleep(20);
+      ok = await pool.query("select 1 as ok").then((result) => result.rows[0].ok, () => null);
+    }
+    expect(ok).toBe(1);
     await db.destroy();
     await admin.db.destroy();
   });
