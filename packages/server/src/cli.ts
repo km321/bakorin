@@ -2,6 +2,7 @@
 
 import { cmdBackup, cmdExport, cmdImport, cmdRestore } from "./cli-backup.ts";
 import { cmdInit } from "./cli-init.ts";
+import { cmdJobs } from "./cli-jobs.ts";
 import { cmdMail } from "./cli-mail.ts";
 import { cmdMigrate, cmdSchema, cmdTypegen } from "./cli-schema.ts";
 import { serve } from "./cli-serve.ts";
@@ -28,6 +29,9 @@ Commands:
   mail list           List templates in mail/
   mail preview <template|rule> [--record <id>] [--entity name] [--format html|text|json]
                       Render a mail template against a sample or real record
+  jobs list           List cron jobs from app.yaml
+  jobs run <name> [--dry-run]
+                      Run a job now and print the result
 
 A project is one folder: app.yaml, optional hooks.ts, mail/, branding/, data/, uploads.
 `);
@@ -67,6 +71,9 @@ switch (command) {
     break;
   case "mail":
     await cmdMail();
+    break;
+  case "jobs":
+    await cmdJobs();
     break;
   case "help":
   case "--help":

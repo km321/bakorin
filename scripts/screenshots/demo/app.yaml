@@ -13,6 +13,7 @@ runtime:
   backups:
     destination: ./data/backups
   mcp: true
+  hooks: ./hooks.ts
 auth:
   entity: users
   adminRole: admin
@@ -112,3 +113,10 @@ mail:
     subject: "{{ record.name }} has shipped"
     template: project-shipped
     expand: [clientId]
+
+jobs:
+  - name: daily_digest
+    cron: "0 6 * * 1-5"
+    timezone: America/New_York
+    timeoutSeconds: 60
+

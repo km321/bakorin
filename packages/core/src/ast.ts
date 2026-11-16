@@ -153,6 +153,8 @@ export interface WebhookAST {
 
 export const MAIL_DEFAULT_MAX_ATTEMPTS = 8;
 export const MAIL_DEFAULT_RETAIN_DAYS = 30;
+export const JOB_DEFAULT_RETAIN_DAYS = 30;
+export const JOB_DEFAULT_TIMEOUT_SECONDS = 300;
 
 export type MailScalar = string | number | boolean | null;
 
@@ -178,6 +180,16 @@ export interface MailRuleAST {
   changed: string[];
   expand: string[];
   maxAttempts: number;
+}
+
+export interface JobAST {
+  name: string;
+  cron: string;
+  handler: string;
+  timezone: string;
+  dryRun: boolean;
+  timeoutSeconds: number;
+  enabled: boolean;
 }
 
 export interface FilesRuntimeAST {
@@ -230,6 +242,7 @@ export interface RuntimeAST {
   appUrl: string;
   webhooksRetainDays: number;
   mailRetainDays: number;
+  jobsRetainDays: number;
   alerts: AlertsRuntimeAST;
   /** How to find the client IP behind proxies. See TrustProxyAST. */
   trustProxy: TrustProxyAST;
@@ -275,6 +288,7 @@ export interface SchemaAST {
   auth: AuthAST;
   webhooks: WebhookAST[];
   mail: MailRuleAST[];
+  jobs: JobAST[];
 }
 
 export type ChangeOp = "create" | "update" | "delete";

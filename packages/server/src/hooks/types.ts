@@ -1,3 +1,4 @@
+import type { SchemaAST } from "@bakorin/core";
 import type { Hono } from "hono";
 import type { Actor } from "../context.ts";
 import type { BakorinDb } from "../db/dialects.ts";
@@ -57,4 +58,35 @@ export interface BakorinHooks {
    * signup and signed out creates. Runs before the request body is used.
    */
   verify?: (ctx: VerifyContext) => Promise<VerifyHookResult> | VerifyHookResult;
+  /**
+   * Cron and manual job handlers, keyed by the handler name in app.yaml
+   * (defaults to the job name).
+   */
+  jobs?: Record<string, JobHandler>;
 }
+
+export type JobTrigger = "scheduled" | "manual";
+
+export interface JobRunResult {
+  ok: boolean;
+  message?: string;
+  data?: unknown;
+}
+
+export interface JobContext {
+  name: string;
+  handler: string;
+  dryRun: boolean;
+  trigger: JobTrigger;
+  scheduledFor: Date | null;
+  actor: Actor | null;
+  db: BakorinDb;
+  mail: MailApi;
+  ast: SchemaAST;
+  projectDir: string;
+  env: Record<string, string | undefined>;
+  log: (message: string) => void;
+  signal: AbortSignal;
+}
+
+export type JobHandler = (ctx: JobContext) => Promise<JobRunResult | void> | JobRunResult | void;

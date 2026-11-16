@@ -16,6 +16,7 @@ Markdown sources for a future bakorin.dev.
 - [Schema changes](migrations.md)
 - [Monitoring](monitoring.md)
 - [Webhooks](webhooks.md)
+- [Jobs](jobs.md)
 - [Security notes](security.md)
 - [Scaling notes](scaling.md)
 - [Realtime](realtime.md)

@@ -1,4 +1,6 @@
 export {
+  JOB_DEFAULT_RETAIN_DAYS,
+  JOB_DEFAULT_TIMEOUT_SECONDS,
   MAIL_DEFAULT_MAX_ATTEMPTS,
   MAIL_DEFAULT_RETAIN_DAYS,
   SCHEMA_AST_VERSION,
@@ -23,6 +25,7 @@ export type {
   FileDriver,
   FilesRuntimeAST,
   MailConditionAST,
+  JobAST,
   MailRuleAST,
   MailScalar,
   OnDelete,
@@ -80,6 +83,17 @@ export type {
   SchemaGraphWebhook,
 } from "./schema-graph.ts";
 export { appYamlSchema, FIELD_TYPES, APP_YAML_TOP_LEVEL_KEYS } from "./yaml-schema.ts";
+export {
+  CronError,
+  isValidTimeZone,
+  latestCronOccurrenceAtOrBefore,
+  matchesCron,
+  nextCronOccurrence,
+  parseCron,
+  zonedParts,
+  zonedToUtc,
+} from "./cron.ts";
+export type { CronExpr, CronFieldName, ZonedParts } from "./cron.ts";
 export type { AppYaml } from "./yaml-schema.ts";
 export {
   BRANDING_DIR,

@@ -74,6 +74,22 @@ const hooks: BakorinHooks = {
 
 hCaptcha and reCAPTCHA work the same way with their own verify URL. To check only some entities, look at `entity` and return `true` for the rest. Signed in creates skip the hook; use [rate limits](/docs/app-yaml/#rate-limits) for those.
 
+## Jobs
+
+`jobs` is a map of cron and manual job handlers, keyed by the handler name in `app.yaml`. See [Jobs](/docs/jobs/).
+
+```ts
+const hooks: BakorinHooks = {
+  jobs: {
+    async refresh_stats(ctx) {
+      if (ctx.dryRun) return { ok: true, message: "dry run" };
+      ctx.log("refreshing");
+      return { ok: true };
+    },
+  },
+};
+```
+
 ## Custom routes
 
 `routes(app)` receives the Hono app. Add any route you need.

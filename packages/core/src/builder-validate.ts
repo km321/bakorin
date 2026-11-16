@@ -88,6 +88,9 @@ function zodTarget(config: BuilderConfig, path: Array<string | number>): string 
     if (b === "when") return `mail.${a}.when`;
     return b !== undefined ? `mail.${a}.${String(b)}` : `mail.${a}`;
   }
+  if (head === "jobs" && typeof a === "number") {
+    return b !== undefined ? `jobs.${a}.${String(b)}` : `jobs.${a}`;
+  }
   if (head === "app" || head === "auth") return a !== undefined ? `${head}.${String(a)}` : String(head);
   if (head === "runtime") return "runtime";
   if (head === "branding") return a !== undefined ? `branding.${String(a)}` : "branding.name";
@@ -111,6 +114,17 @@ function compileTarget(config: BuilderConfig, message: string): string {
     }
     if (/name /.test(text)) return `mail.${i}.name`;
     return `mail.${i}`;
+  }
+  const job = /^job (?:"([^"]+)"|#(\d+))/.exec(text);
+  if (job) {
+    const i = job[1] !== undefined ? config.jobs.findIndex((item) => item.name === job[1]) : Number(job[2]) - 1;
+    if (i < 0) return "jobs";
+    if (/cron/.test(text)) return `jobs.${i}.cron`;
+    if (/handler/.test(text)) return `jobs.${i}.handler`;
+    if (/timezone/.test(text)) return `jobs.${i}.timezone`;
+    if (/timeoutSeconds/.test(text)) return `jobs.${i}.timeoutSeconds`;
+    if (/name /.test(text)) return `jobs.${i}.name`;
+    return `jobs.${i}`;
   }
   if (/^auth\b/.test(text) || /auth entity|auth: true|auth\.entity/.test(text)) {
     if (/identity/.test(text)) return "auth.identity";

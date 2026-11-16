@@ -1,7 +1,7 @@
 import type { MetaEntity } from "../lib/api.ts";
 import { initials } from "../lib/format.ts";
 import { Brand } from "./Brand.tsx";
-import { IconAudit, IconBackup, IconDocs, IconFiles, IconMail, IconSchema, IconStatus, IconWebhook } from "./Icons.tsx";
+import { IconAudit, IconBackup, IconDocs, IconFiles, IconJobs, IconMail, IconSchema, IconStatus, IconWebhook } from "./Icons.tsx";
 import type { AdminPage } from "../pages/ProjectScreen.tsx";
 
 /** The admin navigation: one entry per entity, then the project screens. */
@@ -105,6 +105,17 @@ export function Sidebar({
             <IconMail />
           </span>
           Mail
+        </button>
+        <button
+          data-nav="jobs"
+          class={page === "jobs" ? "active" : ""}
+          aria-current={page === "jobs" ? "page" : undefined}
+          onClick={() => onOpenPage("jobs")}
+        >
+          <span class="nav-icon">
+            <IconJobs />
+          </span>
+          Jobs
         </button>
         <button
           data-nav="audit"

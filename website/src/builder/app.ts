@@ -13,6 +13,7 @@ import {
   emptyEntity,
   emptyField,
   emptyBranding,
+  emptyJob,
   emptyMailRule,
   importAppYaml,
   validateConfig,
@@ -23,6 +24,7 @@ import {
   type BuilderResult,
   type EntityDraft,
   type FieldDraft,
+  type JobDraft,
   type MailDraft,
   type PolicyAction,
   type WhenOp,
@@ -92,6 +94,8 @@ function loadInitial(): void {
       if (saved?.config?.entities) {
         config = saved.config;
         config.branding = { ...emptyBranding(), ...(config.branding ?? {}) };
+        config.mail = config.mail ?? [];
+        config.jobs = config.jobs ?? [];
         starterId = saved.starterId ?? "custom";
         return;
       }
@@ -1057,6 +1061,106 @@ function mailCard(rule: MailDraft, i: number): HTMLElement {
   );
 }
 
+
+function jobCard(job: JobDraft, i: number): HTMLElement {
+  const at = `jobs.${i}`;
+  const title = job.name || `job ${i + 1}`;
+  return h(
+    "details",
+    { class: "entity", open: true, "data-target": at },
+    h("summary", {}, h("span", { class: "entity-title" }, title), h("span", { class: "entity-meta" }, job.cron || "no schedule")),
+    h(
+      "div",
+      { class: "entity-body" },
+      h(
+        "div",
+        { class: "grid3" },
+        control(`${at}.name`, "Job name", textInput(job.name, (v) => (job.name = v), { placeholder: "refresh_stats" })),
+        control(`${at}.cron`, "Cron", textInput(job.cron, (v) => (job.cron = v), { placeholder: "0 * * * *" }), {
+          hint: "Five fields: minute hour day month weekday. UTC unless you set a time zone.",
+        }),
+        control(`${at}.handler`, "Handler", textInput(job.handler, (v) => (job.handler = v), { placeholder: job.name || "refresh_stats" }), {
+          hint: "hooks.jobs key. Leave empty to use the job name.",
+        }),
+      ),
+      h(
+        "div",
+        { class: "grid3" },
+        control(`${at}.timezone`, "Time zone", textInput(job.timezone, (v) => (job.timezone = v), { placeholder: "UTC" }), {
+          hint: "IANA name such as America/New_York. Empty means UTC.",
+        }),
+        control(
+          `${at}.timeoutSeconds`,
+          "Timeout (seconds)",
+          h("input", {
+            type: "number",
+            min: 1,
+            max: 86400,
+            value: job.timeoutSeconds,
+            placeholder: "300",
+            onInput: (event: Event) => {
+              job.timeoutSeconds = (event.target as HTMLInputElement).value;
+              changed();
+            },
+          }),
+        ),
+        h(
+          "div",
+          { class: "stack" },
+          checkbox(`${at}.enabled`, "Enabled", job.enabled, (checked) => {
+            job.enabled = checked;
+          }),
+          checkbox(`${at}.dryRun`, "Dry run by default", job.dryRun, (checked) => {
+            job.dryRun = checked;
+          }),
+        ),
+      ),
+      h(
+        "button",
+        {
+          type: "button",
+          class: "btn-secondary",
+          onClick: () => {
+            config.jobs.splice(i, 1);
+            changed(true);
+          },
+        },
+        "Remove job",
+      ),
+    ),
+  );
+}
+
+function jobsSection(): HTMLElement {
+  return h(
+    "section",
+    { class: "panel", "aria-labelledby": "bk-jobs-h" },
+    h("h2", { id: "bk-jobs-h" }, "Jobs"),
+    h(
+      "p",
+      { class: "hint" },
+      "Run TypeScript on a cron schedule. Each job needs a handler in hooks.jobs. See ",
+      h("a", { href: "/docs/jobs/" }, "Jobs docs"),
+      ".",
+    ),
+    h("div", { class: "err-slot", "data-slot": "jobs" }),
+    h("div", { class: "entity-list" }, ...config.jobs.map((job, i) => jobCard(job, i))),
+    h(
+      "button",
+      {
+        type: "button",
+        class: "btn-secondary",
+        onClick: () => {
+          const job = emptyJob(`job_${config.jobs.length + 1}`);
+          config.jobs.push(job);
+          changed(true, `jobs.${config.jobs.length - 1}.name`);
+        },
+      },
+      "Add job",
+    ),
+  );
+}
+
 function mailSection(): HTMLElement {
   return h(
     "section",
@@ -1103,7 +1207,7 @@ function render(focusTarget?: string): void {
   const active = document.activeElement as HTMLElement | null;
   const activeId = focusTarget ? idFor(focusTarget) : active?.id;
   const scroll = window.scrollY;
-  root.replaceChildren(appSection(), brandingSection(), authSection(), entitiesSection(), mailSection());
+  root.replaceChildren(appSection(), brandingSection(), authSection(), entitiesSection(), mailSection(), jobsSection());
   const starterSelect = document.getElementById("bk-starter") as HTMLSelectElement | null;
   if (starterSelect) starterSelect.value = STARTERS.some((item) => item.id === starterId) ? starterId : "custom";
   if (activeId) {

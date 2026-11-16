@@ -90,6 +90,19 @@ export interface MailDraft {
   maxAttempts: string;
 }
 
+export interface JobDraft {
+  name: string;
+  cron: string;
+  /** Empty means use the job name. */
+  handler: string;
+  /** Empty means UTC. */
+  timezone: string;
+  dryRun: boolean;
+  /** Empty means the server default (300). */
+  timeoutSeconds: string;
+  enabled: boolean;
+}
+
 export interface AuthDraft {
   entity: string;
   identity: string;
@@ -126,6 +139,7 @@ export interface BuilderConfig {
   /** Webhooks are not edited by the builder but are preserved on import. */
   webhooks: unknown[];
   mail: MailDraft[];
+  jobs: JobDraft[];
 }
 
 export interface BuilderIssue {
@@ -201,6 +215,18 @@ export function emptyMailRule(entity = ""): MailDraft {
     changed: [],
     expand: [],
     maxAttempts: "",
+  };
+}
+
+export function emptyJob(name = ""): JobDraft {
+  return {
+    name,
+    cron: "0 * * * *",
+    handler: "",
+    timezone: "",
+    dryRun: false,
+    timeoutSeconds: "",
+    enabled: true,
   };
 }
 

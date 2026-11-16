@@ -32,3 +32,7 @@
 - Backup downloads are admin only, through a 60 second link bound to one backup and re-checked against the admin's current role. No public URLs.
 - `bakorin restore` verifies sha256 checksums before it changes anything and takes a safety backup first.
 - Request logs and error reports leave out query strings, headers, bodies, and tokens. `/metrics` is off unless `METRICS_TOKEN` is set.
+
+## Jobs
+
+Scheduled jobs run with no user actor. Manual Run now runs as the signed in admin. Only admins can list runs or start a job. Job handlers are your TypeScript; treat them like other hooks and do not log secrets.

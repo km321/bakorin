@@ -56,12 +56,16 @@ export const TEST_DIALECT = process.env.BAKORIN_TEST_DIALECT === "postgres" ? "p
 
 const SQLITE_BLOCK = `  sqlite:\n    path: ./data/app.db\n`;
 
-export async function boot(yaml?: string, hooks?: string): Promise<RuntimeHandles & { dir: string }> {
+export async function boot(
+  yaml?: string,
+  hooks?: string,
+  options: { workers?: boolean } = {},
+): Promise<RuntimeHandles & { dir: string }> {
   const source = yaml ?? MINI_YAML;
   if (TEST_DIALECT === "postgres" && source.includes("dialect: sqlite") && source.includes(SQLITE_BLOCK)) {
-    return bootOnPostgres(source, hooks);
+    return bootOnPostgres(source, hooks, options);
   }
-  return bootAs(source, hooks);
+  return bootAs(source, hooks, options);
 }
 
 /** For tests about SQLite files themselves (snapshots, app.db downloads). */
@@ -69,11 +73,12 @@ export async function bootSqlite(yaml?: string, hooks?: string): Promise<Runtime
   return bootAs(yaml ?? MINI_YAML, hooks);
 }
 
-async function bootAs(yaml: string, hooks?: string): Promise<RuntimeHandles & { dir: string }> {
+async function bootAs(yaml: string, hooks?: string, options: { workers?: boolean } = {}): Promise<RuntimeHandles & { dir: string }> {
   const dir = await tempProject(yaml, hooks);
   const runtime = await createRuntime({
     projectDir: dir,
     yamlSource: await Bun.file(join(dir, "app.yaml")).text(),
+    ...options,
   });
   return Object.assign(runtime, { dir });
 }
@@ -89,7 +94,7 @@ export async function bootPostgres(hooks?: string, base = MINI_YAML): Promise<Ru
   return bootOnPostgres(base, hooks);
 }
 
-async function bootOnPostgres(base: string, hooks?: string): Promise<RuntimeHandles & { dir: string; database: string }> {
+async function bootOnPostgres(base: string, hooks?: string, options: { workers?: boolean } = {}): Promise<RuntimeHandles & { dir: string; database: string }> {
   const adminUrl = process.env.DATABASE_URL;
   if (!adminUrl) {
     throw new Error("DATABASE_URL is required for postgres tests");
@@ -97,7 +102,7 @@ async function bootOnPostgres(base: string, hooks?: string): Promise<RuntimeHand
   const { createPostgresDatabase, dropPostgresDatabase } = await import("@bakorin/server");
   const database = `b${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
   const url = await createPostgresDatabase(adminUrl, database);
-  const runtime = await bootAs(postgresYaml(url, base), hooks);
+  const runtime = await bootAs(postgresYaml(url, base), hooks, options);
   const originalClose = runtime.close.bind(runtime);
   runtime.close = async () => {
     await originalClose();

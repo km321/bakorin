@@ -692,3 +692,79 @@ export async function retryMailDelivery(id: string): Promise<MailDelivery> {
   const response = await request(`/api/v1/mail/deliveries/${id}/retry`, { method: "POST" });
   return mailJson<MailDelivery>(response, "retry failed");
 }
+
+export type JobRunStatus = "running" | "ok" | "error";
+
+export interface JobRun {
+  id: string;
+  jobName: string;
+  handler: string;
+  trigger: "scheduled" | "manual";
+  status: JobRunStatus;
+  dryRun: boolean;
+  scheduledFor: string | null;
+  startedAt: string;
+  finishedAt: string | null;
+  durationMs: number | null;
+  message: string | null;
+  log: string | null;
+  data: unknown;
+  actorId: string | null;
+}
+
+export interface JobConfig {
+  name: string;
+  cron: string;
+  handler: string;
+  timezone: string;
+  dryRun: boolean;
+  timeoutSeconds: number;
+  enabled: boolean;
+  lastRun: JobRun | null;
+}
+
+export async function listJobs(): Promise<JobConfig[]> {
+  const response = await request("/api/v1/jobs");
+  const json = (await response.json()) as { data?: JobConfig[]; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "failed to list jobs");
+  }
+  return json.data;
+}
+
+export async function listJobRuns(params: {
+  limit: number;
+  offset: number;
+  job?: string;
+  status?: JobRunStatus | "all";
+}): Promise<{ data: JobRun[]; meta: { total: number; limit: number; offset: number } }> {
+  const search = new URLSearchParams({ limit: String(params.limit), offset: String(params.offset) });
+  if (params.job) {
+    search.set("job", params.job);
+  }
+  if (params.status && params.status !== "all") {
+    search.set("status", params.status);
+  }
+  const response = await request(`/api/v1/jobs/runs?${search.toString()}`);
+  const json = (await response.json()) as {
+    data?: JobRun[];
+    meta?: { total: number; limit: number; offset: number };
+    error?: { message: string };
+  };
+  if (!response.ok || !json.data || !json.meta) {
+    throw new Error(json.error?.message ?? "failed to list job runs");
+  }
+  return { data: json.data, meta: json.meta };
+}
+
+export async function runJobNow(name: string, dryRun?: boolean): Promise<JobRun> {
+  const response = await request(`/api/v1/jobs/${encodeURIComponent(name)}/run`, {
+    method: "POST",
+    body: JSON.stringify(dryRun === undefined ? {} : { dryRun }),
+  });
+  const json = (await response.json()) as { data?: JobRun; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "failed to run job");
+  }
+  return json.data;
+}

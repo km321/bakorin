@@ -1,6 +1,6 @@
 ---
 title: Admin UI
-description: The built in admin at /admin/ with light and dark themes, data tables, invites, files, backups, audit, and webhooks.
+description: The built in admin at /admin/ with light and dark themes, data tables, invites, files, backups, audit, webhooks, and jobs.
 ---
 
 import projectsDark from "../../../assets/screens/admin-projects-dark.webp";
@@ -10,6 +10,7 @@ import signin from "../../../assets/screens/admin-signin-light.webp";
 import adminsOnly from "../../../assets/screens/admin-admins-only-light.webp";
 import statusLight from "../../../assets/screens/admin-status-light.webp";
 import schemaLight from "../../../assets/screens/admin-schema-light.webp";
+import jobsLight from "../../../assets/screens/admin-jobs-light.webp";
 import { Image } from "astro:assets";
 
 Every project serves an admin UI at `/admin/`. It is built from your `app.yaml`, embedded in the binary, and needs no extra setup.
@@ -69,6 +70,7 @@ Each entity appears under **Data** in the sidebar.
 | **Schema** | Draws your entities and relations. See [Schema visualizer](/docs/schema/) |
 | **Webhooks** | Lists configured webhooks and deliveries, filters by status, retries failed rows, sends a test event |
 | **Mail** | Lists mail rules and templates, previews a template against sample data or a real record in a sandboxed frame, sends a test to you, and shows the delivery log with Retry. See [Email](/docs/email/#admin-mail-page) |
+| **Jobs** | Lists cron jobs from app.yaml, shows run history, and runs a job now (with an optional dry run). See [Jobs](/docs/jobs/#admin-and-cli) |
 | **Audit** | The append only audit log: signups, logins, failed logins, resets, invites, role changes, admin writes, backups, file deletions |
 | **API docs** | Opens the bundled Swagger UI at `/docs` |
 

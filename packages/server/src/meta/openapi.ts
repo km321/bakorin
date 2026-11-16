@@ -36,6 +36,7 @@ export function buildOpenApi(ast: SchemaAST): Record<string, unknown> {
       { name: "backups", description: "Admin-only live backups. Restore is CLI-only." },
       { name: "webhooks", description: "Admin-only webhook configuration and delivery log." },
       { name: "audit", description: "Admin-only append-only audit log." },
+      { name: "jobs", description: "Admin-only cron jobs, run history, and run now." },
       { name: "meta", description: "Health, OpenAPI, admin metadata, and docs." },
       ...ast.entities.map((entity) => ({ name: entity.name, description: entity.description ?? entity.plural })),
     ],

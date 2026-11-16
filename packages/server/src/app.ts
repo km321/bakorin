@@ -29,6 +29,8 @@ import { createWebhookRoutes } from "./webhooks/routes.ts";
 import { validateMailTemplates } from "./mail/files.ts";
 import { createMailApi, startMailWorker } from "./mail/outbox.ts";
 import { createMailRoutes } from "./mail/routes.ts";
+import { createJobRoutes } from "./jobs/routes.ts";
+import { startJobsScheduler } from "./jobs/schedule.ts";
 import type { AppContext } from "./context.ts";
 import { runBackup, startBackupScheduler } from "./backup/schedule.ts";
 import { resolveRuntimePath } from "./paths.ts";
@@ -96,7 +98,7 @@ export async function createRuntime(options: {
   projectDir: string;
   yamlSource: string;
   env?: Record<string, string | undefined>;
-  /** Background workers (backups, webhook and mail delivery). Off for one-shot CLI commands like mail preview. */
+  /** Background workers (backups, webhook, mail delivery, and cron jobs). Off for one-shot CLI commands like mail preview. */
   workers?: boolean;
 }): Promise<RuntimeHandles> {
   const projectDir = resolve(options.projectDir);
@@ -186,6 +188,7 @@ export async function createRuntime(options: {
   const stopWebhooks = workers ? startWebhookWorker(opened.db, () => context.ast) : noop;
   const stopMail = workers ? startMailWorker(opened.db, () => context.ast, () => context.mailer) : noop;
   const stopAlerts = workers ? startAlertWorker(context, monitor) : noop;
+  const stopJobs = workers ? startJobsScheduler(context, env) : noop;
 
   const app = new Hono();
   app.use("*", monitor.middleware());
@@ -261,6 +264,7 @@ export async function createRuntime(options: {
   app.route("/api/v1/audit", createAuditRoutes());
   app.route("/api/v1/webhooks", createWebhookRoutes());
   app.route("/api/v1/mail", createMailRoutes());
+  app.route("/api/v1/jobs", createJobRoutes());
   app.route("/api/v1/realtime", createRealtimeRoutes());
   app.route("/mcp", createMcpRoutes());
   app.route("/api/v1", createMetaRoutes());
@@ -302,6 +306,7 @@ export async function createRuntime(options: {
       stopWebhooks();
       stopMail();
       stopAlerts();
+      stopJobs();
       await monitor.flush();
       await opened.close();
     },

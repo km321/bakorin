@@ -2,7 +2,7 @@
 
 import { SchemaError } from "./errors.ts";
 import type { AppYaml } from "./yaml-schema.ts";
-import { type AlertsRuntimeAST, MAIL_DEFAULT_RETAIN_DAYS, MCP_DEFAULTS, type McpRuntimeAST, REALTIME_DEFAULTS, type RealtimeRuntimeAST, type RuntimeAST, type TrustProxyAST, WEBHOOK_DEFAULT_RETAIN_DAYS } from "./ast.ts";
+import { type AlertsRuntimeAST, JOB_DEFAULT_RETAIN_DAYS, MAIL_DEFAULT_RETAIN_DAYS, MCP_DEFAULTS, type McpRuntimeAST, REALTIME_DEFAULTS, type RealtimeRuntimeAST, type RuntimeAST, type TrustProxyAST, WEBHOOK_DEFAULT_RETAIN_DAYS } from "./ast.ts";
 import { compileRateLimit } from "./compile-entity.ts";
 import { assertStrongJwtSecret, DEV_JWT_SECRET } from "./compile-secrets.ts";
 
@@ -153,6 +153,7 @@ export function compileRuntime(yaml: AppYaml, production: boolean, env: Record<s
     appUrl: parseAppUrl(env, parsePort(runtime.port, env)),
     webhooksRetainDays: parseWebhookRetainDays(runtime.webhooks?.retainDays, env),
     mailRetainDays: parseMailRetainDays(runtime.mail?.retainDays, env),
+    jobsRetainDays: parseJobsRetainDays(runtime.jobs?.retainDays, env),
     alerts: parseAlerts(runtime.alerts, env),
     trustProxy: parseTrustProxy(runtime.trustProxy, env),
     realtime: parseRealtime(runtime.realtime, env, dialect),
@@ -315,6 +316,15 @@ function parseMailRetainDays(yamlValue: number | undefined, env: Record<string, 
   const value = fromEnv ? Number(fromEnv) : (yamlValue ?? MAIL_DEFAULT_RETAIN_DAYS);
   if (!Number.isInteger(value) || value < 1 || value > 3650) {
     throw new SchemaError("runtime.mail.retainDays must be an integer from 1 to 3650");
+  }
+  return value;
+}
+
+function parseJobsRetainDays(yamlValue: number | undefined, env: Record<string, string | undefined>): number {
+  const fromEnv = firstEnv(env, ["BAKORIN_JOBS_RETAIN_DAYS"]);
+  const value = fromEnv ? Number(fromEnv) : (yamlValue ?? JOB_DEFAULT_RETAIN_DAYS);
+  if (!Number.isInteger(value) || value < 1 || value > 3650) {
+    throw new SchemaError("runtime.jobs.retainDays must be an integer from 1 to 3650");
   }
   return value;
 }

@@ -1,6 +1,6 @@
 # app.yaml reference
 
-One file describes the app, runtime, auth, entities, policies, and webhooks.
+One file describes the app, runtime, auth, entities, policies, webhooks, and jobs.
 
 ```yaml
 app:
@@ -91,6 +91,19 @@ mail:
 ```
 
 `runtime.mail.retainDays` (default 30) controls how long sent mail rows are kept. Full reference: [Transactional email](mail.md).
+
+## Jobs
+
+A top-level `jobs:` list declares cron jobs. Each job has a cron expression and a handler in `hooks.jobs`:
+
+```yaml
+jobs:
+  - name: refresh_stats
+    cron: "0 */6 * * *"
+    timezone: America/New_York
+```
+
+`runtime.jobs.retainDays` (default 30) controls how long finished run rows are kept. Full reference: [Jobs](jobs.md).
 
 ## Fields
 

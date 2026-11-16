@@ -7,6 +7,7 @@ import {
   AUDIT_TABLE,
   DEPRECATED_TABLE,
   FILES_TABLE,
+  JOB_RUNS_TABLE,
   MAIL_OUTBOX_TABLE,
   META_TABLE,
   WEBHOOK_OUTBOX_TABLE,
@@ -21,7 +22,7 @@ import { sealBackup } from "./integrity.ts";
  * one-time auth tokens, rate limits, lockouts and leases are left out on purpose:
  * they are short-lived and restoring them would revive old sessions.
  */
-export const PORTABLE_SYSTEM_TABLES = [FILES_TABLE, MAIL_OUTBOX_TABLE, WEBHOOK_OUTBOX_TABLE, AUDIT_TABLE, DEPRECATED_TABLE] as const;
+export const PORTABLE_SYSTEM_TABLES = [FILES_TABLE, MAIL_OUTBOX_TABLE, WEBHOOK_OUTBOX_TABLE, AUDIT_TABLE, DEPRECATED_TABLE, JOB_RUNS_TABLE] as const;
 
 export const BACKUP_FORMAT = 1 as const;
 

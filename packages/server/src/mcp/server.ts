@@ -118,6 +118,7 @@ export const MCP_TOOLS: ToolDef[] = [
         features: {
           webhooks: ast.webhooks.length,
           mailRules: ast.mail.length,
+          jobs: ast.jobs.length,
           realtimeEntities: ast.entities.filter((entity) => entity.realtime).map((entity) => entity.name),
           branding: Boolean(ast.branding),
           apiDocs: ast.runtime.apiDocs,

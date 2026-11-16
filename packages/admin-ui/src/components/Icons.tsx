@@ -97,6 +97,15 @@ export function IconMail() {
   );
 }
 
+export function IconJobs() {
+  return (
+    <Svg>
+      <circle cx="8" cy="8" r="5.25" stroke="currentColor" stroke-width="1.25" />
+      <path d="M8 5.25v3.1l2.2 1.3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
+    </Svg>
+  );
+}
+
 export function IconMenu() {
   return (
     <Svg>

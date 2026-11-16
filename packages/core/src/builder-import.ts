@@ -2,7 +2,7 @@
 
 import { parse as parseYaml } from "yaml";
 import { BakorinError } from "./errors.ts";
-import { BRANDING_KEYS, BUILDER_FIELD_TYPES, type BuilderConfig, type BuilderFieldType, emptyBranding, emptyEntity, emptyField, emptyMailRule, type FieldDraft, MAIL_EVENTS, type MailDraft, ON_DELETE, POLICY_ACTIONS, type WhenDraft } from "./builder-model.ts";
+import { BRANDING_KEYS, BUILDER_FIELD_TYPES, type BuilderConfig, type BuilderFieldType, emptyBranding, emptyEntity, emptyField, emptyJob, emptyMailRule, type FieldDraft, MAIL_EVENTS, type MailDraft, ON_DELETE, POLICY_ACTIONS, type WhenDraft } from "./builder-model.ts";
 
 function str(value: unknown): string {
   if (value === undefined || value === null) return "";
@@ -66,7 +66,7 @@ export function importAppYaml(source: string): ImportResult {
     throw new BakorinError("yaml_invalid", `This is not valid YAML: ${error instanceof Error ? error.message : String(error)}`);
   }
   const root = record(parsed);
-  const known = new Set(["app", "branding", "runtime", "auth", "entities", "webhooks", "mail"]);
+  const known = new Set(["app", "branding", "runtime", "auth", "entities", "webhooks", "mail", "jobs"]);
   for (const key of Object.keys(root)) {
     if (!known.has(key)) warnings.push(`Top-level key "${key}" is not part of app.yaml and was dropped.`);
   }
@@ -94,6 +94,7 @@ export function importAppYaml(source: string): ImportResult {
     entities: [],
     webhooks: Array.isArray(root.webhooks) ? root.webhooks : [],
     mail: [],
+    jobs: [],
   };
   for (const [name, rawEntity] of Object.entries(record(root.entities))) {
     const raw = record(rawEntity);
@@ -141,6 +142,17 @@ export function importAppYaml(source: string): ImportResult {
     rule.expand = strList(raw.expand);
     rule.maxAttempts = raw.maxAttempts === undefined ? "" : str(raw.maxAttempts);
     config.mail.push(rule);
+  }
+  for (const rawJob of Array.isArray(root.jobs) ? root.jobs : []) {
+    const raw = record(rawJob);
+    const job = emptyJob(str(raw.name));
+    job.cron = str(raw.cron);
+    job.handler = str(raw.handler);
+    job.timezone = str(raw.timezone);
+    job.dryRun = raw.dryRun === true;
+    job.timeoutSeconds = raw.timeoutSeconds === undefined ? "" : str(raw.timeoutSeconds);
+    job.enabled = raw.enabled !== false;
+    config.jobs.push(job);
   }
   return { config, warnings };
 }

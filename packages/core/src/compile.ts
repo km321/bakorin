@@ -10,6 +10,7 @@ import { appYamlSchema } from "./yaml-schema.ts";
 import { type ActionName, type EntityAST, type PolicyAST, SCHEMA_AST_VERSION, type SchemaAST, WEBHOOK_DEFAULT_MAX_ATTEMPTS, WEBHOOK_DEFAULT_TIMEOUT_MS } from "./ast.ts";
 import { findAuthEntity } from "./compile-auth.ts";
 import { asFieldObject, assertEntityRouteFree, compileEntityRateLimit, compileField, compileIndexes, defaultPolicies, pluralize, resolveDisplay, systemFields, titleCase } from "./compile-entity.ts";
+import { compileJobs } from "./compile-jobs.ts";
 import { compileMailRules } from "./compile-mail.ts";
 import { compileRuntime } from "./compile-runtime.ts";
 import { isDevMode } from "./compile-secrets.ts";
@@ -110,6 +111,7 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
   });
 
   const mail = compileMailRules(yaml, entityMap);
+  const jobs = compileJobs(yaml);
 
   return {
     version: SCHEMA_AST_VERSION,
@@ -124,5 +126,6 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
     auth,
     webhooks,
     mail,
+    jobs,
   };
 }

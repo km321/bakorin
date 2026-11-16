@@ -14,6 +14,8 @@ import mailLight from "../assets/screens/admin-mail-light.webp";
 import mailDark from "../assets/screens/admin-mail-dark.webp";
 import webhooksLight from "../assets/screens/admin-webhooks-light.webp";
 import webhooksDark from "../assets/screens/admin-webhooks-dark.webp";
+import jobsLight from "../assets/screens/admin-jobs-light.webp";
+import jobsDark from "../assets/screens/admin-jobs-dark.webp";
 import backupsLight from "../assets/screens/admin-backups-light.webp";
 import backupsDark from "../assets/screens/admin-backups-dark.webp";
 import brandedLight from "../assets/screens/admin-branded-light.webp";
@@ -317,6 +319,14 @@ const faqs = [
           </div>
           <h3>Webhooks</h3>
           <p>Every delivery with its status, attempts, and response</p>
+        </a>
+        <a class="tour-card" href="/docs/jobs/">
+          <div class="shot">
+            <Image class="only-light" src={jobsLight} alt="Jobs page listing the daily digest job, a Run now button, and a history of successful runs, light mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+            <Image class="only-dark" src={jobsDark} alt="Jobs page listing the daily digest job, a Run now button, and a history of successful runs, dark mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+          </div>
+          <h3>Jobs</h3>
+          <p>Cron schedules, run history, and a button to run a job now</p>
         </a>
         <a class="tour-card" href="/docs/files/#files-page">
           <div class="shot">

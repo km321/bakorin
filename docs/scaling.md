@@ -21,3 +21,5 @@ Files: local disk is per-instance; use the S3 driver behind a load balancer.
 ## What this is not
 
 Realtime fan-out across instances is not in v0.1. Subscribe to the existing change bus later (SSE/WebSocket, or Postgres LISTEN/NOTIFY).
+
+Scheduled jobs are claimed with a `job-run:{name}` lease, so only one instance runs a given job at a time. Each cron slot is recorded once in `_bakorin_job_runs`.

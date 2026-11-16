@@ -293,6 +293,29 @@ mail:
 
 See [Email](/docs/email/#transactional-email).
 
+## jobs
+
+Cron jobs. Handlers live in `hooks.jobs`. See [Jobs](/docs/jobs/).
+
+```yaml
+jobs:
+  - name: refresh_stats
+    cron: "0 */6 * * *"
+    timezone: America/New_York
+```
+
+| Key | Default | Notes |
+|---|---|---|
+| `name` | | Unique identifier (letters, digits, underscores) |
+| `cron` | | Five fields: minute hour day month weekday |
+| `handler` | the job name | Key in `hooks.jobs` |
+| `timezone` | `UTC` | IANA time zone |
+| `dryRun` | `false` | Passed to the handler on scheduled runs |
+| `timeoutSeconds` | `300` | 1 to 86400 |
+| `enabled` | `true` | Disabled jobs are skipped by the scheduler; Run now still works |
+
+`runtime.jobs.retainDays` (default 30, or `BAKORIN_JOBS_RETAIN_DAYS`) is how long finished runs are kept.
+
 ## Schema changes
 
 When `app.yaml` changes, Bakorin plans the migration in four groups:

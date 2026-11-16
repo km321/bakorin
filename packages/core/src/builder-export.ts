@@ -1,7 +1,7 @@
 // Builder: write the builder model out as an app.yaml object and YAML text.
 
 import { Document, isMap, isSeq, visit, type Node as YamlNode } from "yaml";
-import { BRANDING_KEYS, type BuilderConfig, type EntityDraft, entityIndex, type FieldDraft, type MailDraft, POLICY_ACTIONS, type WhenDraft } from "./builder-model.ts";
+import { BRANDING_KEYS, type BuilderConfig, type EntityDraft, entityIndex, type FieldDraft, type JobDraft, type MailDraft, POLICY_ACTIONS, type WhenDraft } from "./builder-model.ts";
 
 function typedDefault(field: FieldDraft): unknown {
   const raw = field.defaultValue.trim();
@@ -180,6 +180,21 @@ export function toAppObject(config: BuilderConfig): Record<string, unknown> {
   out.entities = entities;
   if (config.webhooks.length > 0) out.webhooks = config.webhooks;
   if (config.mail.length > 0) out.mail = config.mail.map((rule) => mailToRaw(config, rule));
+  if (config.jobs.length > 0) out.jobs = config.jobs.map((job) => jobToRaw(job));
+  return out;
+}
+
+function jobToRaw(job: JobDraft): Record<string, unknown> {
+  const out: Record<string, unknown> = { name: job.name, cron: job.cron };
+  if (job.handler && job.handler !== job.name) out.handler = job.handler;
+  if (job.timezone && job.timezone !== "UTC") out.timezone = job.timezone;
+  if (job.dryRun) out.dryRun = true;
+  const timeout = job.timeoutSeconds.trim();
+  if (timeout) {
+    const value = Number(timeout);
+    out.timeoutSeconds = Number.isFinite(value) ? value : timeout;
+  }
+  if (!job.enabled) out.enabled = false;
   return out;
 }
 

@@ -22,7 +22,8 @@ Bakorin is in private beta. The npm packages (`create-bakorin`, `@bakorin/sdk`, 
 - **Permissions.** Per action policies such as `owner(ownerId)`, `authenticated`, `role(editor)`, and `admin`.
 - **Files.** Uploads to local disk or S3 compatible storage, served by short lived signed URLs.
 - **Webhooks.** Durable, signed, retried deliveries from an outbox table.
-- **Admin UI.** Light and dark themes, tables, create and edit drawers, invites, backups, audit, webhooks, and a schema map.
+- **Jobs.** Cron schedules in `app.yaml`, handlers in `hooks.ts`, and an admin run history.
+- **Admin UI.** Light and dark themes, tables, create and edit drawers, invites, backups, audit, webhooks, jobs, and a schema map.
 - **Generated OpenAPI** at `/api/v1/openapi.json`, with Swagger UI at `/docs`.
 
 ## The stack
@@ -34,7 +35,7 @@ The packages in the repository:
 | Package | What it is |
 |---|---|
 | `@bakorin/core` | Parses and validates `app.yaml`, compiles the schema, plans migrations, generates types |
-| `@bakorin/server` | The HTTP server, CLI, migrators, auth, files, webhooks, backups |
+| `@bakorin/server` | The HTTP server, CLI, migrators, auth, files, webhooks, jobs, backups |
 | `@bakorin/admin-ui` | The Preact admin UI served at `/admin/` |
 | `@bakorin/sdk` | Typed client, plus Astro and Next.js cookie helpers |
 | `create-bakorin` | Scaffolds a project with an optional Astro or Next.js starter |

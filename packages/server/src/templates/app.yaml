@@ -117,3 +117,5 @@ entities:
       create: authenticated
       update: owner(ownerId)
       delete: owner(ownerId)
+
+# Cron jobs: add a jobs: list and a matching hooks.jobs handler. See docs/jobs.md.

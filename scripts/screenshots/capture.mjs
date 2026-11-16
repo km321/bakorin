@@ -59,6 +59,7 @@ for (const theme of ["light", "dark"]) {
   }
   if (want("mail")) { await nav("mail"); await page.waitForTimeout(800); await page.getByRole("button", { name: /project-shipped/ }).first().click().catch(() => page.getByText("project-shipped").first().click()); await page.waitForTimeout(1200); await page.evaluate(() => { for (const sel of document.querySelectorAll("select")) { const opt = [...sel.options].find((o) => o.textContent.includes("Annual report")); if (opt) { sel.value = opt.value; sel.dispatchEvent(new Event("change", { bubbles: true })); } } }); await page.waitForTimeout(1200); await save(page, "admin-mail", theme); }
   if (want("webhooks")) { await nav("webhooks"); await save(page, "admin-webhooks", theme); }
+  if (want("jobs")) { await nav("jobs"); await save(page, "admin-jobs", theme); }
   if (want("backups")) { await nav("backups"); await save(page, "admin-backups", theme); }
   if (want("audit")) { await nav("audit"); await save(page, "admin-audit", theme); }
   if (want("schema")) { await nav("schema"); await page.waitForTimeout(800); await save(page, "admin-schema", theme); }

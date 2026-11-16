@@ -69,7 +69,7 @@ Keep each client in one directory you can zip and move:
 ```
 client/
   app.yaml          schema, policies, runtime
-  hooks.ts          optional TypeScript escape hatch
+  hooks.ts          optional TypeScript escape hatch (entity hooks, verify, routes, jobs)
   mail/             optional email templates
   branding/         optional logo and favicon (white label)
   .env              JWT_SECRET and DATABASE_URL
@@ -201,7 +201,7 @@ Applies to the admin (header, sign in, colors in light and dark), `/docs`, and t
 
 ## Hooks and custom routes
 
-`hooks.ts` is the only customization point. It is not a plugin system.
+`hooks.ts` is the only customization point (entity hooks, verify, custom routes, and cron jobs). It is not a plugin system.
 
 ```ts
 import type { BakorinHooks } from "@bakorin/server";
@@ -240,7 +240,7 @@ bakorin export ./portable               # dialect-agnostic NDJSON + files + app.
 bakorin import ./portable               # load that archive into the current dialect
 ```
 
-SQLite backups are a consistent `VACUUM INTO` copy of `app.db`, plus `app.yaml`, `hooks.ts`, `branding/`, uploads, and a portable export. Postgres backups use the portable NDJSON format (entities, users, file metadata, the mail and webhook outbox, the audit log, schema, uploads). Every backup has a `manifest.json` with a sha256 per file, and restore refuses a backup that does not match. Sessions and one-time tokens are left out; users sign in again after a restore. Admins can download any backup from the **Backups** page as a `.tar.gz` (short-lived signed link, streamed from disk or S3). Details: `docs/backups.md`.
+SQLite backups are a consistent `VACUUM INTO` copy of `app.db`, plus `app.yaml`, `hooks.ts`, `branding/`, uploads, and a portable export. Postgres backups use the portable NDJSON format (entities, users, file metadata, the mail and webhook outbox, job run history, the audit log, schema, uploads). Every backup has a `manifest.json` with a sha256 per file, and restore refuses a backup that does not match. Sessions and one-time tokens are left out; users sign in again after a restore. Admins can download any backup from the **Backups** page as a `.tar.gz` (short-lived signed link, streamed from disk or S3). Details: `docs/backups.md`.
 
 ## Schema changes
 
@@ -417,7 +417,7 @@ Point `APP_URL` at that front end so reset, verify, and invite emails use its or
 - File downloads require a short-lived signed URL. Upload size and MIME types are set in `app.yaml`.
 - Admin and docs send CSP, nosniff, frame-ancestors, Referrer-Policy, and HSTS on HTTPS.
 - Audit log: `GET /api/v1/audit` (admin) and the admin Audit page.
-- The admin UI is admins only. After sign in it checks `GET /api/v1/_meta` (403 for non-admins) and shows an **Admins only** screen with Sign out instead of the dashboard. Admin endpoints (`_meta`, files listing and cleanup, backups, audit, webhooks, mail, invites) return 403 to non-admins on the server.
+- The admin UI is admins only. After sign in it checks `GET /api/v1/_meta` (403 for non-admins) and shows an **Admins only** screen with Sign out instead of the dashboard. Admin endpoints (`_meta`, files listing and cleanup, backups, audit, webhooks, mail, jobs, invites) return 403 to non-admins on the server.
 
 ## CLI
 

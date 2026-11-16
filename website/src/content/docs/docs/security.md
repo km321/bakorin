@@ -42,3 +42,7 @@ description: What Bakorin does to keep a client backend safe by default.
 Logins, failed logins, resets, invites, role changes, admin writes, backups, and MCP calls are written to an append only audit log. Admins read it on the **Audit** page.
 
 ![Audit log page in light mode listing logins, invites, admin writes, and backups with actor, entity, record, and IP](../../../assets/screens/admin-audit-light.webp)
+
+## Jobs
+
+Scheduled jobs run with no user actor. Manual Run now runs as the signed in admin. Only admins can list runs or start a job. Job handlers are your TypeScript; treat them like other hooks and do not log secrets.

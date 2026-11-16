@@ -23,7 +23,7 @@ export const FIELD_TYPES = [
   "relation",
 ] as const;
 
-export const APP_YAML_TOP_LEVEL_KEYS = ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail"] as const;
+export const APP_YAML_TOP_LEVEL_KEYS = ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail", "jobs"] as const;
 
 const fieldType = z.enum(FIELD_TYPES);
 
@@ -177,6 +177,18 @@ const brandingObject = z
     message: "add at least one of name, primaryColor, accentColor, logo, or favicon, or remove branding",
   });
 
+const jobItem = z
+  .object({
+    name: ident,
+    cron: z.string().min(1),
+    handler: ident.optional(),
+    timezone: z.string().min(1).optional(),
+    dryRun: z.boolean().optional(),
+    timeoutSeconds: z.number().int().min(1).max(86_400).optional(),
+    enabled: z.boolean().optional(),
+  })
+  .strict();
+
 export const appYamlSchema = z
   .object({
     app: z
@@ -292,6 +304,12 @@ export const appYamlSchema = z
           })
           .strict()
           .optional(),
+        jobs: z
+          .object({
+            retainDays: z.number().int().min(1).max(3650).optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),
@@ -312,6 +330,7 @@ export const appYamlSchema = z
     }),
     webhooks: z.array(webhookObject).optional(),
     mail: z.array(mailRuleObject).optional(),
+    jobs: z.array(jobItem).optional(),
   })
   .strict();
 

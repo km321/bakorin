@@ -19,6 +19,12 @@ const hooks: BakorinHooks = {
       },
     },
   },
+  // jobs: {
+  //   async refresh_stats(ctx) {
+  //     if (ctx.dryRun) return { ok: true, message: "dry run" };
+  //     return { ok: true };
+  //   },
+  // },
 };
 
 export default hooks;

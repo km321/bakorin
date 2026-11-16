@@ -13,6 +13,7 @@ export const LEASE_TABLE = "_bakorin_leases";
 export const AUDIT_TABLE = "_bakorin_audit";
 export const WEBHOOK_OUTBOX_TABLE = "_bakorin_webhook_outbox";
 export const MAIL_OUTBOX_TABLE = "_bakorin_mail_outbox";
+export const JOB_RUNS_TABLE = "_bakorin_job_runs";
 export const TOKEN_CUTOFF_TABLE = "_bakorin_token_cutoffs";
 /** Short lived log of changes on realtime entities: ids for resume, and the fan out source. */
 export const REALTIME_TABLE = "_bakorin_realtime";
@@ -230,6 +231,35 @@ export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): P
     .execute(db);
   await sql
     .raw(`create index if not exists _bakorin_mail_outbox_due_idx on ${MAIL_OUTBOX_TABLE} (status, next_attempt_at)`)
+    .execute(db);
+  await sql
+    .raw(
+      `create table if not exists ${JOB_RUNS_TABLE} (
+        id ${text} primary key,
+        job_name ${text} not null,
+        handler ${text} not null,
+        trigger ${text} not null,
+        status ${text} not null,
+        dry_run ${int} not null default 0,
+        scheduled_for ${text},
+        started_at ${text} not null,
+        finished_at ${text},
+        duration_ms ${int},
+        message ${text},
+        log ${text},
+        data ${text},
+        actor_id ${text}
+      )`,
+    )
+    .execute(db);
+  await sql
+    .raw(`create unique index if not exists _bakorin_job_runs_slot_idx on ${JOB_RUNS_TABLE} (job_name, scheduled_for)`)
+    .execute(db);
+  await sql
+    .raw(`create index if not exists _bakorin_job_runs_started_idx on ${JOB_RUNS_TABLE} (started_at)`)
+    .execute(db);
+  await sql
+    .raw(`create index if not exists _bakorin_job_runs_job_idx on ${JOB_RUNS_TABLE} (job_name, started_at)`)
     .execute(db);
 }
 

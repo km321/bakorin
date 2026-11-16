@@ -1006,6 +1006,46 @@ textarea:focus {
   color: var(--danger);
 }
 
+.badge.status-ok {
+  background: var(--badge-yes-bg);
+  color: var(--badge-yes-fg);
+}
+
+.badge.status-error {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.badge.status-running {
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.hook-card-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.inline-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.9rem;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.filter-select select {
+  font: inherit;
+  color: inherit;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.25rem 0.5rem;
+}
+
 .schema-tools {
   display: flex;
   flex-wrap: wrap;

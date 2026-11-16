@@ -1,4 +1,4 @@
-/** Admin mail, webhook, and backup routes. */
+/** Admin mail, webhook, backup, and job routes. */
 
 import { errorResponses } from "./schemas.ts";
 
@@ -162,6 +162,58 @@ export function operationsPaths(): Record<string, unknown> {
           },
           401: errorResponses[401],
           403: errorResponses[403],
+        },
+      },
+    },
+    "/api/v1/jobs": {
+      get: {
+        tags: ["jobs"],
+        summary: "List cron jobs",
+        description: "Admin only. Jobs from app.yaml, each with its last run when one exists.",
+        security: [{ bearerAuth: [] }],
+        responses: { 200: { description: "OK" }, 401: errorResponses[401], 403: errorResponses[403] },
+      },
+    },
+    "/api/v1/jobs/runs": {
+      get: {
+        tags: ["jobs"],
+        summary: "List job runs",
+        description: "Admin only. History of scheduled and manual job runs.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: "limit", in: "query", schema: { type: "integer" } },
+          { name: "offset", in: "query", schema: { type: "integer" } },
+          { name: "job", in: "query", schema: { type: "string" } },
+          { name: "status", in: "query", schema: { type: "string", enum: ["running", "ok", "error"] } },
+        ],
+        responses: { 200: { description: "OK" }, 401: errorResponses[401], 403: errorResponses[403] },
+      },
+    },
+    "/api/v1/jobs/runs/{id}": {
+      get: {
+        tags: ["jobs"],
+        summary: "Get a job run",
+        description: "Admin only. One run, including its log and result data.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: { 200: { description: "OK" }, 401: errorResponses[401], 403: errorResponses[403], 404: errorResponses[404] },
+      },
+    },
+    "/api/v1/jobs/{name}/run": {
+      post: {
+        tags: ["jobs"],
+        summary: "Run a job now",
+        description:
+          "Admin only. Body: { dryRun? }. Starts the job immediately and returns the run. Disabled jobs can still be run by an admin.",
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: "name", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          201: { description: "Finished successfully" },
+          200: { description: "Finished with an error status" },
+          401: errorResponses[401],
+          403: errorResponses[403],
+          404: errorResponses[404],
+          409: { description: "The job is already running" },
         },
       },
     },
