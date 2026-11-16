@@ -117,6 +117,7 @@ input:focus-visible {
 nav {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
 }
 
@@ -238,8 +239,48 @@ button.secondary:not([class*="bk-"]),
   width: min(1080px, calc(100% - 32px));
 }
 
-nav a[aria-current="page"] {
-  font-weight: 700;
+/* Header: the brand on the left; links and the account control share one center line. */
+.site-header {
+  flex-wrap: wrap;
+  row-gap: 8px;
+}
+
+.site-header nav {
+  align-items: center;
+  gap: 4px 20px;
+}
+
+.site-header nav > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--bk-control-height, 2.75rem);
+  color: var(--ink);
+  line-height: 1.5;
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 6px;
+}
+
+.site-header nav > a:hover {
+  text-decoration-color: var(--muted);
+}
+
+.site-header nav > a[aria-current="page"] {
+  font-weight: 600;
+  text-decoration-color: var(--accent);
+}
+
+@media (max-width: 640px) {
+  .site-header nav {
+    gap: 4px 16px;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .site-header nav > a {
+    transition: text-decoration-color 0.15s;
+  }
 }
 
 /* Marks content that seed.ts created, so nobody mistakes it for real data. */

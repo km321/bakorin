@@ -15,6 +15,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { deflateSync } from "node:zlib";
+import { navReport } from "../e2e-shared/nav.ts";
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 
 const ROOT = resolve(import.meta.dir, "../..");
@@ -109,6 +110,31 @@ async function axe(page: Page, label: string) {
     throw new Error(`axe found ${result.violations.length} WCAG problem(s) on ${label}`);
   }
   log(`axe clean: ${label}`);
+  await navCheck(page, label);
+}
+
+let mobileHeaderSaved = false;
+
+/** The header lines up at desktop width and at phone width (where it may wrap). */
+async function navCheck(page: Page, label: string) {
+  if ((await page.locator(".site-header nav").count()) === 0) return;
+  const desktop = await navReport(page);
+  check(desktop.ok, `header lines up on ${label}: ${desktop.detail}`);
+  const size = page.viewportSize();
+  if (!size) return;
+  await page.setViewportSize({ width: 375, height: 800 });
+  try {
+    const phone = await navReport(page);
+    check(phone.ok, `header lines up on ${label} at 375px: ${phone.detail}`);
+    if (shots && !mobileHeaderSaved) {
+      mobileHeaderSaved = true;
+      await mkdir(shots, { recursive: true });
+      await page.locator(".site-header").first().screenshot({ path: join(shots, `${template}-${frontend}-header-mobile.png`) });
+    }
+  } finally {
+    await page.setViewportSize(size);
+  }
+  log(`header lines up: ${label}`);
 }
 
 /** Waits until the page's forms are interactive (React hydrated, or the Astro element upgraded). */
@@ -132,7 +158,10 @@ async function shot(page: Page, name: string, locator?: string) {
   await mkdir(shots, { recursive: true });
   const path = join(shots, `${template}-${frontend}-${name}.png`);
   if (locator) await page.locator(locator).first().screenshot({ path });
-  else await page.screenshot({ path, fullPage: true });
+  else {
+    await page.screenshot({ path, fullPage: true });
+    if ((await page.locator(".site-header").count()) > 0) await page.locator(".site-header").first().screenshot({ path: path.replace(/\.png$/, "-header.png") });
+  }
   log(`screenshot ${path}`);
 }
 

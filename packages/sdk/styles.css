@@ -170,6 +170,7 @@ select.bk-input[multiple] {
   gap: 0.4rem;
   min-height: var(--bk-control-height);
   min-width: 2.75rem;
+  margin: 0;
   padding: 0.5rem 1.1rem;
   border: 1px solid var(--bk-accent);
   border-radius: var(--bk-radius);
@@ -177,7 +178,9 @@ select.bk-input[multiple] {
   color: var(--bk-accent-fg);
   font: inherit;
   font-weight: 600;
+  line-height: 1.25;
   text-decoration: none;
+  vertical-align: middle;
   cursor: pointer;
 }
 
@@ -421,10 +424,15 @@ select.bk-input[multiple] {
 .bk-user-menu {
   position: relative;
   display: inline-block;
+  vertical-align: middle;
 }
 
+/* A block-level flex box, so the menu has no inline line box (and no stray baseline gap)
+   and lines up with links and buttons beside it. */
 .bk-user-menu__button {
-  display: inline-flex;
+  display: flex;
+  margin: 0;
+  line-height: 1.25;
   align-items: center;
   gap: 0.5rem;
   min-height: var(--bk-control-height);
