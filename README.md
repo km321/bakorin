@@ -417,7 +417,7 @@ Point `APP_URL` at that front end so reset, verify, and invite emails use its or
 - File downloads require a short-lived signed URL. Upload size and MIME types are set in `app.yaml`.
 - Admin and docs send CSP, nosniff, frame-ancestors, Referrer-Policy, and HSTS on HTTPS.
 - Audit log: `GET /api/v1/audit` (admin) and the admin Audit page.
-- The admin UI is admins only. After sign in it checks `GET /api/v1/_meta` (403 for non-admins) and shows an **Admins only** screen with Sign out instead of the dashboard. Admin endpoints (`_meta`, backups, audit, webhooks, mail, invites) return 403 to non-admins on the server.
+- The admin UI is admins only. After sign in it checks `GET /api/v1/_meta` (403 for non-admins) and shows an **Admins only** screen with Sign out instead of the dashboard. Admin endpoints (`_meta`, files listing and cleanup, backups, audit, webhooks, mail, invites) return 403 to non-admins on the server.
 
 ## CLI
 
@@ -454,7 +454,7 @@ bun run release    # linux-x64, linux-arm64, darwin-arm64 in ./release
 
 ## Status of this v0.1
 
-Works: schema compiler, 3-tier diff, SQLite and Postgres migrators (including `indexes:`), CRUD with filters/sort/expand, policies, auth (signup, login, forgot/reset, verify, invites, lockout), DB-backed rate limits, JWT rotation, signed file URLs, audit log, leases for backups and webhooks, admin UI with Backups, Audit, and Webhooks, SDK, create-bakorin, Astro and Next starters, backup/restore/export/import including S3 retention, hooks, generated OpenAPI, compiled binary, Docker, Railway template files.
+Works: schema compiler, 3-tier diff, SQLite and Postgres migrators (including `indexes:`), CRUD with filters/sort/expand (relations and file fields), policies, auth (signup, login, forgot/reset, verify, invites, lockout), DB-backed rate limits, JWT rotation, signed file URLs, audit log, leases for backups and webhooks, admin UI with Files, Backups, Audit, and Webhooks, SDK with file uploads, create-bakorin, Astro and Next starters, backup/restore/export/import including S3 retention, hooks, generated OpenAPI, compiled binary, Docker, Railway template files.
 
 ## Roadmap
 

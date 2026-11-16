@@ -17,6 +17,15 @@ export function IconSearch() {
   );
 }
 
+export function IconFiles() {
+  return (
+    <Svg>
+      <path d="M4 2.5h5l3 3v8H4z" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round" />
+      <path d="M9 2.5v3h3M6 9h4M6 11h3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
+    </Svg>
+  );
+}
+
 export function IconBackup() {
   return (
     <Svg>

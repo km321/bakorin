@@ -4,6 +4,7 @@ import { saveRecord } from "../lib/api.ts";
 import { fieldLabel } from "../lib/label.ts";
 import { pushToast } from "../lib/toast.ts";
 import { FieldInput } from "./FieldInput.tsx";
+import { changedValues } from "../lib/record-form.ts";
 
 interface Props {
   entity: MetaEntity;
@@ -76,29 +77,28 @@ export function Drawer({ entity, record, onClose, onSaved }: Props) {
     setError(null);
     const data = new FormData(event.target as HTMLFormElement);
     try {
-      const body = { ...form };
+      // Only the editable fields go to the server: never id, timestamps, or the
+      // $expand data the list loaded. On edit, only the fields that changed.
+      const values: Record<string, unknown> = {};
       for (const field of fields) {
-        if (field.type === "file" || field.type === "boolean" || field.relation?.many) {
+        if (field.name in form) {
+          values[field.name] = form[field.name];
+        }
+        if (field.type === "file" || field.type === "boolean" || field.type === "number" || field.type === "integer" || field.relation?.many) {
           continue;
         }
         const raw = data.get(field.name);
         if (typeof raw === "string" && raw !== "") {
-          body[field.name] = raw;
+          values[field.name] = raw;
         }
       }
-      if (record) {
-        for (const field of fields) {
-          if (field.secret && !body[field.name]) {
-            delete body[field.name];
-          }
-        }
-      }
-      const nextErrors = validate(body);
+      const nextErrors = validate(values);
       setFieldErrors(nextErrors);
       if (Object.keys(nextErrors).length > 0) {
         setSaving(false);
         return;
       }
+      const body = record ? changedValues(fields, values, record) : values;
       await saveRecord(entity.name, record ? String(record.id) : null, body);
       pushToast("ok", record ? `${entity.label} saved` : `${entity.label} created`);
       onSaved();
@@ -136,6 +136,7 @@ export function Drawer({ entity, record, onClose, onSaved }: Props) {
               <FieldInput
                 field={field}
                 value={form[field.name]}
+                saved={record?.[field.name]}
                 invalid={invalid}
                 onChange={(value) => {
                   setForm({ ...form, [field.name]: value });

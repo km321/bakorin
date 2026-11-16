@@ -84,6 +84,21 @@ Many to many fields take and return arrays of ids. Filter them with `has`, which
 await api.entity("projects").list({ filter: { tagIds: { op: "has", value: [designId, urgentId] } } });
 ```
 
+## Files
+
+```ts
+const file = await api.files.upload(input.files[0]); // { id, filename, contentType, size, url, downloadUrl, expiresAt }
+await api.entity("projects").update(projectId, { brief: file.id });
+
+const project = await api.entity("projects").get(projectId, "brief");
+project.$expand.brief?.url;          // signed link: images, PDF and text open inline
+project.$expand.brief?.downloadUrl;  // the same file as a download
+
+const fresh = await api.files.sign(file.id); // a new link for a file you uploaded
+```
+
+Store the file id in the record, never the link: links expire after `signedUrlTtlSeconds`. `expand` works on list calls too. The SDK returns full URLs on your `baseUrl`, or on the pass through route in the browser client. See [Files](/docs/files/#show-a-file).
+
 ## Realtime
 
 ```ts

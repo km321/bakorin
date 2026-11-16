@@ -1,17 +1,20 @@
 import type { MetaResponse } from "../lib/api.ts";
 import { Audit } from "./Audit.tsx";
 import { Backups } from "./Backups.tsx";
+import { Files } from "./Files.tsx";
 import { Mail } from "./Mail.tsx";
 import { Schema } from "./Schema.tsx";
 import { Status } from "./Status.tsx";
 import { Webhooks } from "./Webhooks.tsx";
 
-export type AdminPage = "records" | "status" | "backups" | "audit" | "webhooks" | "mail" | "schema";
+export type AdminPage = "records" | "status" | "files" | "backups" | "audit" | "webhooks" | "mail" | "schema";
 
 export function pageFromHash(hash: string): AdminPage {
   switch (hash) {
     case "#status":
       return "status";
+    case "#files":
+      return "files";
     case "#backups":
       return "backups";
     case "#audit":
@@ -40,6 +43,8 @@ export function ProjectScreen({
   switch (page) {
     case "status":
       return <Status />;
+    case "files":
+      return <Files meta={meta} />;
     case "backups":
       return <Backups />;
     case "webhooks":

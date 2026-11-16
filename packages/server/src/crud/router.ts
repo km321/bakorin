@@ -13,11 +13,13 @@ import type { Context } from "hono";
 import { decideAccess, ownedByFields } from "./policies-sql.ts";
 import { applyAccess, applyFilters, decodeRow, expandRows, parseListQuery } from "./query.ts";
 import { InputError, parseBody, visibleRow } from "./validate.ts";
+import { assertFileTargets, signedFile } from "../files/refs.ts";
 import { attachLinks, deleteLinksFor, readableIds, writeLinks } from "./links.ts";
 import {
   applyAuthCreateDefaults,
   assertClientFieldWrites,
   assertPasswordWrite,
+  effectiveWritable,
   ForbiddenError,
   stripDisallowedWrites,
 } from "./write-guards.ts";
@@ -130,6 +132,36 @@ function entityOr404(ast: SchemaAST, name: string): EntityAST | null {
   return ast.entityMap[name] ?? null;
 }
 
+/**
+ * Clients often send back the record they loaded. Locked fields (id, createdAt,
+ * updatedAt, writable: none or admin, ownership fields) that still hold the
+ * stored value are dropped instead of refused; changing one is still a 403.
+ */
+function dropUnchangedReadOnly(
+  ast: SchemaAST,
+  entity: EntityAST,
+  raw: Record<string, unknown>,
+  before: Record<string, unknown>,
+  locked: string[],
+): Record<string, unknown> {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return raw;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(raw)) {
+    if (key === "$expand") {
+      continue;
+    }
+    const field = entity.fieldMap[key];
+    const guarded = field && (effectiveWritable(ast, entity, field) !== "any" || locked.includes(key));
+    if (guarded && !field.secret && key in before && JSON.stringify(before[key]) === JSON.stringify(value)) {
+      continue;
+    }
+    out[key] = value;
+  }
+  return out;
+}
+
 function ownershipMissing(value: unknown): boolean {
   return value === undefined || value === null || value === "";
 }
@@ -152,6 +184,11 @@ function stripClientOwnership(
     }
     const next = { ...data };
     for (const field of forced) {
+      // An admin creating a record owns it by default. Lists of people (many to
+      // many relations to users) are left as sent: they are members, not owners.
+      if (entity.fieldMap[field]?.relation?.many) {
+        continue;
+      }
       if (ownershipMissing(next[field])) {
         next[field] = actor.id;
       }
@@ -165,7 +202,7 @@ function stripClientOwnership(
       continue;
     }
     if (actor) {
-      next[field] = actor.id;
+      next[field] = entity.fieldMap[field]?.relation?.many ? [actor.id] : actor.id;
     } else {
       delete next[field];
     }
@@ -238,6 +275,7 @@ export function createCrudRouter(): Hono {
       },
       (name) => ctx.ast.entityMap[name],
       view,
+      (info) => signedFile(ctx.ast, info),
     );
     const total = Number((totalRow as { count?: number | string } | undefined)?.count ?? decoded.length);
     return c.json({ data: decoded, meta: { total, limit: query.limit, offset: query.offset } });
@@ -286,6 +324,7 @@ export function createCrudRouter(): Hono {
       },
       (name) => ctx.ast.entityMap[name],
       view,
+      (info) => signedFile(ctx.ast, info),
     );
     return c.json({ data: data[0] });
   });
@@ -331,7 +370,8 @@ export function createCrudRouter(): Hono {
     body = await runBefore(ctx, entity.name, "beforeCreate", body, actor);
     body = stripDisallowedWrites(ctx.ast, entity, body, actor);
     body = stripClientOwnership(entity, ctx.ast.auth.entity, body, actor, decision.bypass, "create");
-    const badRelation = await assertRelationTargets(ctx, entity, raw, body, actor);
+    const badRelation =
+      (await assertRelationTargets(ctx, entity, raw, body, actor)) ?? (await assertFileTargets(ctx.db, ctx.ast, entity, body, actor));
     if (badRelation) {
       return jsonError("invalid_input", badRelation, 400);
     }
@@ -392,7 +432,7 @@ export function createCrudRouter(): Hono {
     const before = decodeRow(entity, existing as Record<string, unknown>);
     await attachLinks(ctx.db, ctx.ast, entity, [before]);
     try {
-      raw = (await c.req.json()) as Record<string, unknown>;
+      raw = dropUnchangedReadOnly(ctx.ast, entity, (await c.req.json()) as Record<string, unknown>, before, forced);
       assertClientFieldWrites(ctx.ast, entity, raw, actor, forced, "update");
       body = parseBody(entity, raw, "update");
       passwordChanged = await assertPasswordWrite(ctx.ast, entity, body, raw, actor, before);
@@ -407,7 +447,9 @@ export function createCrudRouter(): Hono {
     body = await runBefore(ctx, entity.name, "beforeUpdate", body, actor, before);
     body = stripDisallowedWrites(ctx.ast, entity, body, actor);
     body = stripClientOwnership(entity, ctx.ast.auth.entity, body, actor, decision.bypass, "update");
-    const badRelation = await assertRelationTargets(ctx, entity, raw, body, actor);
+    const badRelation =
+      (await assertRelationTargets(ctx, entity, raw, body, actor)) ??
+      (await assertFileTargets(ctx.db, ctx.ast, entity, body, actor, before));
     if (badRelation) {
       return jsonError("invalid_input", badRelation, 400);
     }

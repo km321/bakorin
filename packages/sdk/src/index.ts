@@ -33,16 +33,24 @@ export class BakorinRequestError extends Error {
   }
 }
 
-/** A stored file, as the upload route answers. url is a signed link that expires at expiresAt (seconds). */
+/** An uploaded file, as returned by files.upload. Store `id` in a file field. */
 export interface UploadedFile {
   id: string;
-  key: string;
+  /** Storage key. Present on upload answers. */
+  key?: string;
   filename: string;
   contentType: string;
   size: number;
+  /** Short lived signed link. Images, PDF and plain text open inline; anything else downloads. */
   url: string;
+  /** The same link, always as a download. */
+  downloadUrl: string;
+  /** Unix seconds when url and downloadUrl stop working. */
   expiresAt: number;
 }
+
+/** A file field after expand=field: the file's details and short lived links. */
+export type ExpandedFile = UploadedFile;
 
 export interface ListResult<T> {
   data: T[];
@@ -126,21 +134,42 @@ export interface SubscribeOptions {
 
 const API_PREFIX = "/api/v1";
 
+function isFormData(body: unknown): boolean {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
+
 export function createClient<S extends object = Entities>(options: ClientOptions) {
   const fetcher = options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
   let refreshMutex: Promise<string | null> | null = null;
   const base = options.baseUrl.replace(/\/+$/, "");
   const apiPath = (options.apiPath ?? API_PREFIX).replace(/\/+$/, "");
 
-  /** Signed file links come back as /api/v1/files/...; point them at this client's base (your site in the browser). */
-  function fileUrl(path: string): string {
-    return path.startsWith("/api/v1/") ? url(path) : path;
-  }
-
   /** Maps an /api/v1/... route onto baseUrl + apiPath. */
   function url(path: string): string {
     const rest = path.startsWith(API_PREFIX) ? path.slice(API_PREFIX.length) : path;
     return `${base}${apiPath}${rest}`;
+  }
+
+  /** Signed file links come back as /api/v1/files/...: point them at baseUrl + apiPath. */
+  function fileLink(link: string): string {
+    return link.startsWith(`${API_PREFIX}/files/`) ? url(link) : link;
+  }
+
+  function withFileLinks<T>(row: T): T {
+    const expand = (row as { $expand?: Record<string, unknown> } | null)?.$expand;
+    if (!expand || typeof expand !== "object") return row;
+    for (const value of Object.values(expand)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        const file = value as { url?: unknown; downloadUrl?: unknown };
+        if (typeof file.url === "string") file.url = fileLink(file.url);
+        if (typeof file.downloadUrl === "string") file.downloadUrl = fileLink(file.downloadUrl);
+      }
+    }
+    return row;
+  }
+
+  function signed<T extends { url: string; downloadUrl?: string }>(file: T): T {
+    return { ...file, url: fileLink(file.url), downloadUrl: fileLink(file.downloadUrl ?? `${file.url}&download=1`) };
   }
 
   async function token(): Promise<string | null> {
@@ -181,9 +210,8 @@ export function createClient<S extends object = Entities>(options: ClientOptions
     if (access) {
       headers.set("authorization", `Bearer ${access}`);
     }
-    // FormData (file uploads) sets its own multipart content type.
-    const isForm = typeof FormData !== "undefined" && init.body instanceof FormData;
-    if (init.body && !isForm && !headers.has("content-type")) {
+    // FormData (file uploads) sets its own multipart content type with the boundary.
+    if (init.body && !isFormData(init.body) && !headers.has("content-type")) {
       headers.set("content-type", "application/json");
     }
     const response = await fetcher(url(path), { credentials: options.credentials, ...init, headers });
@@ -328,20 +356,30 @@ export function createClient<S extends object = Entities>(options: ClientOptions
       );
       return json.data;
     },
+    /**
+     * Uploads for file fields. Upload, then save the returned id in the record:
+     *
+     *   const file = await api.files.upload(input.files[0]);
+     *   await api.entity("projects").update(id, { brief: file.id });
+     *
+     * To show a file later, read the record with expand (api.entity("projects").get(id, "brief"))
+     * or ask for a fresh link with files.sign(id). Links expire, so do not store them.
+     * Use uploadFile from @bakorin/sdk/headless for progress.
+     */
     files: {
-      /** Uploads a file (signed in users only). Use uploadFile from @bakorin/sdk/headless for progress. */
       async upload(file: Blob, filename?: string): Promise<UploadedFile> {
-        const form = new FormData();
-        form.set("file", file, filename ?? (file as File).name ?? "upload");
-        const json = await parse<{ data: UploadedFile }>(await request("/api/v1/files", { method: "POST", body: form }));
-        return { ...json.data, url: fileUrl(json.data.url) };
+        const body = new FormData();
+        const name = filename ?? (file as { name?: string }).name ?? "upload";
+        body.set("file", file, name);
+        const json = await parse<{ data: UploadedFile }>(await request("/api/v1/files", { method: "POST", body }));
+        return signed(json.data);
       },
       /** A fresh signed link for a file you uploaded (admins: any file). */
-      async sign(id: string): Promise<{ url: string; expiresAt: number }> {
-        const json = await parse<{ data: { url: string; expiresAt: number } }>(
+      async sign(id: string): Promise<UploadedFile> {
+        const json = await parse<{ data: UploadedFile }>(
           await request(`/api/v1/files/${encodeURIComponent(id)}/sign`, { method: "POST" }),
         );
-        return { ...json.data, url: fileUrl(json.data.url) };
+        return signed(json.data);
       },
     },
     /** The resolved API root, for example https://site.example/api/bakorin. Signed file links are relative to it. */
@@ -351,11 +389,16 @@ export function createClient<S extends object = Entities>(options: ClientOptions
     entity<K extends keyof S & string>(name: K) {
       return {
         async list(query?: Query) {
-          return parse<ListResult<S[K]>>(await request(`/api/v1/${name}${queryString(query)}`));
+          const result = await parse<ListResult<S[K]>>(await request(`/api/v1/${name}${queryString(query)}`));
+          result.data = result.data.map((row) => withFileLinks(row));
+          return result;
         },
+        /** expand takes relation and file fields, for example "clientId,brief". */
         async get(id: string, expand?: string) {
-          const json = await parse<{ data: S[K] }>(await request(`/api/v1/${name}/${id}${expand ? `?expand=${expand}` : ""}`));
-          return json.data;
+          const json = await parse<{ data: S[K] }>(
+            await request(`/api/v1/${name}/${id}${expand ? `?expand=${encodeURIComponent(expand)}` : ""}`),
+          );
+          return withFileLinks(json.data);
         },
         async create(body: Partial<S[K]>) {
           const json = await parse<{ data: S[K] }>(await request(`/api/v1/${name}`, { method: "POST", body: JSON.stringify(body) }));

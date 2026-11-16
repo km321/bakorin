@@ -16,12 +16,10 @@ import webhooksLight from "../assets/screens/admin-webhooks-light.webp";
 import webhooksDark from "../assets/screens/admin-webhooks-dark.webp";
 import backupsLight from "../assets/screens/admin-backups-light.webp";
 import backupsDark from "../assets/screens/admin-backups-dark.webp";
-import auditLight from "../assets/screens/admin-audit-light.webp";
-import auditDark from "../assets/screens/admin-audit-dark.webp";
 import brandedLight from "../assets/screens/admin-branded-light.webp";
 import brandedDark from "../assets/screens/admin-branded-dark.webp";
-import filesLight from "../assets/screens/admin-files-light.webp";
-import filesDark from "../assets/screens/admin-files-dark.webp";
+import filesLight from "../assets/screens/admin-files-page-light.webp";
+import filesDark from "../assets/screens/admin-files-page-dark.webp";
 const heroYaml = `app:
   name: studio-leads
 
@@ -97,7 +95,7 @@ const features = [
   },
   {
     title: "Files",
-    body: "Uploads to local disk or any S3 compatible bucket, including R2 and Railway buckets. Size and type limits, served by short lived signed URLs.",
+    body: "Uploads to local disk or any S3 compatible bucket, including R2 and Railway buckets. Size and type limits, short lived signed URLs, and a Files page that finds unused uploads.",
     tag: "POST /api/v1/files",
   },
   {
@@ -107,7 +105,7 @@ const features = [
   },
   {
     title: "Admin UI, light and dark",
-    body: "Sortable, searchable tables, create and edit drawers, invites, backups, audit log, and webhooks. Generated from your schema.",
+    body: "Sortable, searchable tables, create and edit drawers, invites, files, backups, audit log, and webhooks. Generated from your schema.",
     tag: "/admin/",
   },
   {
@@ -320,6 +318,14 @@ const faqs = [
           <h3>Webhooks</h3>
           <p>Every delivery with its status, attempts, and response</p>
         </a>
+        <a class="tour-card" href="/docs/files/#files-page">
+          <div class="shot">
+            <Image class="only-light" src={filesLight} alt="Files page listing uploads with thumbnails, the record each file belongs to, and Preview, Download and Delete buttons, light mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+            <Image class="only-dark" src={filesDark} alt="Files page listing uploads with thumbnails, the record each file belongs to, and Preview, Download and Delete buttons, dark mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+          </div>
+          <h3>Files</h3>
+          <p>Every upload, the record it belongs to, and cleanup of unused files</p>
+        </a>
         <a class="tour-card" href="/docs/backups/">
           <div class="shot">
             <Image class="only-light" src={backupsLight} alt="Backups page with a list of snapshots, their sizes, the restore command, and Download buttons, light mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
@@ -327,14 +333,6 @@ const faqs = [
           </div>
           <h3>Backups</h3>
           <p>Run a live backup and download any snapshot</p>
-        </a>
-        <a class="tour-card" href="/docs/security/">
-          <div class="shot">
-            <Image class="only-light" src={auditLight} alt="Audit log table with logins, invites, admin writes, and backups, light mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
-            <Image class="only-dark" src={auditDark} alt="Audit log table with logins, invites, admin writes, and backups, dark mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
-          </div>
-          <h3>Audit log</h3>
-          <p>Logins, invites, admin writes, backups, and MCP calls</p>
         </a>
         <a class="tour-card" href="/docs/branding/">
           <div class="shot">

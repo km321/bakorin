@@ -191,7 +191,7 @@ export async function deleteRecord(entity: string, id: string): Promise<void> {
   }
 }
 
-export async function uploadFile(file: File): Promise<{ id: string; url?: string; filename: string; contentType?: string }> {
+export async function uploadFile(file: File): Promise<FileDetails> {
   const body = new FormData();
   body.set("file", file);
   const response = await request("/api/v1/files", { method: "POST", body });
@@ -201,9 +201,12 @@ export async function uploadFile(file: File): Promise<{ id: string; url?: string
   }
   return {
     id: json.data.id as string,
-    url: json.data.url as string | undefined,
+    url: json.data.url as string,
+    downloadUrl: (json.data.downloadUrl as string | undefined) ?? `${json.data.url}&download=1`,
     filename: (json.data.filename as string | undefined) ?? file.name,
-    contentType: json.data.contentType as string | undefined,
+    contentType: (json.data.contentType as string | undefined) ?? file.type,
+    size: (json.data.size as number | undefined) ?? file.size,
+    expiresAt: json.data.expiresAt as number,
   };
 }
 
@@ -441,13 +444,110 @@ export async function resendVerification(userId: string): Promise<void> {
   }
 }
 
-export async function signFile(id: string): Promise<string> {
-  const response = await request(`/api/v1/files/${id}/sign`, { method: "POST" });
-  const json = (await response.json()) as { data?: { url: string }; error?: { message: string } };
+export interface FileDetails {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  createdAt?: string;
+  /** Short lived signed link: images, PDF and text open inline. */
+  url: string;
+  /** The same link, always as a download. */
+  downloadUrl: string;
+  expiresAt: number;
+}
+
+/** A fresh signed link plus the file's name, type and size. */
+export async function signFile(id: string): Promise<FileDetails> {
+  const response = await request(`/api/v1/files/${encodeURIComponent(id)}/sign`, { method: "POST" });
+  const json = (await response.json()) as { data?: FileDetails; error?: { message: string } };
   if (!response.ok || !json.data?.url) {
     throw new Error(json.error?.message ?? "could not load file");
   }
-  return json.data.url;
+  return { ...json.data, downloadUrl: json.data.downloadUrl ?? `${json.data.url}&download=1` };
+}
+
+export interface FileUse {
+  entity: string;
+  field: string;
+  id: string;
+  label: string;
+  removed: boolean;
+}
+
+export interface FileRow extends FileDetails {
+  createdAt: string;
+  createdBy: string | null;
+  usedBy: FileUse[];
+  orphaned: boolean;
+  /** Uploaded in the last hour: may belong to a form that is still open. */
+  recent: boolean;
+}
+
+export interface FileListMeta {
+  total: number;
+  limit: number;
+  offset: number;
+  files: number;
+  bytes: number;
+  orphaned: number;
+  orphanedBytes: number;
+  removable: number;
+  graceMinutes: number;
+}
+
+export interface FileQuery {
+  q?: string;
+  type?: string;
+  status?: string;
+  minSize?: number;
+  maxSize?: number;
+  from?: string;
+  to?: string;
+  sort?: string;
+  ids?: string[];
+  limit?: number;
+  offset?: number;
+}
+
+export async function listFiles(query: FileQuery = {}): Promise<{ data: FileRow[]; meta: FileListMeta }> {
+  const search = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value === undefined || value === null || value === "") continue;
+    search.set(key, Array.isArray(value) ? value.join(",") : String(value));
+  }
+  const response = await request(`/api/v1/files${search.size ? `?${search}` : ""}`);
+  const json = (await response.json()) as { data?: FileRow[]; meta?: FileListMeta; error?: { message: string } };
+  if (!response.ok || !json.data || !json.meta) {
+    throw new Error(json.error?.message ?? "failed to load files");
+  }
+  return { data: json.data, meta: json.meta };
+}
+
+export async function deleteFile(id: string): Promise<void> {
+  const response = await request(`/api/v1/files/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!response.ok) {
+    const json = (await response.json().catch(() => ({}))) as { error?: { message: string } };
+    throw new Error(json.error?.message ?? "delete failed");
+  }
+}
+
+export async function deleteOrphanFiles(): Promise<{ deleted: number; deletedBytes: number }> {
+  const response = await request("/api/v1/files/orphans/delete", { method: "POST" });
+  const json = (await response.json()) as { data?: { deleted: number; deletedBytes: number }; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "delete failed");
+  }
+  return json.data;
+}
+
+export async function getRecord(entity: string, id: string): Promise<Record<string, unknown>> {
+  const response = await request(`/api/v1/${entity}/${encodeURIComponent(id)}`);
+  const json = (await response.json()) as { data?: Record<string, unknown>; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "record not found");
+  }
+  return json.data;
 }
 
 export async function listRelated(entity: string): Promise<Array<Record<string, unknown>>> {

@@ -65,7 +65,8 @@ function throughSite(file: UploadedFile, options: UploadOptions): UploadedFile {
     return file;
   }
   const basePath = (options.basePath ?? "/api/bakorin").replace(/\/+$/, "");
-  return { ...file, url: `${options.origin ?? ""}${basePath}${file.url.slice("/api/v1".length)}` };
+  const site = (link: string) => (link.startsWith("/api/v1/") ? `${options.origin ?? ""}${basePath}${link.slice("/api/v1".length)}` : link);
+  return { ...file, url: site(file.url), downloadUrl: site(file.downloadUrl ?? `${file.url}&download=1`) };
 }
 
 function errorFrom(status: number, text: string): BakorinRequestError {

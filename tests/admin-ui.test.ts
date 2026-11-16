@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { emptyLabel, formatDate, formatDateTime, initials } from "../packages/admin-ui/src/lib/format.ts";
+import { emptyLabel, fileKind, formatDate, formatDateTime, formatSize, initials, isPreviewImage } from "../packages/admin-ui/src/lib/format.ts";
+import { changedValues } from "../packages/admin-ui/src/lib/record-form.ts";
 import { parseThemeMode, resolvedTheme } from "../packages/admin-ui/src/lib/theme.ts";
 import { boot, client } from "./helpers.ts";
 
@@ -58,5 +59,45 @@ describe("admin meta", () => {
     const verified = users?.fields.find((field) => field.name === "emailVerified");
     expect(verified?.description).toBeTruthy();
     await runtime.close();
+  });
+});
+
+describe("admin record editor", () => {
+  const fields = [
+    { name: "name", type: "text", required: true, secret: false },
+    { name: "brief", type: "file", required: false, secret: false },
+    { name: "password", type: "password", required: true, secret: true },
+    { name: "tagIds", type: "relation", required: false, secret: false, relation: { to: "tags", many: true } },
+  ];
+
+  test("an edit sends only the fields that changed, never id, timestamps or $expand", () => {
+    const record = {
+      id: "r1",
+      createdAt: "2026-11-01T00:00:00.000Z",
+      updatedAt: "2026-11-01T00:00:00.000Z",
+      name: "Store",
+      brief: null,
+      tagIds: ["t1"],
+      $expand: { brief: null },
+    };
+    const values = { ...record, name: "Store", brief: "file-1", password: "", tagIds: ["t1"] };
+    expect(changedValues(fields, values, record)).toEqual({ brief: "file-1" });
+    expect(changedValues(fields, { ...values, brief: null, tagIds: ["t1", "t2"] }, record)).toEqual({ tagIds: ["t1", "t2"] });
+    expect(changedValues(fields, { ...values, brief: null, password: "new-password-1" }, record)).toEqual({ password: "new-password-1" });
+  });
+
+  test("date fields show the stored calendar day in every time zone", () => {
+    // 2027-01-22 used to be read as UTC midnight, so the list showed Jan 21 west of UTC.
+    expect(formatDate("2027-01-22")).toBe(new Date(2027, 0, 22).toLocaleDateString(undefined, { dateStyle: "medium" }));
+  });
+
+  test("file labels", () => {
+    expect(formatSize(45)).toBe("45 B");
+    expect(formatSize(2048)).toBe("2.0 KB");
+    expect(fileKind("application/pdf")).toBe("PDF");
+    expect(fileKind("image/png")).toBe("PNG");
+    expect(fileKind("text/plain; charset=utf-8")).toBe("Text");
+    expect(isPreviewImage("image/png")).toBe(true);
+    expect(isPreviewImage("image/svg+xml")).toBe(false);
   });
 });

@@ -24,16 +24,23 @@ export declare class BakorinRequestError extends Error {
     readonly field?: string;
     constructor(message: string, status: number, code: string, field?: string);
 }
-/** A stored file, as the upload route answers. url is a signed link that expires at expiresAt (seconds). */
+/** An uploaded file, as returned by files.upload. Store `id` in a file field. */
 export interface UploadedFile {
     id: string;
-    key: string;
+    /** Storage key. Present on upload answers. */
+    key?: string;
     filename: string;
     contentType: string;
     size: number;
+    /** Short lived signed link. Images, PDF and plain text open inline; anything else downloads. */
     url: string;
+    /** The same link, always as a download. */
+    downloadUrl: string;
+    /** Unix seconds when url and downloadUrl stop working. */
     expiresAt: number;
 }
+/** A file field after expand=field: the file's details and short lived links. */
+export type ExpandedFile = UploadedFile;
 export interface ListResult<T> {
     data: T[];
     meta: {
@@ -170,19 +177,26 @@ export declare function createClient<S extends object = Entities>(options: Clien
     }): Promise<{
         ok: boolean;
     }>;
+    /**
+     * Uploads for file fields. Upload, then save the returned id in the record:
+     *
+     *   const file = await api.files.upload(input.files[0]);
+     *   await api.entity("projects").update(id, { brief: file.id });
+     *
+     * To show a file later, read the record with expand (api.entity("projects").get(id, "brief"))
+     * or ask for a fresh link with files.sign(id). Links expire, so do not store them.
+     * Use uploadFile from @bakorin/sdk/headless for progress.
+     */
     files: {
-        /** Uploads a file (signed in users only). Use uploadFile from @bakorin/sdk/headless for progress. */
         upload(file: Blob, filename?: string): Promise<UploadedFile>;
         /** A fresh signed link for a file you uploaded (admins: any file). */
-        sign(id: string): Promise<{
-            url: string;
-            expiresAt: number;
-        }>;
+        sign(id: string): Promise<UploadedFile>;
     };
     /** The resolved API root, for example https://site.example/api/bakorin. Signed file links are relative to it. */
     apiUrl(path?: string): string;
     entity<K extends keyof S & string>(name: K): {
         list(query?: Query): Promise<ListResult<S[K]>>;
+        /** expand takes relation and file fields, for example "clientId,brief". */
         get(id: string, expand?: string): Promise<S[K]>;
         create(body: Partial<S[K]>): Promise<S[K]>;
         update(id: string, body: Partial<S[K]>): Promise<S[K]>;

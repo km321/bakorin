@@ -3,6 +3,8 @@ import { FILES_TABLE } from "../db/system.ts";
 import { checkRateRule, rateLimitedResponse } from "../auth/rate-limit.ts";
 import { clientIp } from "../http/client-ip.ts";
 import { signFileUrl, verifyFileSignature } from "./sign.ts";
+import { fileInfo, signedFile } from "./refs.ts";
+import { createFileAdminRoutes } from "./admin.ts";
 
 function mimeFromName(name: string): string | null {
   const ext = name.includes(".") ? name.slice(name.lastIndexOf(".") + 1).toLowerCase() : "";
@@ -33,9 +35,9 @@ const INLINE_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gi
  * else (HTML, SVG, JS, unknown types) downloads as an attachment and is
  * sandboxed, so an uploaded page cannot run script on the API or admin origin.
  */
-export function fileResponseHeaders(contentType: string, filename: string): Record<string, string> {
+export function fileResponseHeaders(contentType: string, filename: string, download = false): Record<string, string> {
   const base = contentType.split(";")[0]?.trim().toLowerCase() ?? "";
-  const inline = INLINE_TYPES.has(base);
+  const inline = !download && INLINE_TYPES.has(base);
   const ascii = filename.replace(/[^\x20-\x7e]/g, "_").replace(/["\\]/g, "");
   const headers: Record<string, string> = {
     "content-type": contentType,
@@ -43,9 +45,12 @@ export function fileResponseHeaders(contentType: string, filename: string): Reco
     "x-content-type-options": "nosniff",
     "cache-control": "private, max-age=60",
   };
-  if (!inline) {
-    headers["content-security-policy"] = "default-src 'none'; sandbox";
-  }
+  // Anything that is not a plain image, PDF or text file is sandboxed, so it can
+  // never run script on this origin even if a browser renders it. Inline types
+  // may only be framed by this origin (the admin's file preview).
+  headers["content-security-policy"] = INLINE_TYPES.has(base)
+    ? "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'"
+    : "default-src 'none'; frame-ancestors 'none'; sandbox";
   return headers;
 }
 
@@ -81,6 +86,9 @@ function allowMime(allowed: string[], type: string): boolean {
 
 export function createFileRoutes(): Hono {
   const app = new Hono();
+
+  // Admin only: the Files page (list, usage, orphan cleanup).
+  app.route("/", createFileAdminRoutes());
 
   app.post("/", async (c) => {
     const actor = c.get("actor");
@@ -133,7 +141,7 @@ export function createFileRoutes(): Hono {
       .execute();
     const exp = Math.floor(Date.now() / 1000) + ctx.ast.runtime.files.signedUrlTtlSeconds;
     const url = signFileUrl(ctx.ast.runtime.jwtSecret, id, exp);
-    return c.json({ data: { id, key, filename: file.name, contentType: type, size: bytes.byteLength, url, expiresAt: exp } }, 201);
+    return c.json({ data: { id, key, filename: file.name, contentType: type, size: bytes.byteLength, url, downloadUrl: `${url}&download=1`, expiresAt: exp } }, 201);
   });
 
   app.post("/:id/sign", async (c) => {
@@ -150,9 +158,7 @@ export function createFileRoutes(): Hono {
     if (!admin && row.created_by && actor.id !== row.created_by) {
       return c.json({ error: { code: "forbidden", message: "not allowed" } }, 403);
     }
-    const exp = Math.floor(Date.now() / 1000) + ctx.ast.runtime.files.signedUrlTtlSeconds;
-    const url = signFileUrl(ctx.ast.runtime.jwtSecret, String(row.id), exp);
-    return c.json({ data: { url, expiresAt: exp } });
+    return c.json({ data: signedFile(ctx.ast, fileInfo(row as Record<string, unknown>)) });
   });
 
   app.get("/:id", async (c) => {
@@ -177,7 +183,10 @@ export function createFileRoutes(): Hono {
     if (!stored) {
       return c.json({ error: { code: "not_found", message: "file missing from store" } }, 404);
     }
-    return new Response(stored.bytes as BodyInit, { headers: fileResponseHeaders(String(row.content_type), String(row.filename)) });
+    const download = url.searchParams.get("download") === "1";
+    return new Response(stored.bytes as BodyInit, {
+      headers: fileResponseHeaders(String(row.content_type), String(row.filename), download),
+    });
   });
 
   return app;

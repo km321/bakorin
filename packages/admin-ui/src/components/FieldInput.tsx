@@ -1,5 +1,6 @@
 import type { MetaEntity } from "../lib/api.ts";
-import { listRelated, signFile, uploadFile } from "../lib/api.ts";
+import { listRelated } from "../lib/api.ts";
+import { FileField } from "./FileField.tsx";
 import { relatedLabel } from "../lib/label.ts";
 import { SearchSelect } from "./SearchSelect.tsx";
 import { MultiSelect } from "./MultiSelect.tsx";
@@ -9,39 +10,19 @@ interface Props {
   field: MetaEntity["fields"][number];
   value: unknown;
   invalid?: boolean;
+  /** The stored value when the form opened (file fields say what Save will change). */
+  saved?: unknown;
   onChange: (value: unknown) => void;
 }
 
-export function FieldInput({ field, value, invalid, onChange }: Props) {
+export function FieldInput({ field, value, invalid, saved, onChange }: Props) {
   const [options, setOptions] = useState<Array<Record<string, unknown>>>([]);
-  const [preview, setPreview] = useState<{ url: string; name: string; image: boolean } | null>(null);
 
   useEffect(() => {
     if (field.relation) {
       void listRelated(field.relation.to).then(setOptions);
     }
   }, [field.relation?.to]);
-
-  useEffect(() => {
-    if (field.type !== "file" || typeof value !== "string" || value === "") {
-      return;
-    }
-    let cancelled = false;
-    void signFile(value)
-      .then((url) => {
-        if (!cancelled) {
-          setPreview({ url, name: "Uploaded file", image: true });
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setPreview({ url: "", name: String(value), image: false });
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [field.type, value]);
 
   const describedBy = invalid ? `${field.name}-error` : field.description ? `${field.name}-hint` : undefined;
 
@@ -80,7 +61,10 @@ export function FieldInput({ field, value, invalid, onChange }: Props) {
           name={field.name}
           type="number"
           value={value === undefined || value === null ? "" : String(value)}
-          onInput={(event) => onChange(Number((event.target as HTMLInputElement).value))}
+          onInput={(event) => {
+            const text = (event.target as HTMLInputElement).value;
+            onChange(text === "" ? null : Number(text));
+          }}
           aria-invalid={invalid}
           aria-describedby={describedBy}
         />
@@ -129,34 +113,14 @@ export function FieldInput({ field, value, invalid, onChange }: Props) {
       );
     case "file":
       return (
-        <div>
-          {preview ? (
-            <div class="file-preview">
-              {preview.image && preview.url ? <img src={preview.url} alt="" /> : null}
-              <span class="muted">{preview.name}</span>
-            </div>
-          ) : null}
-          <input
-            class="file-input"
-            type="file"
-            aria-invalid={invalid}
-            onChange={(event) => {
-              const file = (event.target as HTMLInputElement).files?.[0];
-              if (!file) {
-                return;
-              }
-              void uploadFile(file).then((uploaded) => {
-                onChange(uploaded.id);
-                const image = Boolean(uploaded.contentType?.startsWith("image/") || file.type.startsWith("image/"));
-                setPreview({
-                  url: uploaded.url ?? URL.createObjectURL(file),
-                  name: uploaded.filename,
-                  image,
-                });
-              });
-            }}
-          />
-        </div>
+        <FileField
+          name={field.name}
+          value={value}
+          saved={saved}
+          invalid={invalid}
+          describedBy={describedBy}
+          onChange={onChange}
+        />
       );
     case "relation":
       if (field.relation?.many) {

@@ -71,7 +71,7 @@ export function addEntityPaths(ast: SchemaAST, schemas: Record<string, unknown>,
             name: "expand",
             in: "query",
             schema: { type: "string" },
-            description: "Comma-separated relation fields to embed under $expand.",
+            description: "Comma-separated relation or file fields to embed under $expand. A file field expands to its name, type, size, and short lived url and downloadUrl.",
           },
         ],
         responses: {

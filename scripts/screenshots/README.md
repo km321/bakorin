@@ -14,6 +14,7 @@ BAKORIN_MCP_TOKEN=demo-mcp-token-fictional-0123456789abcdef \
 # 2. Seed data, then keep a few realtime streams open
 cd scripts/screenshots && npm i --no-save playwright sharp
 node seed.mjs && node extra.mjs && node ship.mjs
+DEMO_DB=/tmp/demo/data/app.db bun files.mjs   # PDF briefs and unused files for the Files shots
 node live.mjs &
 
 # 3. Capture light and dark (wait a minute after seeding: login is rate limited)

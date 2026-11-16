@@ -6,7 +6,7 @@ import {
   envProxySecret2,
   createClient2,
   readEventStream2
-} from "./chunks/index-1qcntxcm.js";
+} from "./chunks/index-kvbz0pj9.js";
 export {
   BakorinRequestError2 as BakorinRequestError,
   PROXY_CLIENT_IP_HEADER2 as PROXY_CLIENT_IP_HEADER,

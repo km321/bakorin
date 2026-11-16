@@ -25,17 +25,38 @@ function envProxySecret2() {
   return env?.BAKORIN_PROXY_SECRET?.trim() || undefined;
 }
 var API_PREFIX = "/api/v1";
+function isFormData(body) {
+  return typeof FormData !== "undefined" && body instanceof FormData;
+}
 function createClient2(options) {
   const fetcher = options.fetch ?? ((input, init) => fetch(input, init));
   let refreshMutex = null;
   const base = options.baseUrl.replace(/\/+$/, "");
   const apiPath = (options.apiPath ?? API_PREFIX).replace(/\/+$/, "");
-  function fileUrl(path) {
-    return path.startsWith("/api/v1/") ? url(path) : path;
-  }
   function url(path) {
     const rest = path.startsWith(API_PREFIX) ? path.slice(API_PREFIX.length) : path;
     return `${base}${apiPath}${rest}`;
+  }
+  function fileLink(link) {
+    return link.startsWith(`${API_PREFIX}/files/`) ? url(link) : link;
+  }
+  function withFileLinks(row) {
+    const expand = row?.$expand;
+    if (!expand || typeof expand !== "object")
+      return row;
+    for (const value of Object.values(expand)) {
+      if (value && typeof value === "object" && !Array.isArray(value)) {
+        const file = value;
+        if (typeof file.url === "string")
+          file.url = fileLink(file.url);
+        if (typeof file.downloadUrl === "string")
+          file.downloadUrl = fileLink(file.downloadUrl);
+      }
+    }
+    return row;
+  }
+  function signed(file) {
+    return { ...file, url: fileLink(file.url), downloadUrl: fileLink(file.downloadUrl ?? `${file.url}&download=1`) };
   }
   async function token() {
     return options.getAccessToken ? await options.getAccessToken() : null;
@@ -73,8 +94,7 @@ function createClient2(options) {
     if (access) {
       headers.set("authorization", `Bearer ${access}`);
     }
-    const isForm = typeof FormData !== "undefined" && init.body instanceof FormData;
-    if (init.body && !isForm && !headers.has("content-type")) {
+    if (init.body && !isFormData(init.body) && !headers.has("content-type")) {
       headers.set("content-type", "application/json");
     }
     const response = await fetcher(url(path), { credentials: options.credentials, ...init, headers });
@@ -186,14 +206,15 @@ function createClient2(options) {
     },
     files: {
       async upload(file, filename) {
-        const form = new FormData;
-        form.set("file", file, filename ?? file.name ?? "upload");
-        const json = await parse(await request("/api/v1/files", { method: "POST", body: form }));
-        return { ...json.data, url: fileUrl(json.data.url) };
+        const body = new FormData;
+        const name = filename ?? file.name ?? "upload";
+        body.set("file", file, name);
+        const json = await parse(await request("/api/v1/files", { method: "POST", body }));
+        return signed(json.data);
       },
       async sign(id) {
         const json = await parse(await request(`/api/v1/files/${encodeURIComponent(id)}/sign`, { method: "POST" }));
-        return { ...json.data, url: fileUrl(json.data.url) };
+        return signed(json.data);
       }
     },
     apiUrl(path = "") {
@@ -202,11 +223,13 @@ function createClient2(options) {
     entity(name) {
       return {
         async list(query) {
-          return parse(await request(`/api/v1/${name}${queryString(query)}`));
+          const result = await parse(await request(`/api/v1/${name}${queryString(query)}`));
+          result.data = result.data.map((row) => withFileLinks(row));
+          return result;
         },
         async get(id, expand) {
-          const json = await parse(await request(`/api/v1/${name}/${id}${expand ? `?expand=${expand}` : ""}`));
-          return json.data;
+          const json = await parse(await request(`/api/v1/${name}/${id}${expand ? `?expand=${encodeURIComponent(expand)}` : ""}`));
+          return withFileLinks(json.data);
         },
         async create(body) {
           const json = await parse(await request(`/api/v1/${name}`, { method: "POST", body: JSON.stringify(body) }));

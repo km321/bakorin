@@ -1,6 +1,6 @@
 import {
   createClient2
-} from "./index-1qcntxcm.js";
+} from "./index-kvbz0pj9.js";
 
 // src/browser.ts
 var clients = new Map;

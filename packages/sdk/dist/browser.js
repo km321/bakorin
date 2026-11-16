@@ -1,7 +1,7 @@
 import {
   createBrowserClient2
-} from "./chunks/index-fvbfbnc8.js";
-import"./chunks/index-1qcntxcm.js";
+} from "./chunks/index-03nmywvj.js";
+import"./chunks/index-kvbz0pj9.js";
 export {
   createBrowserClient2 as createBrowserClient
 };

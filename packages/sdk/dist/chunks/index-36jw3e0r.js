@@ -1,7 +1,7 @@
 import {
   createStore2,
   isRequestError2
-} from "./index-qzf6915z.js";
+} from "./index-a5bzk4nd.js";
 
 // src/headless/auth.ts
 function createAuth2(client, options = {}) {

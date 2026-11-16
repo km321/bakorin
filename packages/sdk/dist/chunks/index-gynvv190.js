@@ -1,7 +1,7 @@
 import {
   visitorHeaders2,
   envProxySecret2
-} from "./index-1qcntxcm.js";
+} from "./index-kvbz0pj9.js";
 
 // src/proxy.ts
 var SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);

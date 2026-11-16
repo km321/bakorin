@@ -2,12 +2,12 @@ import {
   visitorHeaders2,
   envProxySecret2,
   createClient2
-} from "./chunks/index-1qcntxcm.js";
+} from "./chunks/index-kvbz0pj9.js";
 import {
   rightmostForwardedFor2,
   isSameSiteRequest2,
   createProxyHandler2
-} from "./chunks/index-4ske5nsk.js";
+} from "./chunks/index-gynvv190.js";
 import {
   isProtected2,
   refreshUrl2,
@@ -19,13 +19,13 @@ import {
 } from "./chunks/index-n603vnp4.js";
 import {
   signInFields2
-} from "./chunks/index-7e23m54v.js";
+} from "./chunks/index-wge7dvfw.js";
 import {
   coerceValue2,
   validateRecord2,
   changedFields2,
   fieldErrorsFrom2
-} from "./chunks/index-qzf6915z.js";
+} from "./chunks/index-a5bzk4nd.js";
 // src/astro.ts
 var DEFAULT_PROXY_PREFIX = "/api/bakorin";
 function createAstroClient(options) {

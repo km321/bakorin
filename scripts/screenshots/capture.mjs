@@ -48,6 +48,15 @@ for (const theme of ["light", "dark"]) {
     await save(page, "admin-files", theme);
     await page.keyboard.press("Escape"); await page.waitForTimeout(400);
   }
+  if (want("filespage")) {
+    await nav("files");
+    await page.waitForTimeout(600);
+    await save(page, "admin-files-page", theme);
+    await page.locator("tbody tr").filter({ hasText: "signage-moodboard.png" }).getByRole("button", { name: "Preview signage-moodboard.png" }).click();
+    await page.waitForTimeout(800);
+    await save(page, "admin-file-preview", theme);
+    await page.keyboard.press("Escape"); await page.waitForTimeout(300);
+  }
   if (want("mail")) { await nav("mail"); await page.waitForTimeout(800); await page.getByRole("button", { name: /project-shipped/ }).first().click().catch(() => page.getByText("project-shipped").first().click()); await page.waitForTimeout(1200); await page.evaluate(() => { for (const sel of document.querySelectorAll("select")) { const opt = [...sel.options].find((o) => o.textContent.includes("Annual report")); if (opt) { sel.value = opt.value; sel.dispatchEvent(new Event("change", { bubbles: true })); } } }); await page.waitForTimeout(1200); await save(page, "admin-mail", theme); }
   if (want("webhooks")) { await nav("webhooks"); await save(page, "admin-webhooks", theme); }
   if (want("backups")) { await nav("backups"); await save(page, "admin-backups", theme); }

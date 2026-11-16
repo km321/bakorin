@@ -1,17 +1,7 @@
 import { useEffect, useState } from "preact/hooks";
 import { createBackup, downloadBackup, listBackups, type BackupRecord } from "../lib/api.ts";
-import { formatDateTime } from "../lib/format.ts";
+import { formatDateTime, formatSize } from "../lib/format.ts";
 import { pushToast } from "../lib/toast.ts";
-
-function formatSize(bytes: number): string {
-  if (bytes < 1024) {
-    return `${bytes} B`;
-  }
-  if (bytes < 1024 * 1024) {
-    return `${(bytes / 1024).toFixed(1)} KB`;
-  }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
 
 export function Backups() {
   const [rows, setRows] = useState<BackupRecord[]>([]);

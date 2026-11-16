@@ -1,6 +1,6 @@
 import {
   BakorinRequestError2
-} from "./index-1qcntxcm.js";
+} from "./index-kvbz0pj9.js";
 
 // src/headless/schema.ts
 function fieldLabel2(name) {
@@ -515,7 +515,8 @@ function throughSite(file, options) {
     return file;
   }
   const basePath = (options.basePath ?? "/api/bakorin").replace(/\/+$/, "");
-  return { ...file, url: `${options.origin ?? ""}${basePath}${file.url.slice("/api/v1".length)}` };
+  const site = (link) => link.startsWith("/api/v1/") ? `${options.origin ?? ""}${basePath}${link.slice("/api/v1".length)}` : link;
+  return { ...file, url: site(file.url), downloadUrl: site(file.downloadUrl ?? `${file.url}&download=1`) };
 }
 function errorFrom(status, text) {
   try {

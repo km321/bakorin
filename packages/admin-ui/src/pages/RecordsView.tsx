@@ -2,7 +2,7 @@ import type { ComponentChildren } from "preact";
 import { resendVerification, type MetaEntity, type MetaResponse } from "../lib/api.ts";
 import { IconSearch } from "../components/Icons.tsx";
 import { fieldLabel, relatedLabel } from "../lib/label.ts";
-import { emptyLabel, formatDate, formatDateTime } from "../lib/format.ts";
+import { emptyLabel, fileKind, formatDate, formatDateTime, isPreviewImage } from "../lib/format.ts";
 import { pushToast } from "../lib/toast.ts";
 
 function relationCell(row: Record<string, unknown>, fieldName: string, display?: string): string {
@@ -21,6 +21,34 @@ function relationCell(row: Record<string, unknown>, fieldName: string, display?:
   return "";
 }
 
+/** A file field in the list: a small preview or type badge, and the name, opening the file. */
+function fileCell(row: Record<string, unknown>, fieldName: string): ComponentChildren {
+  const value = row[fieldName];
+  if (typeof value !== "string" || value === "") {
+    return "";
+  }
+  const expanded = (row.$expand as Record<string, unknown> | undefined)?.[fieldName] as
+    | { filename?: string; contentType?: string; url?: string }
+    | null
+    | undefined;
+  if (!expanded?.url) {
+    return <span class="muted small">File not found</span>;
+  }
+  const type = expanded.contentType ?? "";
+  return (
+    <a class="file-chip" href={expanded.url} target="_blank" rel="noopener" title={expanded.filename}>
+      {isPreviewImage(type) ? (
+        <img src={expanded.url} alt="" />
+      ) : (
+        <span class="file-chip-kind" aria-hidden="true">
+          {fileKind(type)}
+        </span>
+      )}
+      <span class="file-chip-name">{expanded.filename}</span>
+    </a>
+  );
+}
+
 function cell(row: Record<string, unknown>, field: MetaEntity["fields"][number]): ComponentChildren {
   if (field.relation) {
     return relationCell(row, field.name, field.relation.display);
@@ -33,6 +61,8 @@ function cell(row: Record<string, unknown>, field: MetaEntity["fields"][number])
       return formatDate(value);
     case "datetime":
       return formatDateTime(value);
+    case "file":
+      return fileCell(row, field.name);
     default:
       if (value === null || value === undefined) {
         return "";

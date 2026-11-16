@@ -80,10 +80,7 @@ export declare function createNextClient<S extends object = Record<string, Recor
     }>;
     files: {
         upload(file: Blob, filename?: string): Promise<import("./index.ts").UploadedFile>;
-        sign(id: string): Promise<{
-            url: string;
-            expiresAt: number;
-        }>;
+        sign(id: string): Promise<import("./index.ts").UploadedFile>;
     };
     apiUrl(path?: string): string;
     entity<K extends keyof S & string>(name: K): {

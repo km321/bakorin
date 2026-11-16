@@ -1,3 +1,5 @@
+import { FILES_TABLE } from "../db/system.ts";
+import { fileInfo, type FileInfo, type SignedFile } from "../files/refs.ts";
 import { sql, type SelectQueryBuilder } from "kysely";
 import { joinTableName, quoteChecked, type EntityAST, type FieldAST } from "@bakorin/core";
 import { decodeValue, encodeValue } from "../db/types.ts";
@@ -61,7 +63,7 @@ export function parseListQuery(entity: EntityAST, search: URLSearchParams, optio
   const expand = (search.get("expand") ?? "")
     .split(",")
     .map((item) => item.trim())
-    .filter((name) => Boolean(entity.fieldMap[name]?.relation));
+    .filter((name) => Boolean(entity.fieldMap[name]?.relation) || entity.fieldMap[name]?.type === "file");
   return { limit, offset, sort, filters, expand };
 }
 
@@ -152,6 +154,7 @@ export async function expandRows(
   relatedAccess: (name: string) => AccessDecision,
   relatedEntity: (name: string) => EntityAST | undefined,
   view?: (target: EntityAST, row: Record<string, unknown>) => Record<string, unknown>,
+  signFile?: (info: FileInfo) => SignedFile,
 ): Promise<Record<string, unknown>[]> {
   if (expand.length === 0 || rows.length === 0) {
     return rows;
@@ -159,6 +162,19 @@ export async function expandRows(
   const expansions: Record<string, Record<string, Record<string, unknown>>> = {};
   for (const fieldName of expand) {
     const field = entity.fieldMap[fieldName];
+    if (field?.type === "file" && signFile) {
+      // File fields expand to the file's name, type, size, and short lived links.
+      // Reading the record is what grants the link, like any other field value.
+      const ids = [...new Set(rows.map((row) => row[fieldName]).filter((id): id is string => typeof id === "string" && id !== ""))];
+      const found = ids.length > 0 ? await db.selectFrom(FILES_TABLE).selectAll().where("id", "in", ids).execute() : [];
+      expansions[fieldName] = Object.fromEntries(
+        found.map((item) => {
+          const { createdBy: _createdBy, ...info } = signFile(fileInfo(item as Record<string, unknown>));
+          return [String(item.id), info as unknown as Record<string, unknown>];
+        }),
+      );
+      continue;
+    }
     const target = field?.relation?.to;
     if (!target) {
       continue;

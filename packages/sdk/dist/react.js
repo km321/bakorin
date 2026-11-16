@@ -1,11 +1,11 @@
 "use client";
-import"./chunks/index-1qcntxcm.js";
+import"./chunks/index-kvbz0pj9.js";
 import {
   createBrowserClient2
-} from "./chunks/index-fvbfbnc8.js";
+} from "./chunks/index-03nmywvj.js";
 import {
   createAuth2
-} from "./chunks/index-506786dm.js";
+} from "./chunks/index-36jw3e0r.js";
 import {
   fieldLabel2,
   formFields2,
@@ -18,7 +18,7 @@ import {
   createCollection2,
   formatBytes2,
   createUpload2
-} from "./chunks/index-qzf6915z.js";
+} from "./chunks/index-a5bzk4nd.js";
 
 // src/react/context.tsx
 import { createContext, useContext, useMemo } from "react";

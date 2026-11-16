@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
-import { deleteRecord, getMe, getMeta, listRecords, logout, type MetaEntity, type MetaResponse } from "../lib/api.ts";
+import { deleteRecord, getMe, getMeta, getRecord, listRecords, logout, type MetaEntity, type MetaResponse } from "../lib/api.ts";
 import { AppHeader } from "../components/AppHeader.tsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
 import { Drawer } from "../components/Drawer.tsx";
@@ -34,6 +34,29 @@ export function AppShell({ onLogout, onForbidden }: Props) {
   const [page, setPage] = useState<AdminPage>(pageFromHash(location.hash));
   const limit = 20;
 
+  /** #record/<entity>/<id> (links from the Files page) opens that record's editor. */
+  function openRecordFromHash(hash: string, known: MetaResponse | null = meta): boolean {
+    const match = /^#record\/([^/]+)\/(.+)$/.exec(hash);
+    if (!match) {
+      return false;
+    }
+    const target = decodeURIComponent(match[1]!);
+    const id = decodeURIComponent(match[2]!);
+    history.replaceState(null, "", `${location.pathname}${location.search}`);
+    if (known && !known.entities.some((item) => item.name === target)) {
+      return false;
+    }
+    setOffset(0);
+    setFilter("");
+    setSort("-createdAt");
+    setEntityName(target);
+    setPage("records");
+    void getRecord(target, id)
+      .then((row) => setEditing(row))
+      .catch((err: unknown) => setError(err instanceof Error ? err.message : "record not found"));
+    return true;
+  }
+
   const entity: MetaEntity | undefined = useMemo(
     () => meta?.entities.find((item) => item.name === entityName),
     [meta, entityName],
@@ -47,7 +70,7 @@ export function AppShell({ onLogout, onForbidden }: Props) {
     const current = meta?.entities.find((item) => item.name === nextEntity);
     const filterField = current?.fields.find((field) => field.type === "text" || field.type === "email");
     const expandFields = (current?.fields ?? [])
-      .filter((field) => field.relation)
+      .filter((field) => field.relation || field.type === "file")
       .map((field) => field.name)
       .join(",");
     const result = await listRecords(nextEntity, {
@@ -70,6 +93,7 @@ export function AppShell({ onLogout, onForbidden }: Props) {
         setMe(profile);
         const first = payload.entities[0]?.name ?? "";
         setEntityName(first);
+        openRecordFromHash(location.hash, payload);
       })
       .catch((err: unknown) => {
         setError(err instanceof Error ? err.message : "failed to load");
@@ -129,7 +153,9 @@ export function AppShell({ onLogout, onForbidden }: Props) {
 
   useEffect(() => {
     function onHash() {
-      setPage(pageFromHash(location.hash));
+      if (!openRecordFromHash(location.hash)) {
+        setPage(pageFromHash(location.hash));
+      }
     }
     window.addEventListener("hashchange", onHash);
     return () => window.removeEventListener("hashchange", onHash);

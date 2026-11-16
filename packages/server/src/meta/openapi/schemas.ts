@@ -66,7 +66,7 @@ export function entityReadSchema(entity: EntityAST): Record<string, unknown> {
   properties.$expand = {
     type: "object",
     additionalProperties: true,
-    description: "Present when expand= lists relation fields",
+    description: "Present when expand= lists relation or file fields",
   };
   const schema: Record<string, unknown> = { type: "object", properties, required };
   if (entity.description) {
@@ -114,7 +114,7 @@ export function pascal(name: string): string {
 }
 
 export function listParameters(entity: EntityAST): unknown[] {
-  const relations = entity.fields.filter((field) => field.relation).map((field) => field.name);
+  const relations = entity.fields.filter((field) => field.relation || field.type === "file").map((field) => field.name);
   const sortable = entity.fields.filter((field) => !field.secret).map((field) => field.name);
   const params: unknown[] = [
     {
@@ -139,8 +139,8 @@ export function listParameters(entity: EntityAST): unknown[] {
       name: "expand",
       in: "query",
       description: relations.length
-        ? `Comma-separated relation fields to embed under $expand: ${relations.join(", ")}.`
-        : "Comma-separated relation field names to embed under $expand.",
+        ? `Comma-separated relation or file fields to embed under $expand: ${relations.join(", ")}. A file field expands to its filename, contentType, size, url and downloadUrl (short lived signed links).`
+        : "Comma-separated relation or file field names to embed under $expand.",
       schema: { type: "string" },
     },
   ];
