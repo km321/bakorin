@@ -1,5 +1,6 @@
-import { logoutAction } from "../actions.ts";
+import { redirect } from "next/navigation";
 
-export async function GET() {
-  await logoutAction();
+// The pass through route revokes the session and clears both cookies.
+export function GET() {
+  redirect("/api/bakorin/-/logout?next=/");
 }

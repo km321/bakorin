@@ -30,7 +30,7 @@ export default async function RootLayout({ children }: { children: ReactNode }) 
             {signedIn ? (
               <>
                 <Link href="/app">App</Link>
-                <Link href="/logout">Sign out</Link>
+                <a href="/api/bakorin/-/logout?next=/">Sign out</a>
               </>
             ) : (
               <>

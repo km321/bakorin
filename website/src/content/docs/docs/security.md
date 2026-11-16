@@ -8,7 +8,7 @@ description: What Bakorin does to keep a client backend safe by default.
 - Ownership fields cannot be taken over. A non admin who sends `ownerId` gets 403. `owner()` row filters keep another user's row at 404.
 - Password updates through CRUD require an admin, or the current password for self service, and are always hashed with argon2id.
 - Access JWTs last 15 minutes. Refresh tokens are stored as SHA-256 hashes, rotated atomically on use, and reuse more than 30 seconds after a rotation revokes every token for that user.
-- Auth routes are rate limited per client IP in the database. The IP is the socket address unless `TRUST_PROXY` says a proxy is in front, so a client cannot dodge limits by sending its own `X-Forwarded-For`. Five failed logins lock the account with backoff.
+- Auth routes are rate limited per client IP in the database. The IP is the socket address unless `TRUST_PROXY` says a proxy is in front, so a client cannot dodge limits by sending its own `X-Forwarded-For`. Five failed logins lock the account with backoff. A site in front sends the visitor IP with `BAKORIN_PROXY_SECRET`, and Bakorin trusts that IP only when the secret matches.
 - `bakorin start` refuses to boot without a `JWT_SECRET` of at least 32 characters that is not a placeholder. The built in development secret is used only by `bakorin dev` and tests. `JWT_SECRET_PREVIOUS` supports rotation and gets the same check.
 - Access tokens are checked against the database on every request: deleted users, role changes, password resets, and logout everywhere take effect at once. Refresh rotation is atomic, with a 30 second grace window for parallel requests.
 - Request bodies are capped: 1 MiB for JSON, and `files.maxBytes` plus framing for uploads. Larger bodies get 413.

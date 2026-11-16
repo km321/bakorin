@@ -6,7 +6,7 @@ let error = "";
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   try {
-    await api(Astro.cookies).login({
+    await api(Astro).login({
       email: String(form.get("email") ?? ""),
       password: String(form.get("password") ?? ""),
     });

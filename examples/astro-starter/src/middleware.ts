@@ -6,9 +6,11 @@ export const onRequest = defineMiddleware(async (context, next) => {
     return next();
   }
   try {
-    await api(context.cookies).me();
+    await api(context).me();
     return next();
   } catch {
-    return context.redirect("/login");
+    // The refresh cookie only goes to the pass through route, so renew the session there.
+    const back = encodeURIComponent(context.url.pathname + context.url.search);
+    return context.redirect(`/api/bakorin/-/refresh?next=${back}&fail=/login`);
   }
 });

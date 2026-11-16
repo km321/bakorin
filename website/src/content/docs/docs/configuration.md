@@ -17,6 +17,7 @@ Bakorin reads `app.yaml` for structure and the environment for secrets and deplo
 | `NODE_ENV` / `BAKORIN_ENV` | Image sets `production` | Production mode for CORS, request logs, and mail checks |
 | `BAKORIN_ENV=development` | `bakorin dev` sets it | Dev mode. The only mode that may use the built in JWT secret. `bakorin start` refuses to run with it. `NODE_ENV` does not turn on dev mode |
 | `TRUST_PROXY` | Behind a proxy | How many proxies to trust for the client IP, or a comma separated list of proxy CIDRs. Unset trusts none. Use `1` on Railway |
+| `BAKORIN_PROXY_SECRET` | With an Astro or Next site | 32 or more random characters, the same on the site and the server. The site's pass through route and server calls send it with the visitor IP, so lockouts and rate limits apply per visitor |
 | `BAKORIN_DATA_DIR` | Recommended | SQLite at `$BAKORIN_DATA_DIR/app.db`. Local uploads and backups live here when S3 is not configured |
 | `DATABASE_URL` | Postgres only | Used when `runtime.dialect` is `postgres` |
 | `CORS_ORIGINS` | Production | Comma separated origins. Overrides `runtime.cors.origins`. Credentials and `Authorization` are allowed |

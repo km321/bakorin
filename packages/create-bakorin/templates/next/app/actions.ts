@@ -1,7 +1,6 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { api } from "../lib/bakorin.ts";
 
 export type SignupState = { ok: true; message: string } | { ok: false; message: string };
@@ -86,15 +85,6 @@ export async function createTaskAction(formData: FormData): Promise<string | voi
 }
 
 export async function logoutAction(): Promise<void> {
-  const store = await cookies();
-  const refresh = store.get("bakorin_refresh")?.value;
-  try {
-    const client = await api();
-    await client.logout(refresh);
-  } catch {
-    // still clear cookies
-  }
-  store.delete("bakorin_access");
-  store.delete("bakorin_refresh");
-  redirect("/");
+  // The pass through route revokes the session and clears both cookies.
+  redirect("/api/bakorin/-/logout?next=/");
 }

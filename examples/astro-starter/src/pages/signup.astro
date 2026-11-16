@@ -8,7 +8,7 @@ if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   try {
     // Signup never signs you in and answers the same way for a new or a taken email.
-    const result = await api(Astro.cookies).signup({
+    const result = await api(Astro).signup({
       email: String(form.get("email") ?? ""),
       password: String(form.get("password") ?? ""),
       name: String(form.get("name") ?? ""),

@@ -31,6 +31,32 @@ export interface ClientOptions {
   getRefreshToken?: () => Promise<string | null> | string | null;
   setTokens?: (tokens: AuthTokens) => Promise<void> | void;
   fetch?: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>;
+  /**
+   * Extra headers sent with every call, including token refresh and realtime. The
+   * server helpers use this to name the visitor IP (see visitorHeaders).
+   */
+  headers?: Record<string, string>;
+}
+
+/** Headers a site sends so Bakorin keys lockouts and rate limits on the visitor, not the site server. */
+export const PROXY_SECRET_HEADER = "x-bakorin-proxy-secret";
+export const PROXY_CLIENT_IP_HEADER = "x-bakorin-client-ip";
+
+/**
+ * The visitor headers for a server side call, or an empty object when the IP or
+ * the secret (BAKORIN_PROXY_SECRET, shared with the Bakorin server) is missing.
+ */
+export function visitorHeaders(clientIp: string | null | undefined, proxySecret: string | null | undefined): Record<string, string> {
+  const ip = clientIp?.trim();
+  const secret = proxySecret?.trim();
+  if (!ip || !secret) return {};
+  return { [PROXY_SECRET_HEADER]: secret, [PROXY_CLIENT_IP_HEADER]: ip };
+}
+
+/** BAKORIN_PROXY_SECRET from the environment, when there is one. */
+export function envProxySecret(): string | undefined {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  return env?.BAKORIN_PROXY_SECRET?.trim() || undefined;
 }
 
 export interface Query {
@@ -97,7 +123,7 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
       const response = await fetcher(url("/api/v1/auth/refresh"), {
         method: "POST",
         credentials: options.credentials,
-        headers: { "content-type": "application/json" },
+        headers: { ...options.headers, "content-type": "application/json" },
         body: JSON.stringify({ refreshToken: current }),
       });
       if (!response.ok) {
@@ -113,7 +139,8 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
   }
 
   async function request(path: string, init: RequestInit = {}, retried = false): Promise<Response> {
-    const headers = new Headers(init.headers);
+    const headers = new Headers(options.headers);
+    new Headers(init.headers).forEach((value, name) => headers.set(name, value));
     const access = await token();
     if (access) {
       headers.set("authorization", `Bearer ${access}`);
@@ -166,7 +193,7 @@ export function createClient<S extends Entities = Entities>(options: ClientOptio
 
   const realtime = createRealtimeConnection({
     open: async (entities, lastEventId, signal) => {
-      const headers = new Headers({ accept: "text/event-stream" });
+      const headers = new Headers({ ...options.headers, accept: "text/event-stream" });
       const access = await token();
       if (access) headers.set("authorization", `Bearer ${access}`);
       if (lastEventId) headers.set("last-event-id", lastEventId);

@@ -27,6 +27,8 @@ export interface AppContext {
   monitor: Monitor;
   /** BAKORIN_MCP_TOKEN: a long lived admin token for the read only MCP server. */
   mcpToken?: string;
+  /** BAKORIN_PROXY_SECRET: a site pass through route that sends it may name the visitor IP. */
+  proxySecret?: string;
   /** Server sent events for entities with realtime: on. Always present; idle until used. */
   realtime?: RealtimeHub;
   /** Production: /auth/first-admin needs the setup token printed to the log at boot. */

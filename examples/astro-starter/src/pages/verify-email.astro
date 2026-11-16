@@ -9,7 +9,7 @@ let done = false;
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   try {
-    await api(Astro.cookies).verifyEmail({ token: String(form.get("token") ?? "") });
+    await api(Astro).verifyEmail({ token: String(form.get("token") ?? "") });
     done = true;
   } catch (err) {
     error = err instanceof Error ? err.message : "Could not verify the email";

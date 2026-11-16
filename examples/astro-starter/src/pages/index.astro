@@ -3,7 +3,7 @@ import Layout from "../layouts/Base.astro";
 import { api } from "../lib/bakorin.ts";
 
 try {
-  await api(Astro.cookies).me();
+  await api(Astro).me();
   return Astro.redirect("/app");
 } catch {
   // stay on the public home page

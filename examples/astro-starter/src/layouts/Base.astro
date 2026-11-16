@@ -9,7 +9,7 @@ interface Props {
 const { title } = Astro.props;
 let signedIn = false;
 try {
-  await api(Astro.cookies).me();
+  await api(Astro).me();
   signedIn = true;
 } catch {
   signedIn = false;
@@ -29,7 +29,7 @@ try {
         {signedIn ? (
           <>
             <a href="/app">App</a>
-            <a href="/logout">Sign out</a>
+            <a href="/api/bakorin/-/logout?next=/">Sign out</a>
           </>
         ) : (
           <>

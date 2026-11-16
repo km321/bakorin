@@ -2,7 +2,7 @@
 import Layout from "../../layouts/Base.astro";
 import { api, type Task } from "../../lib/bakorin.ts";
 
-const client = api(Astro.cookies);
+const client = api(Astro);
 let error = "";
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();

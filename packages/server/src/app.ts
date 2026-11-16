@@ -43,6 +43,7 @@ import { createRealtimeHub } from "./realtime/hub.ts";
 import { createMemoryBroker, createPostgresBroker } from "./realtime/broker.ts";
 import { createRealtimeRoutes } from "./realtime/routes.ts";
 import { createMcpRoutes, MCP_TOKEN_MIN_LENGTH } from "./mcp/server.ts";
+import { PROXY_SECRET_MIN_LENGTH } from "./http/client-ip.ts";
 
 export interface RuntimeHandles {
   app: Hono;
@@ -165,6 +166,12 @@ export async function createRuntime(options: {
     console.warn(`[bakorin] BAKORIN_MCP_TOKEN is shorter than ${MCP_TOKEN_MIN_LENGTH} characters and is ignored`);
   } else if (mcpToken) {
     context.mcpToken = mcpToken;
+  }
+  const proxySecret = env.BAKORIN_PROXY_SECRET?.trim();
+  if (proxySecret && proxySecret.length < PROXY_SECRET_MIN_LENGTH) {
+    console.warn(`[bakorin] BAKORIN_PROXY_SECRET is shorter than ${PROXY_SECRET_MIN_LENGTH} characters and is ignored`);
+  } else if (proxySecret) {
+    context.proxySecret = proxySecret;
   }
   if (ast.runtime.mcp.enabled) {
     console.log(`[bakorin] MCP dev server on at /mcp (read only, admin token required)${isDevMode(env) ? "" : ". It is on in production: turn it off unless you need it"}`);

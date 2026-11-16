@@ -4,7 +4,7 @@
 - Auth `role` is always `writable: admin`. Signup ignores a client-supplied role.
 - Ownership fields cannot be taken over (403 if a non-admin sends `ownerId`).
 - Passwords are argon2id. Access JWTs last 15 minutes. Refresh tokens are hashed, rotated atomically, and reuse more than 30 seconds after a rotation revokes every token for the user.
-- Rate limits live in the database and key on the socket address unless `TRUST_PROXY` trusts a proxy, so a client sent `X-Forwarded-For` is ignored by default. Failed logins lock the account after 5 tries with backoff.
+- Rate limits live in the database and key on the socket address unless `TRUST_PROXY` trusts a proxy, so a client sent `X-Forwarded-For` is ignored by default. Failed logins lock the account after 5 tries with backoff. A site in front sends the visitor IP with `BAKORIN_PROXY_SECRET`, and Bakorin trusts that IP only when the secret matches.
 - `bakorin start` refuses to boot without a strong `JWT_SECRET` (32+ characters, not a placeholder). The development secret is only for `bakorin dev` and tests.
 - Signup answers 202 with the same body for new and existing emails and never returns a session, so it does not reveal who is registered. Login runs the same password check and lockout for unknown emails.
 - Signup follows `auth.signup` (`open`, `invite`, `closed`). Users' email, role, and `emailVerified` are private to the user and admins, and the default users read policy is `[owner(id), admin]`.

@@ -7,7 +7,7 @@ let error = "";
 if (Astro.request.method === "POST") {
   const form = await Astro.request.formData();
   try {
-    await api(Astro.cookies).acceptInvite({
+    await api(Astro).acceptInvite({
       token: String(form.get("token") ?? ""),
       password: String(form.get("password") ?? ""),
       name: String(form.get("name") ?? "") || undefined,

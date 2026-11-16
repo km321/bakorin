@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { BlockList, isIP } from "node:net";
 import type { Context } from "hono";
 import type { TrustProxyAST } from "@bakorin/core";
@@ -95,7 +96,36 @@ export function resolveClientIp(c: Context, trust: TrustProxyAST): string {
   return chain[0] ?? UNKNOWN_CLIENT;
 }
 
-/** Shorthand used by routes: resolves with the app's current trustProxy setting. */
+/** Shortest BAKORIN_PROXY_SECRET accepted. */
+export const PROXY_SECRET_MIN_LENGTH = 32;
+/** Headers a site pass through route sends to name the visitor (see @bakorin/sdk proxy). */
+export const PROXY_SECRET_HEADER = "x-bakorin-proxy-secret";
+export const PROXY_CLIENT_IP_HEADER = "x-bakorin-client-ip";
+
+function sameSecret(sent: string, expected: string): boolean {
+  const a = Buffer.from(sent);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+/**
+ * The visitor IP named by a trusted site pass through route, or null. Trusted only
+ * when the request carries BAKORIN_PROXY_SECRET, so browsers and other callers
+ * cannot pick their own address.
+ */
+export function proxiedClientIp(c: Context, secret: string | undefined): string | null {
+  if (!secret) {
+    return null;
+  }
+  const sent = c.req.header(PROXY_SECRET_HEADER);
+  if (!sent || !sameSecret(sent, secret)) {
+    return null;
+  }
+  return normalize(c.req.header(PROXY_CLIENT_IP_HEADER));
+}
+
+/** Shorthand used by routes: a trusted pass through's visitor IP, else the trustProxy rules. */
 export function clientIp(c: Context): string {
-  return resolveClientIp(c, c.get("app").ast.runtime.trustProxy);
+  const ctx = c.get("app");
+  return proxiedClientIp(c, ctx.proxySecret) ?? resolveClientIp(c, ctx.ast.runtime.trustProxy);
 }
