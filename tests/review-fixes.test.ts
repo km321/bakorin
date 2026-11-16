@@ -229,7 +229,10 @@ describe("H2: a failing after hook never crashes the process", () => {
   test("bakorin start survives a throwing afterCreate (probe crash2)", async () => {
     const yaml = NO_SECRET_YAML.replace("app:\n  name: mini\n", "app:\n  name: crashsafe\n");
     const dir = await tempProject(yaml, THROWING);
-    const port = 43900 + Math.floor(Math.random() * 60);
+    // Ask the OS for a free port instead of guessing, so parallel CI jobs cannot collide.
+    const probe = Bun.serve({ port: 0, fetch: () => new Response("") });
+    const port = probe.port;
+    probe.stop(true);
     const proc = Bun.spawn([process.execPath, CLI, "start", "--dir", dir, "--port", String(port)], {
       cwd: dir,
       env: cliEnv({ JWT_SECRET: STRONG, CORS_ORIGINS: "http://localhost" }),
@@ -239,11 +242,15 @@ describe("H2: a failing after hook never crashes the process", () => {
     cleanups.push(() => proc.kill(9));
     const base = `http://127.0.0.1:${port}`;
     let ready = false;
-    for (let i = 0; i < 80 && !ready; i++) {
+    // A cold CI runner can take a while to load the CLI, so allow up to 30 seconds.
+    for (let i = 0; i < 300 && !ready && proc.exitCode === null; i++) {
       await Bun.sleep(100);
       ready = await fetch(`${base}/health`).then((r) => r.ok, () => false);
     }
-    expect(ready).toBe(true);
+    if (!ready) {
+      proc.kill(9);
+      throw new Error(`bakorin start did not come up: ${await new Response(proc.stderr).text()}`);
+    }
     const signup = await fetch(`${base}/api/v1/auth/signup`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -274,7 +281,7 @@ describe("H2: a failing after hook never crashes the process", () => {
     (target as unknown as EventEmitter).emit("unhandledRejection", new Error("late"), Promise.resolve());
     (target as unknown as EventEmitter).emit("uncaughtException", new Error("sync"));
     expect(captured.map((info) => info.source)).toEqual(["process", "process"]);
-  });
+  }, 45_000);
 });
 
 describe("H3: rate limits do not trust a client X-Forwarded-For", () => {
