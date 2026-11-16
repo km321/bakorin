@@ -11,7 +11,7 @@ describe("first admin onboarding", () => {
     const http = client(runtime);
     const setup = await http.fetch("/api/v1/auth/setup");
     expect(setup.status).toBe(200);
-    expect(await setup.json()).toEqual({ data: { firstAdmin: true } });
+    expect(await setup.json()).toEqual({ data: { firstAdmin: true, signup: "open" } });
 
     const created = await http.fetch("/api/v1/auth/first-admin", {
       method: "POST",
@@ -24,7 +24,7 @@ describe("first admin onboarding", () => {
     expect(payload.data.accessToken).toBeTruthy();
 
     const again = await http.fetch("/api/v1/auth/setup");
-    expect(await again.json()).toEqual({ data: { firstAdmin: false } });
+    expect(await again.json()).toEqual({ data: { firstAdmin: false, signup: "open" } });
 
     const refused = await http.fetch("/api/v1/auth/first-admin", {
       method: "POST",
@@ -83,7 +83,7 @@ describe("first admin onboarding", () => {
     });
     expect(signup.status).toBe(201);
     const setup = await http.fetch("/api/v1/auth/setup");
-    expect(await setup.json()).toEqual({ data: { firstAdmin: true } });
+    expect(await setup.json()).toEqual({ data: { firstAdmin: true, signup: "open" } });
     const created = await http.fetch("/api/v1/auth/first-admin", {
       method: "POST",
       body: JSON.stringify({ email: "owner@studio.test", password: "password123" }),
@@ -108,7 +108,7 @@ describe("first admin onboarding", () => {
         projectDir: dir,
         yamlSource,
         env: {
-          JWT_SECRET: "test-secret-test-secret-test-secret-32",
+          JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop",
           BAKORIN_ADMIN_EMAIL: "ada@studio.test",
           BAKORIN_ADMIN_PASSWORD: "short",
         },
@@ -183,7 +183,7 @@ runtime:
   sqlite:
     path: ./data/app.db
   host: 127.0.0.1
-  port: 43991
+  port: 43981
 auth:
   entity: users
 entities:
@@ -199,7 +199,7 @@ entities:
     await mkdir(join(dir, "data"), { recursive: true });
     const env: Record<string, string | undefined> = { ...process.env, NODE_ENV: "development", BAKORIN_ENV: "development" };
     delete env.JWT_SECRET;
-    const proc = Bun.spawn(["bun", join(import.meta.dir, "../packages/server/src/cli.ts"), "dev", "--dir", dir, "--port", "43991"], {
+    const proc = Bun.spawn([process.execPath, join(import.meta.dir, "../packages/server/src/cli.ts"), "dev", "--dir", dir, "--port", "43981"], {
       cwd: dir,
       env,
       stdout: "pipe",
@@ -212,7 +212,7 @@ entities:
     while (Date.now() < deadline) {
       await Bun.sleep(100);
       try {
-        const health = await fetch("http://127.0.0.1:43991/health");
+        const health = await fetch("http://127.0.0.1:43981/health");
         if (health.ok) {
           sawWarn = true;
           break;
@@ -226,5 +226,5 @@ entities:
     const combined = `${stdout}\n${stderr}`;
     expect(sawWarn || combined.includes("jwtwarn")).toBe(true);
     expect(combined).toContain("WARNING: using the default JWT secret");
-  });
+  }, 15_000);
 });

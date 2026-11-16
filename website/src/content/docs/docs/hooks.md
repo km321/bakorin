@@ -58,6 +58,8 @@ Sends are never inline: they get retries, backoff, and a row in the admin delive
 
 ## The change bus
 
-Every successful create, update, and delete emits one event on an in process change bus with `entity`, `op`, `before`, `after`, and `actor`. Webhooks, mail rules, and `after*` hooks subscribe to it.
+Every successful create, update, and delete emits one event on an in process change bus with `entity`, `op`, `before`, `after`, and `actor`, after the database transaction commits. `after*` hooks subscribe to it. Webhook deliveries, mail rule deliveries, and audit rows do not wait for the bus: they are written inside the same transaction as the record, so they commit or roll back together.
+
+If an `after*` hook throws or its promise rejects, Bakorin logs it with the request id, reports it to error monitoring (Sentry or `ERROR_WEBHOOK_URL` when set, and the Status page), and keeps serving. The write that triggered it has already succeeded. `bakorin start` and `bakorin dev` also catch stray unhandled rejections and exceptions the same way instead of exiting.
 
 In `bakorin dev`, saving `hooks.ts` reloads it along with `app.yaml`.

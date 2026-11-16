@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
-import { bootPostgres, client } from "./helpers.ts";
+import { bootPostgres, client, MINI_YAML } from "./helpers.ts";
 import { deliverMailById, exportPortable, importPortable, type MailMessage } from "@bakorin/server";
-import { MAIL_OUTBOX_TABLE } from "../packages/server/src/db/system.ts";
+import { AUDIT_TABLE, MAIL_OUTBOX_TABLE, WEBHOOK_OUTBOX_TABLE } from "../packages/server/src/db/system.ts";
 
 const url = process.env.DATABASE_URL;
 
@@ -129,5 +129,83 @@ describe.skipIf(!url)("postgres", () => {
     expect(row?.status).toBe("sent");
     expect(sent.length).toBeLessThanOrEqual(1);
     await runtime.close();
+  });
+
+  describe("review fixes: transactional outbox and hook safety", () => {
+    const WEBHOOK_YAML = `${MINI_YAML}
+webhooks:
+  - entity: items
+    events: [create, update, delete]
+    url: http://127.0.0.1:9/hook
+    secret: webhook-secret-webhook-secret
+`;
+    const THROWING = `export default { entities: { items: { afterCreate: async () => { throw new Error("hook boom"); } } } };\n`;
+
+    async function count(runtime: Awaited<ReturnType<typeof bootPostgres>>, table: string): Promise<number> {
+      const row = (await (runtime.db as any).selectFrom(table).select((eb: any) => eb.fn.countAll().as("n")).executeTakeFirst()) as { n: string | number };
+      return Number(row.n);
+    }
+
+    async function firstAdmin(runtime: Awaited<ReturnType<typeof bootPostgres>>) {
+      const res = await client(runtime).fetch("/api/v1/auth/first-admin", {
+        method: "POST",
+        body: JSON.stringify({ email: "boss@x.test", password: "password123", name: "Boss" }),
+      });
+      return (await res.json()).data as { accessToken: string; user: { id: string } };
+    }
+
+    test("create, update and delete write webhook and audit rows in the record transaction", async () => {
+      const runtime = await bootPostgres(THROWING, WEBHOOK_YAML);
+      try {
+        const admin = await firstAdmin(runtime);
+        const api = client(runtime, admin.accessToken);
+        const auditBefore = await count(runtime, AUDIT_TABLE);
+        const created = await api.fetch("/api/v1/items", { method: "POST", body: JSON.stringify({ title: "a", ownerId: admin.user.id }) });
+        expect(created.status).toBe(201);
+        const id = (await created.json()).data.id;
+        expect((await api.fetch(`/api/v1/items/${id}`, { method: "PATCH", body: JSON.stringify({ title: "b" }) })).status).toBe(200);
+        expect((await api.fetch(`/api/v1/items/${id}`, { method: "DELETE" })).status).toBeLessThan(300);
+        expect(await count(runtime, WEBHOOK_OUTBOX_TABLE)).toBe(3);
+        expect((await count(runtime, AUDIT_TABLE)) - auditBefore).toBe(3);
+        // The throwing afterCreate was reported, not fatal.
+        await Bun.sleep(50);
+        expect(runtime.context.monitor.recentErrors().some((error) => error.source === "hook")).toBe(true);
+        expect((await client(runtime).fetch("/health")).status).toBe(200);
+      } finally {
+        await runtime.close();
+      }
+    });
+
+    test("a failed outbox write rolls back the record", async () => {
+      const runtime = await bootPostgres(undefined, WEBHOOK_YAML);
+      try {
+        const admin = await firstAdmin(runtime);
+        await runtime.db.schema.dropTable(WEBHOOK_OUTBOX_TABLE).execute();
+        const created = await client(runtime, admin.accessToken).fetch("/api/v1/items", {
+          method: "POST",
+          body: JSON.stringify({ title: "ghost", ownerId: admin.user.id }),
+        });
+        expect(created.status).toBe(500);
+        expect(await count(runtime, "items")).toBe(0);
+        expect((await client(runtime).fetch("/health")).status).toBe(200);
+      } finally {
+        await runtime.close();
+      }
+    });
+
+    test("concurrent writes each commit their own outbox row", async () => {
+      const runtime = await bootPostgres(undefined, WEBHOOK_YAML);
+      try {
+        const admin = await firstAdmin(runtime);
+        const api = client(runtime, admin.accessToken);
+        const results = await Promise.all(
+          Array.from({ length: 20 }, (_, i) => api.fetch("/api/v1/items", { method: "POST", body: JSON.stringify({ title: `t${i}`, ownerId: admin.user.id }) })),
+        );
+        expect(results.every((res) => res.status === 201)).toBe(true);
+        expect(await count(runtime, WEBHOOK_OUTBOX_TABLE)).toBe(20);
+      } finally {
+        await runtime.close();
+      }
+    });
   });
 });

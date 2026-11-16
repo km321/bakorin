@@ -14,7 +14,8 @@ SQLite on the volume is the default. A Postgres plugin is optional (`DATABASE_UR
 
 | Variable | Value |
 |---|---|
-| `JWT_SECRET` | long random string (required in production) |
+| `JWT_SECRET` | required: output of `openssl rand -base64 48`. `bakorin start` refuses to boot without a strong secret |
+| `TRUST_PROXY` | `1` (Railway's edge proxy is in front, so rate limits see each visitor's IP) |
 | `BAKORIN_DATA_DIR` | `/data` |
 | `CORS_ORIGINS` | your Astro/Next origin, comma-separated if more than one |
 | `APP_URL` | public URL of the front end |
@@ -54,7 +55,7 @@ docker build -t bakorin-app .
 docker run --rm -p 4371:4371 \
   -e PORT=4371 \
   -e NODE_ENV=production \
-  -e JWT_SECRET=change-me-to-a-long-random-string \
+  -e JWT_SECRET="$(openssl rand -base64 48)" \
   -e BAKORIN_DATA_DIR=/data \
   -e CORS_ORIGINS=https://your-frontend.example \
   -e APP_URL=https://your-frontend.example \

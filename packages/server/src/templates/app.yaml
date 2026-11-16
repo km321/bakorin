@@ -12,7 +12,6 @@ runtime:
     driver: local
     path: ./data/uploads
   jwt:
-    secret: ${JWT_SECRET:-dev-only-change-me}
     accessTtlSeconds: 900
     refreshTtlSeconds: 2592000
   backups:
@@ -30,6 +29,8 @@ auth:
   role: role
   adminRole: admin
   requireVerifiedEmail: false
+  # open: anyone can sign up. invite: admins invite people. closed: no new accounts.
+  signup: invite
 
 entities:
   users:
@@ -54,7 +55,7 @@ entities:
         default: user
         writable: admin
     policies:
-      read: authenticated
+      read: [owner(id), admin]
       create: admin
       update: owner(id)
       delete: admin

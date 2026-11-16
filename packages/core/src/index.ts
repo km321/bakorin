@@ -28,9 +28,22 @@ export type {
   PolicyKind,
   RuntimeAST,
   SchemaAST,
+  SignupMode,
+  TrustProxyAST,
   WebhookAST,
 } from "./ast.ts";
-export { compileAppYaml, deserializeAst, serializeAst, DEFAULT_ALLOWED_MIME_TYPES, DEV_JWT_SECRET } from "./compile.ts";
+export {
+  assertStrongJwtSecret,
+  compileAppYaml,
+  deserializeAst,
+  isDevMode,
+  parseTrustProxy,
+  serializeAst,
+  weakJwtSecretReason,
+  DEFAULT_ALLOWED_MIME_TYPES,
+  DEV_JWT_SECRET,
+  MIN_JWT_SECRET_LENGTH,
+} from "./compile.ts";
 export type { CompileOptions } from "./compile.ts";
 export {
   assertPlanApplyable,

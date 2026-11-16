@@ -70,7 +70,11 @@ describe("privilege escalation guards", () => {
       }),
     });
     expect(withoutRole.status).toBe(201);
-    expect((await withoutRole.json()).data.role).toBe("user");
+    const createdUser = (await withoutRole.json()).data;
+    // role is a private field, so an anonymous creator does not see it in the response.
+    expect(createdUser.role).toBeUndefined();
+    const stored = await runtime.db.selectFrom("users").select(["role"]).where("id", "=", createdUser.id).executeTakeFirstOrThrow();
+    expect(stored.role).toBe("user");
     const login = await client(runtime).fetch("/api/v1/auth/login", {
       method: "POST",
       body: JSON.stringify({ email: "ok@example.com", password: "password123" }),

@@ -32,10 +32,16 @@ If you leave out `policies`, Bakorin uses:
 
 | Entity | read | create | update | delete |
 |---|---|---|---|---|
-| Auth entity | `authenticated` | `admin` | `owner(id)` | `admin` |
+| Auth entity | `[owner(id), admin]` | `admin` | `owner(id)` | `admin` |
 | Any other entity | `authenticated` | `authenticated` | `authenticated` | `authenticated` |
 
-Public signup belongs on `POST /api/v1/auth/signup`, not on `users.create`. Do not make the auth entity's `create` policy public.
+Public signup belongs on `POST /api/v1/auth/signup` with `auth.signup: open`, not on `users.create`. Do not make the auth entity's `create` policy public. See [Auth](/docs/auth/#who-can-sign-up).
+
+## Private fields on users
+
+On the auth entity, the identity field (usually `email`), the role field, and `emailVerified` are private by default. A private field is returned only to the user it belongs to and to admins. Everyone else gets the row without it, even when a `read` policy lets them see the row. Filters and sorts on a private field are ignored for non admins, and rows pulled in with `expand` follow the same rule.
+
+Mark any other field `private: true` to get the same treatment, or set `private: false` on one of the auth fields to opt out.
 
 ## Ownership
 

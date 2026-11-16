@@ -24,7 +24,7 @@ bun run create my-app --frontend astro --schema todo --yes
 cp my-app/.env.example my-app/.env
 ```
 
-Set `JWT_SECRET` in `my-app/.env` to a long random string. `--mail log|resend|smtp` (or `--email`) writes `MAIL_DRIVER`, `MAIL_FROM`, and an empty `RESEND_API_KEY=` placeholder. Never paste a real key into git. Resend: [Email with Resend](resend.md).
+Set `JWT_SECRET` in `my-app/.env` to the output of `openssl rand -base64 48` (`bakorin start` refuses to boot without a strong secret). `--mail log|resend|smtp` (or `--email`) writes `MAIL_DRIVER`, `MAIL_FROM`, and an empty `RESEND_API_KEY=` placeholder. Never paste a real key into git. Resend: [Email with Resend](resend.md).
 
 Start the API from the repo root so it loads `my-app/.env`:
 

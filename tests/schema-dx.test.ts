@@ -9,7 +9,7 @@ import {
 import { createDebounced } from "@bakorin/server";
 import { MINI_YAML, tempProject } from "./helpers.ts";
 
-const SECRET = { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } };
+const SECRET = { env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" } };
 
 function compileMessage(source: string): string {
   try {
@@ -67,7 +67,7 @@ describe("friendly app.yaml errors", () => {
     const dir = await tempProject(`${MINI_YAML}\ncars:\n  fields:\n    name: text\n`);
     const proc = Bun.spawn(
       ["bun", join(import.meta.dir, "../packages/server/src/cli.ts"), "start", "--dir", dir],
-      { stdout: "pipe", stderr: "pipe" },
+      { stdout: "pipe", stderr: "pipe", env: { ...process.env, BAKORIN_TEST: undefined, BAKORIN_ENV: undefined } },
     );
     const [stdout, stderr, code] = await Promise.all([
       new Response(proc.stdout).text(),

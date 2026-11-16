@@ -420,6 +420,20 @@ function authSection(): HTMLElement {
       ),
     ),
     checkbox("auth.requireVerifiedEmail", "Require a verified email before sign-in", auth.requireVerifiedEmail, (v) => (auth.requireVerifiedEmail = v)),
+    control(
+      "auth.signup",
+      "Who can create an account",
+      select(
+        auth.signup,
+        [
+          ["", "Default (follows the users create policy)"],
+          ["open", "Open: anyone can sign up"],
+          ["invite", "Invite: admins invite people"],
+          ["closed", "Closed: no new accounts"],
+        ],
+        (v) => (auth.signup = v as typeof auth.signup),
+      ),
+    ),
   );
 }
 

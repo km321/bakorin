@@ -4,7 +4,7 @@ import { MINI_YAML } from "./helpers.ts";
 
 describe("compiler", () => {
   test("normalizes yaml into a versioned AST with topo order", () => {
-    const ast = compileAppYaml(MINI_YAML, { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } });
+    const ast = compileAppYaml(MINI_YAML, { env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" } });
     expect(ast.version).toBe(1);
     expect(ast.order).toEqual(["users", "items"]);
     expect(ast.auth.entity).toBe("users");
@@ -18,12 +18,12 @@ describe("compiler", () => {
   test("honors entity display and rejects a missing field", () => {
     const ast = compileAppYaml(
       MINI_YAML.replace("  items:\n    fields:", "  items:\n    display: title\n    fields:"),
-      { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } },
+      { env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" } },
     );
     expect(ast.entityMap.items?.display).toBe("title");
     expect(() =>
       compileAppYaml(MINI_YAML.replace("  items:\n    fields:", "  items:\n    display: missing\n    fields:"), {
-        env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" },
+        env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" },
       }),
     ).toThrow(/display field missing/);
   });
@@ -49,13 +49,13 @@ describe("compiler", () => {
     expect(() =>
       compileAppYaml(
         `app:\n  name: x\nentities:\n  users:\n    auth: true\n    fields:\n      email: { type: email, unique: true, required: true }\n      password: { type: password, required: true }\n      role: { type: enum, values: [user, admin], default: user }\n      itemId: { type: relation, to: items }\n  items:\n    fields:\n      userId: { type: relation, to: users }\n      title: text\n`,
-        { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } },
+        { env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" } },
       ),
     ).toThrow(/circular/);
   });
 
   test("typegen emits interfaces", () => {
-    const ast = compileAppYaml(MINI_YAML, { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } });
+    const ast = compileAppYaml(MINI_YAML, { env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" } });
     const types = generateTypes(ast);
     expect(types).toContain("export interface Users");
     expect(types).toContain("export interface BakorinEntities");
@@ -64,7 +64,7 @@ describe("compiler", () => {
 
   test("requires JWT_SECRET in production", () => {
     const yaml = MINI_YAML.replace(
-      `  jwt:\n    secret: test-secret-test-secret-test-secret-32\n`,
+      `  jwt:\n    secret: test-jwt-secret-0123456789-abcdefghijklmnop\n`,
       "",
     );
     expect(() => compileAppYaml(yaml, { env: {}, production: true })).toThrow(/JWT_SECRET/);
@@ -73,7 +73,7 @@ describe("compiler", () => {
   test("locks the auth role field and defaults auth create to admin", () => {
     const ast = compileAppYaml(
       `app:\n  name: x\nentities:\n  users:\n    auth: true\n    fields:\n      email: { type: email, unique: true, required: true }\n      password: { type: password, required: true }\n      role: { type: enum, values: [user, admin], default: user }\n      notes: { type: text, writable: admin }\n      locked: { type: text, readonly: true, default: sealed }\n`,
-      { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } },
+      { env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" } },
     );
     expect(ast.entityMap.users?.policies.create).toEqual([{ kind: "admin" }]);
     expect(ast.entityMap.users?.fieldMap.role?.writable).toBe("admin");
@@ -98,7 +98,7 @@ webhooks:
     maxAttempts: 3
     timeoutMs: 1500
 `,
-      { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } },
+      { env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" } },
     );
     expect(ast.runtime.webhooksRetainDays).toBe(30);
     expect(ast.webhooks[0]?.id).toBe("wh_1");
@@ -111,7 +111,7 @@ webhooks:
   test("CORS_ORIGINS overrides yaml and APP_URL is compiled", () => {
     const ast = compileAppYaml(MINI_YAML, {
       env: {
-        JWT_SECRET: "test-secret-test-secret-test-secret-32",
+        JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop",
         CORS_ORIGINS: "https://app.test, https://admin.test",
         APP_URL: "https://app.test/",
       },

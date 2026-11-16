@@ -8,7 +8,7 @@ describe("migrator", () => {
   test("creates tables from an empty database", async () => {
     const dir = await tempProject();
     const { db } = openSqlite(join(dir, "data/app.db"));
-    const ast = compileAppYaml(MINI_YAML, { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } });
+    const ast = compileAppYaml(MINI_YAML, { env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" } });
     const result = await migrateToSchema(db, ast);
     expect(result.applied).toBe(true);
     const tables = await db.selectFrom("_bakorin_meta").selectAll().execute();
@@ -27,7 +27,7 @@ describe("migrator", () => {
         "done: { type: boolean, default: false }",
         "done: { type: boolean, default: false }\n      notes: { type: text }",
       ),
-      { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } },
+      { env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" } },
     );
     const again = await migrateToSchema(db, to);
     expect(again.plan.auto.some((change) => change.kind === "add_field")).toBe(true);

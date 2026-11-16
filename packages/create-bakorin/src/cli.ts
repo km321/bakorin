@@ -137,7 +137,9 @@ function mailFromHeader(appName: string, mail: Mail): string {
 }
 
 export function envExample(appName: string, mail: Mail): string {
-  return `JWT_SECRET=change-me-to-a-long-random-string
+  return `# Required for bakorin start: 32+ random characters. Generate one with: openssl rand -base64 48
+# bakorin dev works without it and prints a warning.
+JWT_SECRET=
 PORT=4371
 APP_URL=http://localhost:4321
 CORS_ORIGINS=http://localhost:4321,http://localhost:3000
@@ -154,6 +156,8 @@ MAIL_FROM=${mailFromHeader(appName, mail)}
 BAKORIN_DATA_DIR=
 BAKORIN_ENV=
 NODE_ENV=
+# Set to 1 behind one proxy such as Railway, or a comma list of proxy CIDRs. Empty trusts no proxy.
+TRUST_PROXY=
 DATABASE_URL=
 JWT_SECRET_PREVIOUS=
 # Placeholder only. Paste a Resend API key locally. Never commit a real key.

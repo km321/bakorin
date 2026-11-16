@@ -45,12 +45,13 @@ runtime:
     region: us-east-1
     path: ./data/uploads
   jwt:
-    secret: test-secret-test-secret-test-secret-32
+    secret: test-jwt-secret-0123456789-abcdefghijklmnop
   backups:
     retain: 2
     destination: s3://${mock.bucket}/backups
 auth:
   entity: users
+  signup: open
 entities:
   users:
     auth: true

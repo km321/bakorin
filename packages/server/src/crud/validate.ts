@@ -1,4 +1,4 @@
-import type { EntityAST, FieldAST } from "@bakorin/core";
+import type { EntityAST, FieldAST, SchemaAST } from "@bakorin/core";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -130,6 +130,47 @@ export function publicRow(entity: EntityAST, row: Record<string, unknown>): Reco
     }
     if (field.name in row) {
       out[field.name] = row[field.name];
+    }
+  }
+  return out;
+}
+
+/** Admins see private fields everywhere; a user sees their own on the auth entity. */
+export function canSeePrivate(
+  ast: SchemaAST,
+  entity: EntityAST,
+  row: Record<string, unknown> | null,
+  actor: { id: string; role: string } | null,
+): boolean {
+  if (actor && actor.role === ast.auth.adminRole) {
+    return true;
+  }
+  return Boolean(actor && row && entity.name === ast.auth.entity && String(row.id) === actor.id);
+}
+
+/**
+ * The API view of a row for one reader: secret fields are always removed, and
+ * private fields (by default the auth identity, role and emailVerified) are removed
+ * unless the reader is an admin or the row is the reader's own user record.
+ */
+export function visibleRow(
+  ast: SchemaAST,
+  entity: EntityAST,
+  row: Record<string, unknown>,
+  actor: { id: string; role: string } | null,
+): Record<string, unknown> {
+  const out = publicRow(entity, row);
+  if (canSeePrivate(ast, entity, row, actor)) {
+    return out;
+  }
+  for (const field of entity.fields) {
+    if (field.private) {
+      delete out[field.name];
+    }
+  }
+  for (const key of Object.keys(row)) {
+    if (key === "$expand") {
+      out[key] = row[key];
     }
   }
   return out;

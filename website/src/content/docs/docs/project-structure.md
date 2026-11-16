@@ -35,7 +35,7 @@ A project scaffolded with `create-bakorin` also contains:
 
 1. Copy `examples/studio-leads` or run `bakorin init`.
 2. Edit `app.yaml` for that client's entities and policies.
-3. Set `JWT_SECRET` (required in production). Point `runtime.postgres.url` at Postgres if you deploy with Postgres.
+3. Set `JWT_SECRET` (required for `bakorin start`, 32 or more random characters). Point `runtime.postgres.url` at Postgres if you deploy with Postgres.
 4. Deploy the binary or Docker image with the project folder mounted or copied in.
 5. Run `bakorin backup` on a schedule and store snapshots off the box.
 6. Run `bakorin typegen` into the front end repo when the schema changes.

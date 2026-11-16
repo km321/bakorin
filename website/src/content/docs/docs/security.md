@@ -8,8 +8,12 @@ description: What Bakorin does to keep a client backend safe by default.
 - Ownership fields cannot be taken over. A non admin who sends `ownerId` gets 403. `owner()` row filters keep another user's row at 404.
 - Password updates through CRUD require an admin, or the current password for self service, and are always hashed with argon2id.
 - Access JWTs last 15 minutes. Refresh tokens are stored as SHA-256 hashes, rotated on use, and reuse revokes every token for that user.
-- Auth routes are rate limited in the database. Five failed logins lock the account with backoff.
-- `JWT_SECRET` is required in production. `JWT_SECRET_PREVIOUS` supports rotation.
+- Auth routes are rate limited per client IP in the database. The IP is the socket address unless `TRUST_PROXY` says a proxy is in front, so a client cannot dodge limits by sending its own `X-Forwarded-For`. Five failed logins lock the account with backoff.
+- `bakorin start` refuses to boot without a `JWT_SECRET` of at least 32 characters that is not a placeholder. The built in development secret is used only by `bakorin dev` and tests. `JWT_SECRET_PREVIOUS` supports rotation and gets the same check.
+- Signup follows `auth.signup` (`open`, `invite`, or `closed`). Apps whose users `create` policy is not public are invite only unless they opt in.
+- Ordinary users never see another user's email, role, or verification status. Those fields are private to the user and admins, and the default users read policy is `[owner(id), admin]`.
+- Webhook, mail rule, and audit rows are written in the same database transaction as the record change, so a change is never saved without them, and a failed outbox write rolls the change back.
+- A throwing `after*` hook, or any other stray error after a response, is logged with the request id and reported to error monitoring. It does not stop the server.
 - Production refuses CORS origin `*` unless `BAKORIN_ALLOW_ANY_ORIGIN=true`.
 - File downloads need a short lived signed URL. Upload size and MIME types are set in `app.yaml`.
 - The admin UI and API docs send `Content-Security-Policy` (including `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and HSTS on HTTPS.

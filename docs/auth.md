@@ -6,7 +6,7 @@ Identity is email plus password on the entity marked `auth: true`.
 
 | Method | Path | Notes |
 |---|---|---|
-| POST | `/api/v1/auth/signup` | Role is forced to the non-admin default |
+| POST | `/api/v1/auth/signup` | Only when `auth.signup` is `open`. Role is forced to the non-admin default |
 | POST | `/api/v1/auth/login` | Issues access + refresh tokens |
 | POST | `/api/v1/auth/refresh` | Rotates refresh tokens; reuse revokes the family |
 | POST | `/api/v1/auth/logout` | Revoke one token or `all: true` |
@@ -21,7 +21,7 @@ Access tokens are HS256 JWTs (15 minutes by default). Refresh tokens are SHA-256
 
 ## Lockout and rate limits
 
-Login, signup, forgot-password, and resend-verification are rate limited in the database (they survive restarts and multiple instances). After 5 failed logins for a known identity, Bakorin locks that account with exponential backoff (capped at 60 minutes). Unknown emails still return 401 so the lock table cannot be used to enumerate accounts.
+Login, signup, forgot-password, and resend-verification are rate limited per client IP in the database (they survive restarts and multiple instances). The client IP is the socket address unless `TRUST_PROXY` is set, so a client sent `X-Forwarded-For` cannot dodge the limits. After 5 failed logins for a known identity, Bakorin locks that account with exponential backoff (capped at 60 minutes). Unknown emails still return 401 so the lock table cannot be used to enumerate accounts.
 
 ## JWT rotation
 
@@ -38,3 +38,21 @@ Set `JWT_SECRET` to the new key and `JWT_SECRET_PREVIOUS` to the old key. Verify
 These emails are queued in the mail outbox and sent in the background with retries. The admin Mail page shows them as `system: verify`, `system: reset`, and `system: invite`, with the link redacted. Override them with `mail/_auth/<kind>.html|.txt|.subject`: see [System emails](mail.md#system-emails-verify-reset-invite).
 
 Resend setup (API key, verified domain, `MAIL_FROM`, and how to test the three emails): [Email with Resend](resend.md). Missing `RESEND_API_KEY` with `MAIL_DRIVER=resend` fails at startup. In production the message starts with `[bakorin] production startup failed`.
+
+## Who can sign up
+
+`auth.signup` decides who can create an account:
+
+| Value | `POST /auth/signup` | Admin invites |
+|---|---|---|
+| `open` | Anyone can sign up | Allowed |
+| `invite` | Returns 403 `signup_disabled` | Allowed. This is how people join |
+| `closed` | Returns 403 `signup_disabled` | Returns 403 `invites_disabled` |
+
+When you leave it out, Bakorin follows the auth entity's `create` policy: `public` means `open`, anything else (including the default `admin`) means `invite`. Setting `invite` or `closed` while `users.create` is `public` is a schema error, because that policy would let anyone create accounts through `POST /api/v1/users`.
+
+`GET /api/v1/auth/setup` returns `{ firstAdmin, signup }` so a front end can hide its signup form when signup is not open. The Astro and Next.js starters set `signup: open`.
+
+## JWT secret
+
+`bakorin start` refuses to boot unless `JWT_SECRET` is at least 32 characters with at least 10 distinct characters and is not a placeholder. Generate one with `openssl rand -base64 48`. Only `bakorin dev` and tests use the built in development secret.

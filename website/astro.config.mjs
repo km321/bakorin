@@ -85,6 +85,7 @@ export default defineConfig({
             { label: "Configuration", slug: "docs/configuration" },
             { label: "CLI", slug: "docs/cli" },
             { label: "Security", slug: "docs/security" },
+            { label: "Upgrade notes", slug: "docs/upgrading" },
             { label: "Scaling", slug: "docs/scaling" },
           ],
         },

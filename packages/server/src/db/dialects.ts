@@ -44,13 +44,47 @@ class BunSqliteConnection implements DatabaseConnection {
   }
 }
 
+/**
+ * One SQLite handle is shared by the whole process, so a transaction must own it
+ * until it commits: otherwise another request's statements would run inside it, or
+ * try to begin a second one. Kysely acquires a connection per query and holds it
+ * for a whole transaction, so a small FIFO mutex here serializes correctly.
+ */
+class ConnectionMutex {
+  private locked = false;
+  private readonly waiting: Array<() => void> = [];
+
+  async lock(): Promise<void> {
+    if (!this.locked) {
+      this.locked = true;
+      return;
+    }
+    await new Promise<void>((resolve) => this.waiting.push(resolve));
+  }
+
+  unlock(): void {
+    const next = this.waiting.shift();
+    if (next) {
+      next();
+      return;
+    }
+    this.locked = false;
+  }
+}
+
 class BunSqliteDriver implements Driver {
-  constructor(private readonly db: Database) {}
+  private readonly mutex = new ConnectionMutex();
+  private readonly connection: BunSqliteConnection;
+
+  constructor(private readonly db: Database) {
+    this.connection = new BunSqliteConnection(db);
+  }
 
   async init(): Promise<void> {}
 
   async acquireConnection(): Promise<DatabaseConnection> {
-    return new BunSqliteConnection(this.db);
+    await this.mutex.lock();
+    return this.connection;
   }
 
   async beginTransaction(connection: DatabaseConnection): Promise<void> {
@@ -65,7 +99,9 @@ class BunSqliteDriver implements Driver {
     await connection.executeQuery(CompiledQuery.raw("rollback"));
   }
 
-  async releaseConnection(): Promise<void> {}
+  async releaseConnection(): Promise<void> {
+    this.mutex.unlock();
+  }
 
   async destroy(): Promise<void> {
     this.db.close();

@@ -40,7 +40,7 @@ Packages are not on npm yet, so the supported path today is a checkout of the re
    cp my-app/.env.example my-app/.env
    ```
 
-2. Open `my-app/.env` and set `JWT_SECRET` to a long random string.
+2. Open `my-app/.env` and set `JWT_SECRET` to the output of `openssl rand -base64 48`. `bakorin dev` runs without it and prints a warning. `bakorin start` refuses to boot without it.
 
 3. Start the API from the repository root so it loads `my-app/.env`:
 

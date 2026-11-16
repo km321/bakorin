@@ -49,6 +49,12 @@ export interface FieldAST {
   secret: boolean;
   description?: string;
   writable: FieldWritable;
+  /**
+   * Private fields are left out of API responses for ordinary users. On the auth
+   * entity a user still sees their own private fields; admins see everything.
+   * The auth identity, role and emailVerified fields are private by default.
+   */
+  private?: boolean;
 }
 
 export interface EntityAST {
@@ -157,7 +163,16 @@ export interface RuntimeAST {
   webhooksRetainDays: number;
   mailRetainDays: number;
   alerts: AlertsRuntimeAST;
+  /** How to find the client IP behind proxies. See TrustProxyAST. */
+  trustProxy: TrustProxyAST;
 }
+
+/**
+ * none: use the socket address and ignore X-Forwarded-For (the default).
+ * hops: trust this many proxies in front of Bakorin (Railway, Fly, Render: 1).
+ * cidrs: trust X-Forwarded-For entries added by proxies in these ranges.
+ */
+export type TrustProxyAST = { kind: "none" } | { kind: "hops"; hops: number } | { kind: "cidrs"; cidrs: string[] };
 
 export interface AuthAST {
   entity: string;
@@ -166,7 +181,15 @@ export interface AuthAST {
   roleField: string;
   adminRole: string;
   requireVerifiedEmail: boolean;
+  /**
+   * open: anyone can create an account at POST /api/v1/auth/signup.
+   * invite: only admins add people, with invites (the default).
+   * closed: no signup and no invites; admins create users in the admin.
+   */
+  signup: SignupMode;
 }
+
+export type SignupMode = "open" | "invite" | "closed";
 
 export interface SchemaAST {
   version: typeof SCHEMA_AST_VERSION;

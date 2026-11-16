@@ -6,6 +6,7 @@ import {
   compileAppYaml,
   DestructiveChangeError,
   DEV_JWT_SECRET,
+  isDevMode,
   diffSchemas,
   formatPlan,
   formatAppYamlError,
@@ -17,6 +18,7 @@ import {
 import { createFiles, loadProject, migrationOptions, openDb } from "./app.ts";
 import { createDebounced } from "./dev-watch.ts";
 import { applyProjectEnv } from "./env-files.ts";
+import { installProcessSafety } from "./monitor/process-safety.ts";
 import { runBackup } from "./backup/schedule.ts";
 import { exportPortable, importPortable, readManifest, restoreProjectAssets } from "./backup/archive.ts";
 import { restoreSqliteSnapshot } from "./backup/sqlite.ts";
@@ -93,7 +95,9 @@ function reportValidationError(error: unknown, context: "startup" | "reload"): v
 }
 
 function envExampleTemplate(): string {
-  return `JWT_SECRET=change-me-to-a-long-random-string
+  return `# Required for bakorin start: 32+ random characters. Generate one with: openssl rand -base64 48
+# bakorin dev works without it and prints a warning.
+JWT_SECRET=
 PORT=4371
 APP_URL=http://localhost:4321
 CORS_ORIGINS=http://localhost:4321,http://localhost:3000
@@ -110,6 +114,8 @@ MAIL_FROM=
 BAKORIN_DATA_DIR=
 BAKORIN_ENV=
 NODE_ENV=
+# Set to 1 behind one proxy such as Railway, or a comma list of proxy CIDRs. Empty trusts no proxy.
+TRUST_PROXY=
 DATABASE_URL=
 JWT_SECRET_PREVIOUS=
 # Placeholder only. Paste a Resend API key locally. Never commit a real key.
@@ -146,6 +152,17 @@ async function loadOrExit(dir: string, options: { workers?: boolean } = {}) {
 
 async function serve(mode: "dev" | "start"): Promise<void> {
   const dir = projectDir();
+  // Load the project .env first so a BAKORIN_ENV in it is checked too.
+  await applyProjectEnv(dir);
+  if (mode === "dev") {
+    // The only place the public dev JWT secret is allowed. `start` is always production.
+    process.env.BAKORIN_ENV = "development";
+  } else if (isDevMode(process.env)) {
+    console.error(
+      "[bakorin] `bakorin start` is for production, but BAKORIN_ENV or BAKORIN_TEST asks for development. Use `bakorin dev` locally, or unset them.",
+    );
+    process.exit(1);
+  }
   const runtime = await loadOrExit(dir);
   const port = Number(arg("--port", String(runtime.ast.runtime.port)));
   const hostname = runtime.ast.runtime.host;
@@ -156,11 +173,20 @@ async function serve(mode: "dev" | "start"): Promise<void> {
       "[bakorin] WARNING: using the default JWT secret. Set JWT_SECRET in this project's .env before going beyond local experiments.",
     );
   }
-  const server = Bun.serve({
-    port,
-    hostname,
-    fetch: runtime.app.fetch,
-  });
+  let server: ReturnType<typeof Bun.serve>;
+  try {
+    server = Bun.serve({
+      port,
+      hostname,
+      fetch: runtime.app.fetch,
+    });
+  } catch (error) {
+    console.error(`[bakorin] could not listen on ${hostname}:${port}: ${error instanceof Error ? error.message : String(error)}`);
+    await runtime.close().catch(() => undefined);
+    process.exit(1);
+  }
+  // Installed only after the server is listening, so a boot failure still exits.
+  installProcessSafety(runtime.context.monitor);
   if (mode === "dev") {
     const yamlPath = join(dir, "app.yaml");
     const hooksPath = join(dir, runtime.ast.runtime.hooksPath ?? "hooks.ts");
@@ -182,11 +208,28 @@ async function serve(mode: "dev" | "start"): Promise<void> {
       }
     })();
   }
-  process.on("SIGINT", async () => {
-    server.stop();
-    await runtime.close();
-    process.exit(0);
-  });
+  let stopping = false;
+  const shutdown = async (signal: string) => {
+    if (stopping) {
+      return;
+    }
+    stopping = true;
+    console.log(`[bakorin] ${signal}: finishing in-flight requests, then stopping`);
+    const force = setTimeout(() => process.exit(0), 15_000);
+    try {
+      void server.stop();
+      const deadline = Date.now() + 10_000;
+      while (server.pendingRequests > 0 && Date.now() < deadline) {
+        await Bun.sleep(50);
+      }
+      await runtime.close();
+    } finally {
+      clearTimeout(force);
+      process.exit(0);
+    }
+  };
+  process.on("SIGINT", () => void shutdown("SIGINT"));
+  process.on("SIGTERM", () => void shutdown("SIGTERM"));
 }
 
 async function cmdSchema(): Promise<void> {
@@ -199,7 +242,8 @@ async function cmdSchema(): Promise<void> {
   }
   const format = (arg("--format", "mermaid") ?? "mermaid").toLowerCase();
   try {
-    const ast = compileAppYaml(await Bun.file(yamlPath).text());
+    // Reads the schema only; no server starts, so the JWT secret is not needed.
+    const ast = compileAppYaml(await Bun.file(yamlPath).text(), { production: false });
     const graph = buildSchemaGraph(ast);
     switch (format) {
       case "mermaid":
@@ -271,7 +315,8 @@ async function openForPlan(dir: string) {
   }
   let ast;
   try {
-    ast = compileAppYaml(await Bun.file(yamlPath).text(), { env: process.env });
+    // Type generation reads the schema only; no server starts.
+    ast = compileAppYaml(await Bun.file(yamlPath).text(), { env: process.env, production: false });
   } catch (error) {
     reportValidationError(error, "startup");
     process.exit(1);

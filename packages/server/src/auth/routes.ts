@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { clientIp } from "../http/client-ip.ts";
 import { encodeValue } from "../db/types.ts";
 import { hashPassword, verifyPassword } from "./password.ts";
 import { signAccessToken, verifyAccessToken } from "./jwt.ts";
@@ -11,10 +12,9 @@ import { decodeRow } from "../crud/query.ts";
 import { sendVerificationEmail } from "./account.ts";
 import { effectiveWritable, safeDefaultRole } from "../crud/write-guards.ts";
 import { createFirstAdmin, hasAdmin } from "./seed.ts";
+import { commitChange, recordChange } from "../events/record.ts";
+import type { ChangeEvent } from "@bakorin/core";
 
-function clientKey(c: { req: { header: (name: string) => string | undefined } }): string {
-  return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "local";
-}
 
 export function createAuthRoutes(): Hono {
   const app = new Hono();
@@ -22,12 +22,12 @@ export function createAuthRoutes(): Hono {
   app.get("/setup", async (c) => {
     const ctx = c.get("app");
     const firstAdmin = !(await hasAdmin(ctx.ast, ctx.db));
-    return c.json({ data: { firstAdmin } });
+    return c.json({ data: { firstAdmin, signup: ctx.ast.auth.signup } });
   });
 
   app.post("/first-admin", async (c) => {
     const ctx = c.get("app");
-    const ip = clientKey(c);
+    const ip = clientIp(c);
     if (!(await rateLimit(ctx.db, `first-admin:${ip}`, 10, 60_000))) {
       return c.json({ error: { code: "rate_limited", message: "too many attempts" } }, 429);
     }
@@ -48,8 +48,22 @@ export function createAuthRoutes(): Hono {
       );
     }
     let result: Awaited<ReturnType<typeof createFirstAdmin>>;
+    let createdEvent: ChangeEvent | null = null;
+    const meta = { requestId: c.get("requestId"), ip };
     try {
-      result = await createFirstAdmin(ctx.ast, ctx.db, { email: identity, password, name });
+      result = await createFirstAdmin(ctx.ast, ctx.db, { email: identity, password, name }, async (trx, id) => {
+        const row = await trx.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
+        const created = decodeRow(entity, row as Record<string, unknown>);
+        const event: ChangeEvent = {
+          entity: entity.name,
+          op: "create",
+          before: null,
+          after: created,
+          actor: { id, role: String(created[ctx.ast.auth.roleField]) },
+        };
+        await recordChange(trx, ctx, event, meta);
+        createdEvent = event;
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : "could not create admin";
       return c.json({ error: { code: "invalid_input", message } }, 400);
@@ -60,13 +74,9 @@ export function createAuthRoutes(): Hono {
     const stored = await ctx.db.selectFrom(entity.name).selectAll().where("id", "=", result.id).executeTakeFirstOrThrow();
     const after = decodeRow(entity, stored as Record<string, unknown>);
     const role = String(after[ctx.ast.auth.roleField]);
-    ctx.bus.emit({
-      entity: entity.name,
-      op: "create",
-      before: null,
-      after,
-      actor: { id: result.id, role },
-    });
+    if (createdEvent) {
+      ctx.bus.emit(createdEvent, meta);
+    }
     await writeAudit(ctx.db, {
       action: "first_admin",
       actorId: result.id,
@@ -89,15 +99,29 @@ export function createAuthRoutes(): Hono {
 
   app.post("/signup", async (c) => {
     const ctx = c.get("app");
-    const ip = clientKey(c);
+    const ip = clientIp(c);
     if (!(await rateLimit(ctx.db, `signup:${ip}`, 10, 60_000))) {
       return c.json({ error: { code: "rate_limited", message: "too many signup attempts" } }, 429);
+    }
+    if (ctx.ast.auth.signup !== "open") {
+      return c.json(
+        {
+          error: {
+            code: "signup_disabled",
+            message:
+              ctx.ast.auth.signup === "invite"
+                ? "Signup is invite only for this app. Ask an admin to invite you."
+                : "Signup is turned off for this app.",
+          },
+        },
+        403,
+      );
     }
     const entity = ctx.ast.entityMap[ctx.ast.auth.entity];
     if (!entity) {
       return c.json({ error: { code: "misconfigured", message: "auth entity missing" } }, 500);
     }
-    const body = (await c.req.json()) as Record<string, unknown>;
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const identityField = entity.fieldMap[ctx.ast.auth.identityField];
     const identityRaw = String(body[ctx.ast.auth.identityField] ?? "").trim();
     const identity = identityField?.type === "email" ? identityRaw.toLowerCase() : identityRaw;
@@ -150,10 +174,15 @@ export function createAuthRoutes(): Hono {
         return c.json({ error: { code: "invalid_input", message: `${field.name} is required` } }, 400);
       }
     }
-    await ctx.db.insertInto(entity.name).values(insert).execute();
-    const stored = await ctx.db.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
-    const after = decodeRow(entity, stored as Record<string, unknown>);
-    ctx.bus.emit({ entity: entity.name, op: "create", before: null, after, actor: { id, role: String(after[ctx.ast.auth.roleField]) } });
+    const after = await commitChange(ctx, { requestId: c.get("requestId"), ip }, async (trx) => {
+      await trx.insertInto(entity.name).values(insert).execute();
+      const stored = await trx.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
+      const row = decodeRow(entity, stored as Record<string, unknown>);
+      return {
+        event: { entity: entity.name, op: "create", before: null, after: row, actor: { id, role: String(row[ctx.ast.auth.roleField]) } },
+        result: row,
+      };
+    });
     await writeAudit(ctx.db, { action: "signup", actorId: id, actorRole: String(after[ctx.ast.auth.roleField]), entity: entity.name, recordId: id, ip });
     await sendVerificationEmail(ctx, id, identity);
     const role = String(after[ctx.ast.auth.roleField]);
@@ -167,12 +196,12 @@ export function createAuthRoutes(): Hono {
 
   app.post("/login", async (c) => {
     const ctx = c.get("app");
-    const ip = clientKey(c);
+    const ip = clientIp(c);
     if (!(await rateLimit(ctx.db, `login:${ip}`, 10, 60_000))) {
       return c.json({ error: { code: "rate_limited", message: "too many login attempts" } }, 429);
     }
     const entity = ctx.ast.entityMap[ctx.ast.auth.entity]!;
-    const body = (await c.req.json()) as Record<string, unknown>;
+    const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const identityField = entity.fieldMap[ctx.ast.auth.identityField];
     const identityRaw = String(body[ctx.ast.auth.identityField] ?? "").trim();
     const identity = identityField?.type === "email" ? identityRaw.toLowerCase() : identityRaw;

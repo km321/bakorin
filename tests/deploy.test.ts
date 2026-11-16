@@ -83,7 +83,7 @@ describe("production deploy env", () => {
     const dir = await tempProject();
     const yamlSource = await Bun.file(join(dir, "app.yaml")).text();
     const env = {
-      JWT_SECRET: "test-secret-test-secret-test-secret-32",
+      JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop",
       BAKORIN_ADMIN_EMAIL: "ada@studio.test",
       BAKORIN_ADMIN_PASSWORD: "password123",
       BAKORIN_ADMIN_NAME: "Ada West",
@@ -168,7 +168,7 @@ describe("production deploy env", () => {
     const runtime = await createRuntime({
       projectDir: dir,
       yamlSource: await Bun.file(join(dir, "app.yaml")).text(),
-      env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" },
+      env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" },
     });
     const users = await runtime.db.selectFrom("users").selectAll().execute();
     expect(users).toHaveLength(0);

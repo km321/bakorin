@@ -27,9 +27,11 @@ runtime:
     retainDays: 30
   cors:
     origins: ["http://localhost:4321"]
+  trustProxy: 1            # one proxy in front (Railway). TRUST_PROXY overrides it
 auth:
   entity: users
   adminRole: admin
+  signup: open             # open, invite, or closed
 entities:
   users:
     auth: true
@@ -59,6 +61,12 @@ webhooks:
     timeoutMs: 10000
 ```
 
+`auth.signup` decides who can create an account: `open` (anyone), `invite` (admins invite people), or `closed` (no new accounts, invites off too). Left out, it follows the auth entity's `create` policy: `public` means `open`, anything else means `invite`. See [Auth](auth.md#who-can-sign-up).
+
+`runtime.trustProxy` (or `TRUST_PROXY`) tells Bakorin how many proxies sit in front, or which proxy CIDRs to trust, when it reads the client IP for rate limits. Unset trusts none and uses the socket address.
+
+Leave `jwt.secret` as `${JWT_SECRET}` with no fallback. `bakorin start` refuses to boot without a strong secret.
+
 Set `runtime.webhooks.retainDays` (default 30) to control how long delivered outbox rows are kept. See [Webhooks](webhooks.md).
 
 ## Branding
@@ -86,7 +94,7 @@ mail:
 
 Types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`.
 
-Optional flags: `required`, `unique`, `index`, `default`, `values` (enum), `to` / `onDelete` (relation), `writable: admin|none`, `secret`, `description`, `renameFrom`.
+Optional flags: `required`, `unique`, `index`, `default`, `values` (enum), `to` / `onDelete` (relation), `writable: admin|none`, `secret`, `private` (only the row's own user and admins see it; on by default for the auth entity's identity, role, and `emailVerified`), `description`, `renameFrom`.
 
 ## Indexes
 

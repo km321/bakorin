@@ -145,7 +145,7 @@ describe("webhooks", () => {
       expect(typeof storedUser?.password).toBe("string");
       expect(String(storedUser?.password)).toContain("argon2");
       const ast = compileAppYaml(await Bun.file(join(runtime.dir, "app.yaml")).text(), {
-        env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" },
+        env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" },
       });
       const redacted = redactChangeEvent(ast, {
         entity: "users",

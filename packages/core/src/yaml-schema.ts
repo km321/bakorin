@@ -43,6 +43,7 @@ const fieldObject = z
     writable: z.enum(["admin", "none"]).optional(),
     readonly: z.boolean().optional(),
     adminOnly: z.boolean().optional(),
+    private: z.boolean().optional(),
   })
   .strict();
 
@@ -225,6 +226,7 @@ export const appYamlSchema = z
           .strict()
           .optional(),
         hooks: z.string().optional(),
+        trustProxy: z.union([z.boolean(), z.number().int().min(0).max(10), z.array(z.string().min(1)).min(1)]).optional(),
         webhooks: z
           .object({
             retainDays: z.number().int().min(1).max(3650).optional(),
@@ -248,6 +250,7 @@ export const appYamlSchema = z
         role: ident.optional(),
         adminRole: z.string().optional(),
         requireVerifiedEmail: z.boolean().optional(),
+        signup: z.enum(["open", "invite", "closed"]).optional(),
       })
       .strict()
       .optional(),

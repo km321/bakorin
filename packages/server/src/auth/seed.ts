@@ -103,7 +103,16 @@ async function buildAdminInsert(
   return { entityName: entity.name, insert, id };
 }
 
-export async function createFirstAdmin(ast: SchemaAST, db: BakorinDb, input: FirstAdminInput): Promise<FirstAdminResult> {
+/**
+ * onCreated runs inside the same transaction as the insert, so outbox rows for the
+ * new admin (webhooks, mail rules, audit) commit or roll back with it.
+ */
+export async function createFirstAdmin(
+  ast: SchemaAST,
+  db: BakorinDb,
+  input: FirstAdminInput,
+  onCreated?: (trx: BakorinDb, id: string) => Promise<void>,
+): Promise<FirstAdminResult> {
   const built = await buildAdminInsert(ast, input);
   return enqueueFirstAdmin(async () => {
     return await db.transaction().execute(async (trx) => {
@@ -118,6 +127,7 @@ export async function createFirstAdmin(ast: SchemaAST, db: BakorinDb, input: Fir
         await trx.deleteFrom(built.entityName).where("id", "=", built.id).execute();
         return { status: "exists" as const };
       }
+      await onCreated?.(trx, built.id);
       return { status: "created" as const, id: built.id };
     });
   });

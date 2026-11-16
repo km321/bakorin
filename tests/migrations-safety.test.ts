@@ -11,7 +11,7 @@ import {
 import { createRuntime, migrateToSchema, openSqlite, planMigration } from "@bakorin/server";
 import { MINI_YAML, tempProject } from "./helpers.ts";
 
-const ENV = { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } };
+const ENV = { env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" } };
 const CLI = join(import.meta.dir, "../packages/server/src/cli.ts");
 const WITHOUT_DONE = MINI_YAML.replace("      done: { type: boolean, default: false }\n", "");
 

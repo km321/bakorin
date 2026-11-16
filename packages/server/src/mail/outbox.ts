@@ -139,8 +139,11 @@ export async function enqueueMail(db: BakorinDb, input: EnqueueMailInput): Promi
   }
   const now = new Date().toISOString();
   const status: MailDeliveryStatus = error ? "failed" : "pending";
+  // on conflict do nothing: a duplicate key must not abort the caller's
+  // transaction (Postgres aborts a transaction on any failed statement).
+  let inserted = 0;
   try {
-    await db
+    const result = await db
       .insertInto(MAIL_OUTBOX_TABLE)
       .values({
         id,
@@ -169,13 +172,21 @@ export async function enqueueMail(db: BakorinDb, input: EnqueueMailInput): Promi
         purpose: input.purpose ?? null,
         sealed: error ? null : (input.sealed ?? null),
       })
-      .execute();
+      .onConflict((oc) => oc.column("idempotency_key").doNothing())
+      .executeTakeFirst();
+    inserted = Number(result?.numInsertedOrUpdatedRows ?? 0);
   } catch (cause) {
     const raced = await findByKey(db, key);
     if (raced) {
       return { id: String(raced.id), status: String(raced.status) as MailDeliveryStatus, duplicate: true, error: null };
     }
     throw cause;
+  }
+  if (inserted === 0) {
+    const raced = await findByKey(db, key);
+    if (raced) {
+      return { id: String(raced.id), status: String(raced.status) as MailDeliveryStatus, duplicate: true, error: null };
+    }
   }
   return { id, status, duplicate: false, error };
 }
@@ -219,28 +230,6 @@ export async function enqueueRuleMail(
     data,
     maxAttempts: rule.maxAttempts,
     render: () => renderMail(projectDir, { template: rule.template, data, subject: rule.subject }),
-  });
-}
-
-/** Mail consumes the same post-write change bus as webhooks and after hooks. */
-export function subscribeMail(
-  getAst: () => SchemaAST,
-  db: BakorinDb,
-  projectDir: string,
-  subscribe: (handler: (event: ChangeEvent) => void) => void,
-): void {
-  subscribe((event) => {
-    void (async () => {
-      const ast = getAst();
-      for (const rule of matchingRules(ast, event)) {
-        try {
-          await enqueueRuleMail(db, ast, projectDir, rule, event);
-        } catch (error) {
-          const message = error instanceof Error ? error.message : String(error);
-          console.error(`[bakorin:mail] could not queue ${rule.id}: ${shortError(message)}`);
-        }
-      }
-    })();
   });
 }
 

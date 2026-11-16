@@ -30,7 +30,7 @@ async function start(options: { env?: Record<string, string>; yaml?: string; hoo
   const runtime = await createRuntime({
     projectDir: dir,
     yamlSource: options.yaml ?? MINI_YAML,
-    env: { JWT_SECRET: "test-secret-test-secret-test-secret-32", ...options.env },
+    env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop", ...options.env },
     workers: false,
   });
   cleanups.push(() => runtime.close());
@@ -342,11 +342,11 @@ describe("monitoring: alerts", () => {
   test("the stored schema copy never contains secrets", () => {
     const ast = compileAppYaml(
       MINI_YAML.replace("  hooks: ./hooks.ts\n", "  hooks: ./hooks.ts\n  alerts:\n    webhook: https://hooks.example.com/x?token=alert-secret\n"),
-      { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } },
+      { env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" } },
     );
     const stored = serializeAst(ast);
-    expect(stored).not.toContain("test-secret-test-secret-test-secret-32");
+    expect(stored).not.toContain("test-jwt-secret-0123456789-abcdefghijklmnop");
     expect(stored).not.toContain("alert-secret");
-    expect(ast.runtime.jwtSecret).toBe("test-secret-test-secret-test-secret-32");
+    expect(ast.runtime.jwtSecret).toBe("test-jwt-secret-0123456789-abcdefghijklmnop");
   });
 });

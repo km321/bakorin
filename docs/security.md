@@ -4,7 +4,11 @@
 - Auth `role` is always `writable: admin`. Signup ignores a client-supplied role.
 - Ownership fields cannot be taken over (403 if a non-admin sends `ownerId`).
 - Passwords are argon2id. Access JWTs last 15 minutes. Refresh tokens are hashed, rotated, and reuse-detected.
-- Rate limits live in the database. Failed logins lock the account after 5 tries with backoff.
+- Rate limits live in the database and key on the socket address unless `TRUST_PROXY` trusts a proxy, so a client sent `X-Forwarded-For` is ignored by default. Failed logins lock the account after 5 tries with backoff.
+- `bakorin start` refuses to boot without a strong `JWT_SECRET` (32+ characters, not a placeholder). The development secret is only for `bakorin dev` and tests.
+- Signup follows `auth.signup` (`open`, `invite`, `closed`). Users' email, role, and `emailVerified` are private to the user and admins, and the default users read policy is `[owner(id), admin]`.
+- Webhook, mail rule, and audit rows commit in the same transaction as the record change.
+- A throwing `after*` hook or a stray unhandled rejection is logged with the request id and reported, and the server keeps running.
 - Admin and docs responses set `Content-Security-Policy` (including `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and `Strict-Transport-Security` when the request is HTTPS (`x-forwarded-proto` or the URL).
 - Uploads honor `runtime.files.maxBytes` and `allowedMimeTypes`. Downloads require a short-lived signed URL (`exp` + HMAC `sig`).
 - Append-only `_bakorin_audit` records signup, login, failed login, reset, invite, role change, admin writes, and backups. `GET /api/v1/audit` is admin-only.

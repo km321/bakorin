@@ -18,13 +18,12 @@ import { createAdminRoutes } from "./admin/serve.ts";
 import { createDocsRoutes, docsIndex } from "./docs/serve.ts";
 import { createBackupRoutes } from "./backup/routes.ts";
 import { createAuditRoutes } from "./audit/routes.ts";
-import { subscribeAudit } from "./audit/log.ts";
 import { loadHooks } from "./hooks/loader.ts";
 import { subscribeAfterHooks } from "./hooks/after.ts";
-import { startWebhookWorker, subscribeWebhooks } from "./webhooks/dispatcher.ts";
+import { startWebhookWorker } from "./webhooks/dispatcher.ts";
 import { createWebhookRoutes } from "./webhooks/routes.ts";
 import { validateMailTemplates } from "./mail/files.ts";
-import { createMailApi, startMailWorker, subscribeMail } from "./mail/outbox.ts";
+import { createMailApi, startMailWorker } from "./mail/outbox.ts";
 import { createMailRoutes } from "./mail/routes.ts";
 import type { AppContext } from "./context.ts";
 import { runBackup, startBackupScheduler } from "./backup/schedule.ts";
@@ -107,7 +106,6 @@ export async function createRuntime(options: {
     throw error;
   }
   await seedAdminOrLog(ast, opened.db, env);
-  const bus = createChangeBus();
   let hooks = await loadHooks(projectDir, ast.runtime.hooksPath);
   const mailer = createMailer(env, mailFrom(env, ast.appName));
   const mail = createMailApi(opened.db, () => context.ast, projectDir);
@@ -117,11 +115,18 @@ export async function createRuntime(options: {
     version: serverVersion(env),
     commit: resolveCommit(env),
   });
+  // Webhooks, mail rules and audit rows are written in the same transaction as the
+  // record (events/record.ts). The bus only carries post-commit work: after* hooks
+  // now, realtime later. A failing subscriber is logged and reported, never fatal.
+  const bus = createChangeBus({
+    onError: (error, event, meta) => {
+      const request = meta.requestId ? ` (request ${meta.requestId})` : "";
+      console.error(`[bakorin] after hook for ${event.entity}.${event.op} failed${request}`, error);
+      monitor.captureError(error, { requestId: meta.requestId, source: "hook" });
+    },
+  });
   const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir, mailer, mail, monitor };
-  subscribeWebhooks(() => context.ast, opened.db, (handler) => bus.subscribe(handler));
-  subscribeMail(() => context.ast, opened.db, projectDir, (handler) => bus.subscribe(handler));
-  subscribeAfterHooks(hooks, opened.db, (handler) => bus.subscribe(handler), mail);
-  subscribeAudit(ast, opened.db, (handler) => bus.subscribe(handler));
+  subscribeAfterHooks(() => context.hooks, opened.db, (handler) => bus.subscribe(handler), mail);
   const workers = options.workers !== false;
   const noop = () => {};
   const stopBackups = workers ? startBackupScheduler({ ast, db: opened.db, files, projectDir }) : noop;

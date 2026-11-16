@@ -14,7 +14,9 @@ export interface ListQuery {
   expand: string[];
 }
 
-export function parseListQuery(entity: EntityAST, search: URLSearchParams): ListQuery {
+/** privateAllowed: false drops filters and sorts on private fields, so they cannot be probed. */
+export function parseListQuery(entity: EntityAST, search: URLSearchParams, options: { privateAllowed?: boolean } = {}): ListQuery {
+  const privateAllowed = options.privateAllowed !== false;
   const limit = Math.min(100, Math.max(1, Number(search.get("limit") ?? 50) || 50));
   const offset = Math.max(0, Number(search.get("offset") ?? 0) || 0);
   const sort: ListQuery["sort"] = [];
@@ -22,7 +24,7 @@ export function parseListQuery(entity: EntityAST, search: URLSearchParams): List
   for (const part of sortRaw.split(",").map((item) => item.trim()).filter(Boolean)) {
     const dir = part.startsWith("-") ? "desc" : "asc";
     const field = part.replace(/^-/, "");
-    if (!entity.fieldMap[field] || entity.fieldMap[field]?.secret) {
+    if (!entity.fieldMap[field] || entity.fieldMap[field]?.secret || (!privateAllowed && entity.fieldMap[field]?.private)) {
       continue;
     }
     sort.push({ field, dir });
@@ -35,7 +37,7 @@ export function parseListQuery(entity: EntityAST, search: URLSearchParams): List
     }
     const fieldName = match[1];
     const field = entity.fieldMap[fieldName];
-    if (!field || field.secret) {
+    if (!field || field.secret || (!privateAllowed && field.private)) {
       continue;
     }
     const op = match[2] ?? "eq";
@@ -124,6 +126,7 @@ export async function expandRows(
   expand: string[],
   relatedAccess: (name: string) => AccessDecision,
   relatedEntity: (name: string) => EntityAST | undefined,
+  view?: (target: EntityAST, row: Record<string, unknown>) => Record<string, unknown>,
 ): Promise<Record<string, unknown>[]> {
   if (expand.length === 0 || rows.length === 0) {
     return rows;
@@ -159,7 +162,7 @@ export async function expandRows(
             }
           }
         }
-        return [String(item.id), decoded];
+        return [String(item.id), targetEntity && view ? view(targetEntity, decoded) : decoded];
       }),
     );
   }

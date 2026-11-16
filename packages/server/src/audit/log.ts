@@ -1,4 +1,4 @@
-import type { ChangeEvent, SchemaAST } from "@bakorin/core";
+
 import type { BakorinDb } from "../db/dialects.ts";
 import { AUDIT_TABLE } from "../db/system.ts";
 
@@ -27,40 +27,6 @@ export async function writeAudit(db: BakorinDb, entry: AuditEntry): Promise<void
       meta: entry.meta ? JSON.stringify(entry.meta) : null,
     })
     .execute();
-}
-
-export function subscribeAudit(
-  ast: SchemaAST,
-  db: BakorinDb,
-  subscribe: (handler: (event: ChangeEvent) => void) => void,
-): void {
-  subscribe((event) => {
-    void (async () => {
-      const admin = event.actor?.role === ast.auth.adminRole;
-      const roleChanged =
-        event.entity === ast.auth.entity &&
-        event.op === "update" &&
-        event.before &&
-        event.after &&
-        String(event.before[ast.auth.roleField]) !== String(event.after[ast.auth.roleField]);
-      if (!admin && !roleChanged) {
-        return;
-      }
-      await writeAudit(db, {
-        action: roleChanged ? "role_change" : `admin.${event.op}`,
-        actorId: event.actor?.id,
-        actorRole: event.actor?.role,
-        entity: event.entity,
-        recordId: String(event.after?.id ?? event.before?.id ?? ""),
-        meta: roleChanged
-          ? {
-              from: event.before?.[ast.auth.roleField],
-              to: event.after?.[ast.auth.roleField],
-            }
-          : undefined,
-      });
-    })();
-  });
 }
 
 export async function listAudit(

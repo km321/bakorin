@@ -5,21 +5,38 @@ description: Environment variables Bakorin reads, and how they interact with app
 
 Bakorin reads `app.yaml` for structure and the environment for secrets and deployment settings. In development, the CLI loads `.env` from the project folder (`--dir`).
 
-`JWT_SECRET` is required when `NODE_ENV=production` or `BAKORIN_ENV=production`. In development Bakorin falls back to a default secret and prints a warning.
+`JWT_SECRET` is required for `bakorin start` and anything else that is not explicit development mode. It must be at least 32 characters with at least 10 distinct characters, and not a placeholder. Generate one with `openssl rand -base64 48`. Only `bakorin dev` (which sets `BAKORIN_ENV=development`) and the test suite fall back to the built in development secret, and `bakorin dev` prints a warning when it does. `bakorin start` refuses to run when `BAKORIN_ENV` is `development`, `dev`, or `test`.
 
 ## Core
 
 | Variable | Required | Notes |
 |---|---|---|
-| `JWT_SECRET` | Yes in production | Signing key for access tokens |
+| `JWT_SECRET` | Yes, except `bakorin dev` | Signing key for access tokens. 32 or more random characters |
 | `JWT_SECRET_PREVIOUS` | During rotation | Previous key. Tokens signed with it still verify |
 | `PORT` | Railway sets it | Listen port. Overrides `runtime.port` (default 4371) |
-| `NODE_ENV` / `BAKORIN_ENV` | Image sets `production` | Production mode |
+| `NODE_ENV` / `BAKORIN_ENV` | Image sets `production` | Production mode for CORS, request logs, and mail checks |
+| `BAKORIN_ENV=development` | `bakorin dev` sets it | Dev mode. The only mode that may use the built in JWT secret. `bakorin start` refuses to run with it. `NODE_ENV` does not turn on dev mode |
+| `TRUST_PROXY` | Behind a proxy | How many proxies to trust for the client IP, or a comma separated list of proxy CIDRs. Unset trusts none. Use `1` on Railway |
 | `BAKORIN_DATA_DIR` | Recommended | SQLite at `$BAKORIN_DATA_DIR/app.db`. Local uploads and backups live here when S3 is not configured |
 | `DATABASE_URL` | Postgres only | Used when `runtime.dialect` is `postgres` |
 | `CORS_ORIGINS` | Production | Comma separated origins. Overrides `runtime.cors.origins`. Credentials and `Authorization` are allowed |
 | `BAKORIN_ALLOW_ANY_ORIGIN` | Optional | Must be `true` to start in production with CORS `*`. Logs a warning |
 | `APP_URL` or `BAKORIN_APP_URL` | Recommended | Front end base URL for email links. Defaults to `http://127.0.0.1:$PORT` |
+
+## Client IP and proxies
+
+Rate limits, the audit log, and lockouts key on the client IP. By default that is the socket address, and `X-Forwarded-For` is ignored, because any client can send that header.
+
+Behind a reverse proxy the socket address is the proxy, so every visitor would share one rate limit bucket. Tell Bakorin about the proxy with `TRUST_PROXY` or `runtime.trustProxy`:
+
+| Value | Meaning |
+|---|---|
+| unset, `false`, `0` | Trust no proxy. Use the socket address |
+| `1`, `true` | One proxy in front (Railway, Fly, Render, a single nginx). The client is the last `X-Forwarded-For` entry |
+| `2` and up | That many proxies in front, for example a CDN plus a load balancer |
+| `10.0.0.0/8,100.64.0.0/10` | Trust proxies in these ranges. Bakorin walks `X-Forwarded-For` from the right and stops at the first address outside them |
+
+Only trust a proxy that overwrites or appends to `X-Forwarded-For`. If clients can reach the app directly, a trusted hop count lets them pick their own IP.
 
 ## First admin
 
@@ -81,7 +98,9 @@ See [Monitoring](/docs/monitoring/).
 `bakorin init` and `create-bakorin` write a `.env.example` like this (values are placeholders):
 
 ```bash title=".env.example"
-JWT_SECRET=change-me-to-a-long-random-string
+# Required for bakorin start: 32+ random characters. Generate one with: openssl rand -base64 48
+# bakorin dev works without it and prints a warning.
+JWT_SECRET=
 PORT=4371
 APP_URL=http://localhost:4321
 CORS_ORIGINS=http://localhost:4321,http://localhost:3000

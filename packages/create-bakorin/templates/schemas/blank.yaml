@@ -15,7 +15,6 @@ runtime:
     allowedMimeTypes: [image/png, image/jpeg, image/webp, image/gif, application/pdf, text/plain]
     signedUrlTtlSeconds: 900
   jwt:
-    secret: ${JWT_SECRET:-dev-only-change-me}
     accessTtlSeconds: 900
     refreshTtlSeconds: 2592000
   backups:
@@ -33,6 +32,8 @@ auth:
   role: role
   adminRole: admin
   requireVerifiedEmail: false
+  # open: anyone can sign up. invite: admins invite people. closed: no new accounts.
+  signup: open
 
 entities:
   users:
@@ -46,7 +47,7 @@ entities:
       name: { type: text, required: true }
       role: { type: enum, values: [user, admin], default: user, writable: admin }
     policies:
-      read: authenticated
+      read: [owner(id), admin]
       create: admin
       update: owner(id)
       delete: admin

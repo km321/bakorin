@@ -39,7 +39,7 @@ export function shortError(message: string, max = 240): string {
   return `${trimmed.slice(0, max - 3)}...`;
 }
 
-function matchingHooks(ast: SchemaAST, event: ChangeEvent): WebhookAST[] {
+export function matchingHooks(ast: SchemaAST, event: ChangeEvent): WebhookAST[] {
   return ast.webhooks.filter((hook) => {
     if (hook.entity !== "*" && hook.entity !== event.entity) {
       return false;
@@ -100,21 +100,6 @@ export async function enqueueWebhook(
     })
     .execute();
   return id;
-}
-
-export function subscribeWebhooks(
-  getAst: () => SchemaAST,
-  db: BakorinDb,
-  subscribe: (handler: (event: ChangeEvent) => void) => void,
-): void {
-  subscribe((event) => {
-    void (async () => {
-      const ast = getAst();
-      for (const hook of matchingHooks(ast, event)) {
-        await enqueueWebhook(db, ast, hook, event);
-      }
-    })();
-  });
 }
 
 export async function postOnce(

@@ -1,6 +1,6 @@
 # Webhooks
 
-Bakorin posts JSON to your URL after a successful create, update, or delete. Delivery is durable: each event is written to `_bakorin_webhook_outbox` in the same database as the rest of the app, then a worker POSTs it with retries.
+Bakorin posts JSON to your URL after a successful create, update, or delete. Delivery is durable: each event is written to `_bakorin_webhook_outbox` in the same database transaction as the record change, then a worker POSTs it with retries. A rolled back change queues nothing, and a failed outbox write rolls the change back.
 
 ## Setup
 

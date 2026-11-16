@@ -23,7 +23,7 @@ import { createPreviewToken, readPreviewToken } from "../packages/server/src/mai
 import { describeWhen } from "../packages/admin-ui/src/pages/Mail.tsx";
 import { client } from "./helpers.ts";
 
-const SECRET = "test-secret-test-secret-test-secret-32";
+const SECRET = "test-jwt-secret-0123456789-abcdefghijklmnop";
 
 const SHOP_YAML = `
 app:

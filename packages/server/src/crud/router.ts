@@ -4,9 +4,13 @@ import type { Actor, AppContext } from "../context.ts";
 import { encodeValue } from "../db/types.ts";
 import { hashPassword } from "../auth/password.ts";
 import { revokeAllForUser } from "../auth/refresh.ts";
+import { commitChange } from "../events/record.ts";
+import { clientIp } from "../http/client-ip.ts";
+import type { ChangeMeta } from "../bus.ts";
+import type { Context } from "hono";
 import { decideAccess, ownedByFields } from "./policies-sql.ts";
 import { applyAccess, applyFilters, decodeRow, expandRows, parseListQuery } from "./query.ts";
-import { InputError, parseBody, publicRow } from "./validate.ts";
+import { InputError, parseBody, visibleRow } from "./validate.ts";
 import {
   applyAuthCreateDefaults,
   assertClientFieldWrites,
@@ -17,6 +21,14 @@ import {
 
 function jsonError(code: string, message: string, status: number) {
   return Response.json({ error: { code, message } }, { status });
+}
+
+function changeMeta(c: Context): ChangeMeta {
+  return { requestId: c.get("requestId"), ip: clientIp(c) };
+}
+
+function actorRef(actor: Actor | null): { id: string; role: string } | null {
+  return actor ? { id: actor.id, role: actor.role } : null;
 }
 
 function entityOr404(ast: SchemaAST, name: string): EntityAST | null {
@@ -96,7 +108,8 @@ export function createCrudRouter(): Hono {
     if (!decision.allow) {
       return jsonError(decision.status === 401 ? "unauthenticated" : "forbidden", "not allowed", decision.status);
     }
-    const query = parseListQuery(entity, new URL(c.req.url).searchParams);
+    const privateAllowed = Boolean(actor && actor.role === ctx.ast.auth.adminRole);
+    const query = parseListQuery(entity, new URL(c.req.url).searchParams, { privateAllowed });
     let qb = ctx.db.selectFrom(entity.name).selectAll();
     qb = applyFilters(qb as never, entity, query, ctx.ast.runtime.dialect) as typeof qb;
     qb = applyAccess(qb as never, decision) as typeof qb;
@@ -108,7 +121,8 @@ export function createCrudRouter(): Hono {
       qb = qb.orderBy(sort.field, sort.dir);
     }
     const rows = await qb.limit(query.limit).offset(query.offset).execute();
-    let decoded = rows.map((row) => publicRow(entity, decodeRow(entity, row as Record<string, unknown>)));
+    const view = (target: EntityAST, row: Record<string, unknown>) => visibleRow(ctx.ast, target, row, actor);
+    let decoded = rows.map((row) => view(entity, decodeRow(entity, row as Record<string, unknown>)));
     decoded = await expandRows(
       ctx.db,
       entity,
@@ -122,6 +136,7 @@ export function createCrudRouter(): Hono {
         return decideAccess(ctx.ast, related, "read", actor);
       },
       (name) => ctx.ast.entityMap[name],
+      view,
     );
     const total = Number((totalRow as { count?: number | string } | undefined)?.count ?? decoded.length);
     return c.json({ data: decoded, meta: { total, limit: query.limit, offset: query.offset } });
@@ -148,7 +163,8 @@ export function createCrudRouter(): Hono {
       .split(",")
       .map((item) => item.trim())
       .filter(Boolean);
-    let data = [publicRow(entity, decodeRow(entity, row as Record<string, unknown>))];
+    const view = (target: EntityAST, item: Record<string, unknown>) => visibleRow(ctx.ast, target, item, actor);
+    let data = [view(entity, decodeRow(entity, row as Record<string, unknown>))];
     data = await expandRows(
       ctx.db,
       entity,
@@ -162,6 +178,7 @@ export function createCrudRouter(): Hono {
         return decideAccess(ctx.ast, related, "read", actor);
       },
       (name) => ctx.ast.entityMap[name],
+      view,
     );
     return c.json({ data: data[0] });
   });
@@ -208,11 +225,13 @@ export function createCrudRouter(): Hono {
       insert[key] =
         field.type === "password" && typeof value === "string" ? await hashPassword(value) : encodeValue(ctx.ast.runtime.dialect, field, value);
     }
-    await ctx.db.insertInto(entity.name).values(insert).execute();
-    const stored = await ctx.db.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
-    const after = decodeRow(entity, stored as Record<string, unknown>);
-    ctx.bus.emit({ entity: entity.name, op: "create", before: null, after, actor: actor ? { id: actor.id, role: actor.role } : null });
-    return c.json({ data: publicRow(entity, after) }, 201);
+    const after = await commitChange(ctx, changeMeta(c), async (trx) => {
+      await trx.insertInto(entity.name).values(insert).execute();
+      const stored = await trx.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
+      const row = decodeRow(entity, stored as Record<string, unknown>);
+      return { event: { entity: entity.name, op: "create", before: null, after: row, actor: actorRef(actor) }, result: row };
+    });
+    return c.json({ data: visibleRow(ctx.ast, entity, after, actor) }, 201);
   });
 
   app.patch("/:entity/:id", async (c) => {
@@ -262,18 +281,21 @@ export function createCrudRouter(): Hono {
       patch[key] =
         field.type === "password" && typeof value === "string" ? await hashPassword(value) : encodeValue(ctx.ast.runtime.dialect, field, value);
     }
-    await ctx.db.updateTable(entity.name).set(patch).where("id", "=", c.req.param("id")).execute();
-    const stored = await ctx.db.selectFrom(entity.name).selectAll().where("id", "=", c.req.param("id")).executeTakeFirstOrThrow();
-    const after = decodeRow(entity, stored as Record<string, unknown>);
-    const roleChanged =
-      entity.name === ctx.ast.auth.entity &&
-      ctx.ast.auth.roleField in body &&
-      String(before[ctx.ast.auth.roleField]) !== String(after[ctx.ast.auth.roleField]);
-    if (passwordChanged || roleChanged) {
-      await revokeAllForUser(ctx.db, String(after.id));
-    }
-    ctx.bus.emit({ entity: entity.name, op: "update", before, after, actor: actor ? { id: actor.id, role: actor.role } : null });
-    return c.json({ data: publicRow(entity, after) });
+    const recordId = c.req.param("id");
+    const after = await commitChange(ctx, changeMeta(c), async (trx) => {
+      await trx.updateTable(entity.name).set(patch).where("id", "=", recordId).execute();
+      const stored = await trx.selectFrom(entity.name).selectAll().where("id", "=", recordId).executeTakeFirstOrThrow();
+      const row = decodeRow(entity, stored as Record<string, unknown>);
+      const roleChanged =
+        entity.name === ctx.ast.auth.entity &&
+        ctx.ast.auth.roleField in body &&
+        String(before[ctx.ast.auth.roleField]) !== String(row[ctx.ast.auth.roleField]);
+      if (passwordChanged || roleChanged) {
+        await revokeAllForUser(trx, String(row.id));
+      }
+      return { event: { entity: entity.name, op: "update", before, after: row, actor: actorRef(actor) }, result: row };
+    });
+    return c.json({ data: visibleRow(ctx.ast, entity, after, actor) });
   });
 
   app.delete("/:entity/:id", async (c) => {
@@ -295,8 +317,11 @@ export function createCrudRouter(): Hono {
     }
     const before = decodeRow(entity, existing as Record<string, unknown>);
     await runBefore(ctx, entity.name, "beforeDelete", before, actor, before);
-    await ctx.db.deleteFrom(entity.name).where("id", "=", c.req.param("id")).execute();
-    ctx.bus.emit({ entity: entity.name, op: "delete", before, after: null, actor: actor ? { id: actor.id, role: actor.role } : null });
+    const recordId = c.req.param("id");
+    await commitChange(ctx, changeMeta(c), async (trx) => {
+      await trx.deleteFrom(entity.name).where("id", "=", recordId).execute();
+      return { event: { entity: entity.name, op: "delete", before, after: null, actor: actorRef(actor) }, result: null };
+    });
     return c.json({ data: { id: c.req.param("id") } });
   });
 

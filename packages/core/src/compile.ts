@@ -16,6 +16,8 @@ import {
   WEBHOOK_DEFAULT_TIMEOUT_MS,
   type ActionName,
   type AuthAST,
+  type SignupMode,
+  type TrustProxyAST,
   type EntityAST,
   type FieldAST,
   type FieldTypeName,
@@ -89,6 +91,7 @@ function compileField(entityName: string, name: string, raw: RawField): FieldAST
     secret: raw.secret === true || type === "password",
     description: raw.description,
     writable: compileWritable(entityName, name, raw),
+    ...(raw.private !== undefined ? { private: raw.private } : {}),
   };
 }
 
@@ -141,7 +144,7 @@ function systemFields(): FieldAST[] {
 function defaultPolicies(auth: boolean): Record<ActionName, PolicyAST[]> {
   if (auth) {
     return {
-      read: [{ kind: "authenticated" }],
+      read: [{ kind: "owner", field: "id" }, { kind: "admin" }],
       create: [{ kind: "admin" }],
       update: [{ kind: "owner", field: "id" }],
       delete: [{ kind: "admin" }],
@@ -250,13 +253,60 @@ function parseVirtualHostedStyle(
 }
 
 export const DEV_JWT_SECRET = "dev-only-change-me";
+export const MIN_JWT_SECRET_LENGTH = 32;
+
+const PLACEHOLDER_SECRET = /change[-_ ]?me|replace[-_ ]?me|your[-_ ]?secret|dev[-_ ]?only|example|placeholder/i;
+
+/**
+ * Explicit development or test mode: `bakorin dev` sets BAKORIN_ENV=development,
+ * and the test preload sets BAKORIN_TEST=1. Everything else is production, so a
+ * server started any other way never runs on the public dev secret.
+ */
+export function isDevMode(env: Record<string, string | undefined>): boolean {
+  const mode = (env.BAKORIN_ENV ?? "").trim().toLowerCase();
+  if (mode === "production") {
+    return false;
+  }
+  return mode === "development" || mode === "dev" || mode === "test" || env.BAKORIN_TEST === "1";
+}
+
+/** Why a JWT secret is too weak for production, or null when it is fine. */
+export function weakJwtSecretReason(secret: string | undefined): string | null {
+  if (!secret) {
+    return "it is not set";
+  }
+  if (secret === DEV_JWT_SECRET || PLACEHOLDER_SECRET.test(secret)) {
+    return "it is a placeholder value";
+  }
+  if (secret.length < MIN_JWT_SECRET_LENGTH) {
+    return `it is ${secret.length} characters; use at least ${MIN_JWT_SECRET_LENGTH}`;
+  }
+  if (new Set(secret).size < 10) {
+    return "it repeats too few characters to be random";
+  }
+  return null;
+}
+
+export function assertStrongJwtSecret(secret: string | undefined, name = "JWT_SECRET"): void {
+  const reason = weakJwtSecretReason(secret);
+  if (reason) {
+    throw new SchemaError(
+      `${name} is too weak for production: ${reason}. Generate one with: openssl rand -base64 48. ` +
+        "Only `bakorin dev` (BAKORIN_ENV=development) runs without a strong secret.",
+    );
+  }
+}
 
 function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, string | undefined>): RuntimeAST {
   const runtime = yaml.runtime ?? {};
   const dialect = runtime.dialect ?? (runtime.postgres?.url ? "postgres" : "sqlite");
-  const jwtSecret = runtime.jwt?.secret ?? env.JWT_SECRET ?? (production ? "" : DEV_JWT_SECRET);
-  if (production && (!jwtSecret || jwtSecret === DEV_JWT_SECRET)) {
-    throw new SchemaError("JWT_SECRET is required in production");
+  const jwtSecret = runtime.jwt?.secret || env.JWT_SECRET || (production ? "" : DEV_JWT_SECRET);
+  const jwtSecretPrevious = firstEnv(env, ["JWT_SECRET_PREVIOUS"]);
+  if (production) {
+    assertStrongJwtSecret(jwtSecret);
+    if (jwtSecretPrevious) {
+      assertStrongJwtSecret(jwtSecretPrevious, "JWT_SECRET_PREVIOUS");
+    }
   }
   if (dialect === "postgres" && !runtime.postgres?.url) {
     throw new SchemaError("runtime.postgres.url is required when dialect is postgres");
@@ -295,7 +345,7 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
     sqlitePath,
     postgresUrl: runtime.postgres?.url,
     jwtSecret,
-    jwtSecretPrevious: firstEnv(env, ["JWT_SECRET_PREVIOUS"]),
+    jwtSecretPrevious,
     accessTtlSeconds: runtime.jwt?.accessTtlSeconds ?? 900,
     refreshTtlSeconds: runtime.jwt?.refreshTtlSeconds ?? 60 * 60 * 24 * 30,
     files: {
@@ -323,7 +373,68 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
     webhooksRetainDays: parseWebhookRetainDays(runtime.webhooks?.retainDays, env),
     mailRetainDays: parseMailRetainDays(runtime.mail?.retainDays, env),
     alerts: parseAlerts(runtime.alerts, env),
+    trustProxy: parseTrustProxy(runtime.trustProxy, env),
   };
+}
+
+/**
+ * runtime.trustProxy (or TRUST_PROXY): false or 0 for none, a hop count such as 1,
+ * true for one hop, or a list of proxy CIDRs. The env var wins so a host can set it.
+ */
+export function parseTrustProxy(
+  yaml: boolean | number | string[] | undefined,
+  env: Record<string, string | undefined>,
+): TrustProxyAST {
+  const raw = (env.TRUST_PROXY ?? "").trim();
+  let value: boolean | number | string[] | undefined = yaml;
+  if (raw) {
+    const lower = raw.toLowerCase();
+    if (lower === "false" || lower === "no" || lower === "off") {
+      value = false;
+    } else if (lower === "true" || lower === "yes" || lower === "on") {
+      value = true;
+    } else if (/^\d+$/.test(raw)) {
+      value = Number(raw);
+    } else {
+      value = raw.split(",").map((item) => item.trim()).filter(Boolean);
+    }
+  }
+  if (value === undefined || value === false || value === 0) {
+    return { kind: "none" };
+  }
+  if (value === true) {
+    return { kind: "hops", hops: 1 };
+  }
+  if (typeof value === "number") {
+    if (!Number.isInteger(value) || value < 0 || value > 10) {
+      throw new SchemaError("runtime.trustProxy hop count must be a whole number from 0 to 10");
+    }
+    return { kind: "hops", hops: value };
+  }
+  for (const cidr of value) {
+    if (!isCidr(cidr)) {
+      throw new SchemaError(`runtime.trustProxy: ${cidr} is not an IP address or CIDR range`);
+    }
+  }
+  return { kind: "cidrs", cidrs: value };
+}
+
+function isCidr(value: string): boolean {
+  const [address, bits, extra] = value.split("/");
+  if (extra !== undefined || !address) {
+    return false;
+  }
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(address);
+  if (v4) {
+    if (v4.slice(1).some((part) => Number(part) > 255)) {
+      return false;
+    }
+    return bits === undefined || (/^\d+$/.test(bits) && Number(bits) <= 32);
+  }
+  if (address.includes(":") && /^[0-9a-fA-F:.]+$/.test(address)) {
+    return bits === undefined || (/^\d+$/.test(bits) && Number(bits) <= 128);
+  }
+  return false;
 }
 
 function parseAlerts(
@@ -639,6 +750,7 @@ function findAuthEntity(yaml: AppYaml, entities: EntityAST[]): AuthAST {
   entity.fieldMap[passwordField]!.secret = true;
   entity.fieldMap[roleField]!.writable = "admin";
   ensureEmailVerifiedField(entity);
+  markPrivateAuthFields(entity, [identityField, roleField, "emailVerified"]);
   return {
     entity: entity.name,
     identityField,
@@ -646,7 +758,37 @@ function findAuthEntity(yaml: AppYaml, entities: EntityAST[]): AuthAST {
     roleField,
     adminRole,
     requireVerifiedEmail: yaml.auth?.requireVerifiedEmail === true,
+    signup: compileSignup(yaml, entity),
   };
+}
+
+/**
+ * auth.signup decides who may create an account at POST /api/v1/auth/signup.
+ * When it is not set, it follows the auth entity's create policy: a public create
+ * means the app already allows public signup (open); anything else is invite. An
+ * explicit invite or closed cannot sit next to a public create policy, because
+ * that would reopen signup through POST /api/v1/<users>.
+ */
+function compileSignup(yaml: AppYaml, entity: EntityAST): SignupMode {
+  const publicCreate = entity.policies.create.some((policy) => policy.kind === "public");
+  const mode: SignupMode = yaml.auth?.signup ?? (publicCreate ? "open" : "invite");
+  if (mode !== "open" && publicCreate) {
+    throw new SchemaError(
+      `${entity.name}.policies.create is public, which lets anyone sign up through POST /api/v1/${entity.name}, but auth.signup is ${mode}. ` +
+        "Set auth.signup: open to allow public signup, and use admin for the create policy.",
+    );
+  }
+  return mode;
+}
+
+/** Fields only the user themself and admins see by default on the auth entity. */
+function markPrivateAuthFields(entity: EntityAST, names: string[]): void {
+  for (const name of names) {
+    const field = entity.fieldMap[name];
+    if (field && field.private === undefined) {
+      field.private = true;
+    }
+  }
 }
 
 function ensureEmailVerifiedField(entity: EntityAST): void {
@@ -694,8 +836,7 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
     throw new SchemaError(formatZodError(parsedYaml.error));
   }
   const yaml = parsedYaml.data;
-  const production =
-    options.production ?? (env.NODE_ENV === "production" || env.BAKORIN_ENV === "production");
+  const production = options.production ?? !isDevMode(env);
   const runtime = compileRuntime(yaml, production, env);
 
   const entities: EntityAST[] = Object.entries(yaml.entities).map(([name, raw]) => {
@@ -818,6 +959,12 @@ export function deserializeAst(raw: string): SchemaAST {
   }
   if (!parsed.auth.requireVerifiedEmail) {
     parsed.auth.requireVerifiedEmail = false;
+  }
+  if (!parsed.auth.signup) {
+    parsed.auth.signup = "invite";
+  }
+  if (!parsed.runtime.trustProxy) {
+    parsed.runtime.trustProxy = { kind: "none" };
   }
   if (!parsed.runtime.appUrl) {
     parsed.runtime.appUrl = `http://127.0.0.1:${parsed.runtime.port}`;

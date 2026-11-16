@@ -79,6 +79,8 @@ export interface AuthDraft {
   role: string;
   adminRole: string;
   requireVerifiedEmail: boolean;
+  /** Empty means unset: signup follows the users create policy. */
+  signup: "" | "open" | "invite" | "closed";
 }
 
 /** Optional white-label settings. Empty strings mean "not set"; all empty means no branding section. */
@@ -186,7 +188,7 @@ export function emptyMailRule(entity = ""): MailDraft {
 }
 
 export function defaultAuth(): AuthDraft {
-  return { entity: "users", identity: "email", password: "password", role: "role", adminRole: "admin", requireVerifiedEmail: false };
+  return { entity: "users", identity: "email", password: "password", role: "role", adminRole: "admin", requireVerifiedEmail: false, signup: "" };
 }
 
 export function cloneConfig(config: BuilderConfig): BuilderConfig {
@@ -279,6 +281,7 @@ export function importAppYaml(source: string): ImportResult {
       role: str(authRaw.role),
       adminRole: str(authRaw.adminRole),
       requireVerifiedEmail: authRaw.requireVerifiedEmail === true,
+      signup: authRaw.signup === "open" || authRaw.signup === "invite" || authRaw.signup === "closed" ? authRaw.signup : "",
     },
     entities: [],
     webhooks: Array.isArray(root.webhooks) ? root.webhooks : [],
@@ -458,6 +461,7 @@ export function toAppObject(config: BuilderConfig): Record<string, unknown> {
   if (a.role) auth.role = a.role;
   if (a.adminRole) auth.adminRole = a.adminRole;
   if (a.requireVerifiedEmail || Object.keys(auth).length > 0) auth.requireVerifiedEmail = a.requireVerifiedEmail;
+  if (a.signup) auth.signup = a.signup;
   if (Object.keys(auth).length > 0) out.auth = auth;
   const entities: Record<string, unknown> = {};
   for (const entity of config.entities) {

@@ -106,7 +106,7 @@ describe("config builder", () => {
     built.runtime = {
       sqlite: { path: "./data/app.db" },
       files: { path: "./data/uploads" },
-      jwt: { secret: "test-secret-test-secret-test-secret-32" },
+      jwt: { secret: "test-jwt-secret-0123456789-abcdefghijklmnop" },
       hooks: "./hooks.ts",
     };
 
@@ -231,7 +231,7 @@ branding:
 
 runtime:
   jwt:
-    secret: test-secret-test-secret-test-secret-32
+    secret: test-jwt-secret-0123456789-abcdefghijklmnop
 
 entities:
   users:

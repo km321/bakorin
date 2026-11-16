@@ -13,7 +13,7 @@ runtime:
   files:
     path: ./data/uploads
   jwt:
-    secret: test-secret-test-secret-test-secret-32
+    secret: test-jwt-secret-0123456789-abcdefghijklmnop
   hooks: ./hooks.ts
 auth:
   entity: users
@@ -60,14 +60,14 @@ export async function boot(yaml?: string, hooks?: string): Promise<RuntimeHandle
   return Object.assign(runtime, { dir });
 }
 
-export function postgresYaml(url: string): string {
-  return MINI_YAML.replace("dialect: sqlite", "dialect: postgres").replace(
+export function postgresYaml(url: string, base = MINI_YAML): string {
+  return base.replace("dialect: sqlite", "dialect: postgres").replace(
     `  sqlite:\n    path: ./data/app.db\n`,
     `  postgres:\n    url: "${url}"\n`,
   );
 }
 
-export async function bootPostgres(hooks?: string): Promise<RuntimeHandles & { dir: string; database: string }> {
+export async function bootPostgres(hooks?: string, base = MINI_YAML): Promise<RuntimeHandles & { dir: string; database: string }> {
   const adminUrl = process.env.DATABASE_URL;
   if (!adminUrl) {
     throw new Error("DATABASE_URL is required for postgres tests");
@@ -75,7 +75,7 @@ export async function bootPostgres(hooks?: string): Promise<RuntimeHandles & { d
   const { createPostgresDatabase, dropPostgresDatabase } = await import("@bakorin/server");
   const database = `b${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
   const url = await createPostgresDatabase(adminUrl, database);
-  const runtime = await boot(postgresYaml(url), hooks);
+  const runtime = await boot(postgresYaml(url, base), hooks);
   const originalClose = runtime.close.bind(runtime);
   runtime.close = async () => {
     await originalClose();

@@ -19,7 +19,7 @@ describe("backup restore", () => {
     await runtime.close();
 
     const ast = compileAppYaml(await Bun.file(join(runtime.dir, "app.yaml")).text(), {
-      env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" },
+      env: { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" },
     });
     const { backupSqlite } = await import("../packages/server/src/backup/sqlite.ts");
     await backupSqlite({

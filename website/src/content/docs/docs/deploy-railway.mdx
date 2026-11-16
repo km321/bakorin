@@ -31,7 +31,8 @@ SQLite on the volume is the default. Postgres is optional: set `runtime.dialect:
 
    | Variable | Value |
    |---|---|
-   | `JWT_SECRET` | Long random string (required in production) |
+   | `JWT_SECRET` | Required. Run `openssl rand -base64 48` and paste the output. `bakorin start` refuses to boot without a strong secret |
+   | `TRUST_PROXY` | `1`. Railway's edge proxy sits in front, so this lets rate limits see each visitor's IP |
    | `BAKORIN_DATA_DIR` | `/data` |
    | `CORS_ORIGINS` | Your Astro or Next.js origin. Comma separated if more than one |
    | `APP_URL` | Public URL of the front end |

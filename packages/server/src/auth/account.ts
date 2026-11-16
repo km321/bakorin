@@ -1,4 +1,6 @@
 import { Hono } from "hono";
+import { clientIp } from "../http/client-ip.ts";
+import { commitChange } from "../events/record.ts";
 import type { SchemaAST } from "@bakorin/core";
 import { encodeValue } from "../db/types.ts";
 import type { BakorinDb } from "../db/dialects.ts";
@@ -15,9 +17,6 @@ import { decodeRow } from "../crud/query.ts";
 import { requireAdmin } from "./guard.ts";
 import { safeDefaultRole } from "../crud/write-guards.ts";
 
-function clientKey(c: { req: { header: (name: string) => string | undefined } }): string {
-  return c.req.header("x-forwarded-for")?.split(",")[0]?.trim() || c.req.header("x-real-ip") || "local";
-}
 
 
 export function createAccountRoutes(): Hono {
@@ -25,7 +24,7 @@ export function createAccountRoutes(): Hono {
 
   app.post("/forgot-password", async (c) => {
     const ctx = c.get("app");
-    const ip = clientKey(c);
+    const ip = clientIp(c);
     if (!(await rateLimit(ctx.db, `forgot:${ip}`, 5, 60 * 60 * 1000))) {
       return c.json({ error: { code: "rate_limited", message: "too many reset requests" } }, 429);
     }
@@ -76,7 +75,7 @@ export function createAccountRoutes(): Hono {
       actorId: consumed.userId,
       entity: entity.name,
       recordId: consumed.userId,
-      ip: clientKey(c),
+      ip: clientIp(c),
     });
     return c.json({ data: { ok: true } });
   });
@@ -108,7 +107,7 @@ export function createAccountRoutes(): Hono {
 
   app.post("/resend-verification", async (c) => {
     const ctx = c.get("app");
-    if (!(await rateLimit(ctx.db, `reverify:${clientKey(c)}`, 5, 60 * 60 * 1000))) {
+    if (!(await rateLimit(ctx.db, `reverify:${clientIp(c)}`, 5, 60 * 60 * 1000))) {
       return c.json({ error: { code: "rate_limited", message: "too many verification emails" } }, 429);
     }
     const actor = c.get("actor");
@@ -154,6 +153,12 @@ export function createAccountRoutes(): Hono {
       return denied;
     }
     const ctx = c.get("app");
+    if (ctx.ast.auth.signup === "closed") {
+      return c.json(
+        { error: { code: "invites_disabled", message: "Invites are off because auth.signup is closed. Create the user in the admin instead." } },
+        403,
+      );
+    }
     const entity = ctx.ast.entityMap[ctx.ast.auth.entity]!;
     const body = (await c.req.json().catch(() => ({}))) as { email?: string; role?: string; name?: string };
     const email = String(body.email ?? "").trim().toLowerCase();
@@ -205,10 +210,16 @@ export function createAccountRoutes(): Hono {
         return c.json({ error: { code: "invalid_input", message: `${field.name} is required` } }, 400);
       }
     }
-    await ctx.db.insertInto(entity.name).values(insert).execute();
-    const stored = await ctx.db.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
-    const after = decodeRow(entity, stored as Record<string, unknown>);
-    ctx.bus.emit({ entity: entity.name, op: "create", before: null, after, actor: c.get("actor") });
+    const inviter = c.get("actor");
+    const after = await commitChange(ctx, { requestId: c.get("requestId"), ip: clientIp(c) }, async (trx) => {
+      await trx.insertInto(entity.name).values(insert).execute();
+      const stored = await trx.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
+      const row = decodeRow(entity, stored as Record<string, unknown>);
+      return {
+        event: { entity: entity.name, op: "create", before: null, after: row, actor: inviter ? { id: inviter.id, role: inviter.role } : null },
+        result: row,
+      };
+    });
     const token = await issueAuthToken(ctx.db, {
       userId: id,
       email,
@@ -225,7 +236,7 @@ export function createAccountRoutes(): Hono {
       actorRole: actor?.role,
       entity: entity.name,
       recordId: id,
-      ip: clientKey(c),
+      ip: clientIp(c),
       meta: { email, role },
     });
     return c.json({ data: { user: publicRow(entity, after), email, role } }, 201);

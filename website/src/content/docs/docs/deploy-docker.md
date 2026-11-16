@@ -16,7 +16,7 @@ docker build -t bakorin-app .
 docker run --rm -p 4371:4371 \
   -e PORT=4371 \
   -e NODE_ENV=production \
-  -e JWT_SECRET=change-me-to-a-long-random-string \
+  -e JWT_SECRET="$(openssl rand -base64 48)" \
   -e BAKORIN_DATA_DIR=/data \
   -e CORS_ORIGINS=https://your-frontend.example \
   -e APP_URL=https://your-frontend.example \

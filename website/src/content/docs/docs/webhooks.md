@@ -3,7 +3,7 @@ title: Webhooks
 description: Durable, signed, retried webhook deliveries for create, update, and delete events.
 ---
 
-Bakorin posts JSON to your URL after a successful create, update, or delete. Delivery is durable: each event is written to the `_bakorin_webhook_outbox` table in the same database as the rest of the app, then a worker POSTs it with retries.
+Bakorin posts JSON to your URL after a successful create, update, or delete. Delivery is durable: each event is written to the `_bakorin_webhook_outbox` table in the same database transaction as the record change, then a worker POSTs it with retries. If the change rolls back, no delivery is queued. If the outbox write fails, the change rolls back too.
 
 ## Setup
 

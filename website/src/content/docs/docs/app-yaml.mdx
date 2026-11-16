@@ -77,9 +77,11 @@ webhooks:
 Use `${NAME}` to read an environment variable, or `${NAME:-fallback}` to provide a default. A referenced variable that is missing and has no fallback stops startup with `missing environment variable NAME referenced from app.yaml`.
 
 ```yaml
-jwt:
-  secret: ${JWT_SECRET:-dev-only-change-me}
+alerts:
+  email: ${ALERT_EMAIL:-ops@example.com}
 ```
+
+Do not give `jwt.secret` a fallback. Leave `jwt.secret` out and set `JWT_SECRET` in the environment instead. `bakorin start` refuses placeholder secrets.
 
 ## app
 
@@ -110,7 +112,7 @@ Optional white label for the admin, `/docs`, and system emails. Leave it out to 
 | `port` | `4371` | The `PORT` environment variable wins |
 | `sqlite.path` | `./data/app.db` | Moves under `BAKORIN_DATA_DIR` when that is set |
 | `postgres.url` | | Usually `${DATABASE_URL}` |
-| `jwt.secret` | dev secret | Required in production. Usually `${JWT_SECRET}` |
+| `jwt.secret` | `JWT_SECRET` | Usually left out so `JWT_SECRET` is used. Required outside `bakorin dev`, 32 or more random characters |
 | `jwt.accessTtlSeconds` | `900` | Access token lifetime (15 minutes) |
 | `jwt.refreshTtlSeconds` | `2592000` | Refresh token lifetime (30 days) |
 | `files.driver` | `local` | `local` or `s3`. A bucket in the environment switches to `s3` |
@@ -130,6 +132,7 @@ Optional white label for the admin, `/docs`, and system emails. Leave it out to 
 | `alerts.backupMaxAgeHours` | | Alert when there has been no backup for this long |
 | `alerts.checkIntervalMinutes` | `15` | How often alerts are checked |
 | `cors.origins` | | Allowed origins. `CORS_ORIGINS` overrides it |
+| `trustProxy` | `false` | `true` or a hop count, or a list of proxy CIDRs. `TRUST_PROXY` overrides it. See [Client IP and proxies](/docs/configuration/#client-ip-and-proxies) |
 | `hooks` | `./hooks.ts` | Path to the hooks module |
 
 ## auth
@@ -142,6 +145,7 @@ Optional white label for the admin, `/docs`, and system emails. Leave it out to 
 | `role` | `role` | Role field. Always admin writable |
 | `adminRole` | `admin` | Role value that counts as admin |
 | `requireVerifiedEmail` | `false` | Block login until the email is verified |
+| `signup` | follows `create` policy | `open`, `invite`, or `closed`. See [Who can sign up](/docs/auth/#who-can-sign-up) |
 
 When `requireVerifiedEmail` is on, Bakorin adds an `emailVerified` boolean to the auth entity if the schema does not define one.
 
@@ -182,6 +186,7 @@ A field can be a bare type (`title: text`) or an object:
 | `adminOnly` | Same as `writable: admin` |
 | `readonly` | Same as `writable: none` |
 | `secret` | Hidden from API responses and webhook payloads. `password` fields are always secret |
+| `private` | Returned only to the row's own user and to admins. On by default for the auth entity's identity, role, and `emailVerified` fields |
 | `description` | Help text in the admin UI and OpenAPI |
 | `renameFrom` | Rename a column without losing data |
 

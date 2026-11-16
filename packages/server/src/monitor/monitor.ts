@@ -17,7 +17,8 @@ export interface RecentError {
   method?: string;
   path?: string;
   status?: number;
-  source: "request" | "worker";
+  /** request: an HTTP handler; worker: a background job; hook: a post-write subscriber; process: an unhandled rejection or exception. */
+  source: "request" | "worker" | "hook" | "process";
 }
 
 export interface MonitorOptions {

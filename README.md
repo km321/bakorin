@@ -85,7 +85,7 @@ The same `app.yaml` drives SQLite or Postgres, local files or S3/R2. The product
 
 1. Copy `examples/studio-leads` or run `bakorin init`.
 2. Edit `app.yaml` for that client's entities and policies.
-3. Set `JWT_SECRET` (required in production). Point `runtime.postgres.url` at Railway Postgres when you deploy.
+3. Set `JWT_SECRET` (required for `bakorin start`; `openssl rand -base64 48`). Point `runtime.postgres.url` at Railway Postgres when you deploy.
 4. Deploy the Bakorin binary or Docker image with the project folder mounted or copied in.
 5. Run `bakorin backup` on a schedule. Store snapshots off-box (S3/R2 or Railway volume snapshots).
 6. `bakorin typegen` into the frontend repo when the schema changes.
@@ -264,7 +264,7 @@ The production image bakes the `examples/studio-leads` project into `/project` a
 
 Health: `GET /health` (also `GET /healthz`) for liveness, `GET /ready` for readiness (database and storage).
 
-`JWT_SECRET` is required when `NODE_ENV=production` or `BAKORIN_ENV=production`.
+`bakorin start` refuses to boot without a strong `JWT_SECRET` (32 or more random characters, not a placeholder; generate one with `openssl rand -base64 48`). On Railway also set `TRUST_PROXY=1` so rate limits see each visitor's IP. See [Upgrade notes](docs/upgrading.md).
 
 ### Docker
 
@@ -299,10 +299,11 @@ Railway volume snapshots are a second copy, not a substitute for `bakorin backup
 
 | Variable | Required | Notes |
 |---|---|---|
-| `JWT_SECRET` | yes in production | Signing key for access tokens |
+| `JWT_SECRET` | yes, except `bakorin dev` | Signing key for access tokens. 32 or more random characters |
 | `JWT_SECRET_PREVIOUS` | during rotation | Previous signing key; tokens signed with it still verify |
 | `PORT` | Railway sets it | Listen port. Overrides `runtime.port` |
-| `NODE_ENV` / `BAKORIN_ENV` | image sets `production` | Production mode |
+| `NODE_ENV` / `BAKORIN_ENV` | image sets `production` | Production mode. `BAKORIN_ENV=development` is dev mode, which `bakorin dev` sets and `bakorin start` refuses |
+| `TRUST_PROXY` | behind a proxy | Hop count (`1` on Railway) or comma separated proxy CIDRs for the client IP. Unset trusts no proxy |
 | `BAKORIN_DATA_DIR` | recommended | SQLite file `$BAKORIN_DATA_DIR/app.db`; local uploads and backups live here if S3 is not configured |
 | `AWS_ENDPOINT_URL` or `S3_ENDPOINT` | for S3 | Railway bucket endpoint. `AWS_ENDPOINT` is also accepted |
 | `AWS_ACCESS_KEY_ID` or `S3_ACCESS_KEY` | for S3 | |
@@ -406,8 +407,10 @@ Point `APP_URL` at that front end so reset, verify, and invite emails use its or
 - Owner ids cannot be taken over: sending `ownerId` (or another ownership field) as a non-admin returns 403. Omitting it still stamps the session user. `owner()` row filters keep another user's row at 404.
 - Password updates through CRUD require an admin, or the current password for self-service, and are always hashed. Role changes and password resets revoke that user's refresh tokens.
 - Passwords are argon2id. Access JWTs last 15 minutes. Refresh tokens are stored as SHA-256 hashes, rotated on use, and reuse of a revoked token revokes every token for that user.
-- Auth routes are rate limited in the database (shared across instances). Five failed logins lock that account with backoff.
-- `JWT_SECRET` is required when `NODE_ENV=production` or `BAKORIN_ENV=production`. Set `JWT_SECRET_PREVIOUS` while rotating.
+- Auth routes are rate limited per client IP in the database (shared across instances). The IP is the socket address unless `TRUST_PROXY` trusts a proxy, so a client sent `X-Forwarded-For` cannot dodge the limits. Five failed logins lock that account with backoff.
+- `bakorin start` refuses to boot without a strong `JWT_SECRET`. The development secret is only for `bakorin dev` and tests. Set `JWT_SECRET_PREVIOUS` while rotating.
+- Signup follows `auth.signup` (`open`, `invite`, or `closed`). Users' email, role, and `emailVerified` are private to the user and admins.
+- Webhook, mail rule, and audit rows commit in the same transaction as the record. A throwing `after*` hook is logged and reported, and the server keeps running.
 - Production refuses CORS origin `*` unless `BAKORIN_ALLOW_ANY_ORIGIN=true`.
 - File downloads require a short-lived signed URL. Upload size and MIME types are set in `app.yaml`.
 - Admin and docs send CSP, nosniff, frame-ancestors, Referrer-Policy, and HSTS on HTTPS.
