@@ -61,7 +61,8 @@ describe.skipIf(!CHROME)("admin UI: file fields", () => {
 
         // The existing file is shown, not an empty picker.
         const card = page.locator('#bakorin-drawer [data-file-field="brief"] .file-card');
-        await card.waitFor();
+        // The card says "Loading file" until the file's details arrive; wait for the name.
+        await card.filter({ hasText: "brief.pdf" }).waitFor();
         await expect(card.innerText()).resolves.toContain("brief.pdf");
         await expect(card.innerText()).resolves.toContain(`PDF, ${PDF.byteLength} B`);
 
