@@ -81,6 +81,7 @@ Path style is the default. You can also set `runtime.files.pathStyle` or `runtim
 | `BAKORIN_BACKUP_DESTINATION` | Override the destination (`./dir` or `s3://bucket/prefix`) |
 | `BAKORIN_WEBHOOK_RETAIN_DAYS` | How long delivered webhook rows are kept. Default 30 |
 | `BAKORIN_ALLOW_DESTRUCTIVE` | Confirmation code for a schema change that removes something. See [Schema changes](/docs/migrations/) |
+| `BAKORIN_API_DOCS` | `public` or `admin`. Who can read the OpenAPI spec. Default `admin` in production |
 
 ## Monitoring
 

@@ -11,6 +11,9 @@
 - JSON bodies are capped at 1 MiB and uploads at `files.maxBytes` (413 above that). Active file types download as sandboxed attachments, and image or PDF uploads must match their bytes.
 - Relation fields must point at records the writer can read.
 - Entity names that would shadow built in routes (`auth`, `audit`, `backups`, `docs`, `files`, `mail`, `status`, `webhooks`, `_meta`) are refused.
+- Login lockouts are per email and client IP; unknown emails get the same password check and lock as known ones.
+- `/api/v1/openapi.json` is admin only in production unless `runtime.apiDocs: public` or `BAKORIN_API_DOCS=public`.
+- Unique and restrict violations answer 409 instead of 500.
 - Webhook, mail rule, and audit rows commit in the same transaction as the record change.
 - A throwing `after*` hook or a stray unhandled rejection is logged with the request id and reported, and the server keeps running.
 - Admin and docs responses set `Content-Security-Policy` (including `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and `Strict-Transport-Security` when the request is HTTPS (`x-forwarded-proto` or the URL).

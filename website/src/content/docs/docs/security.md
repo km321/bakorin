@@ -16,6 +16,9 @@ description: What Bakorin does to keep a client backend safe by default.
 - A client can only point a relation at a record it can read.
 - In production the first admin needs the env seed or a one time setup token from the server log.
 - Entities can set `rateLimit` per action, uploads can set `runtime.files.rateLimit`, and a `verify` hook can require a captcha on signup and public creates.
+- Login lockouts are per email and client IP, and unknown emails look the same as wrong passwords.
+- `/api/v1/openapi.json` is admin only in production unless `runtime.apiDocs: public`.
+- `bakorin restore --discard-pending` drops queued mail and webhooks so a staging copy of production cannot email customers.
 - Signup follows `auth.signup` (`open`, `invite`, or `closed`). Apps whose users `create` policy is not public are invite only unless they opt in.
 - Ordinary users never see another user's email, role, or verification status. Those fields are private to the user and admins, and the default users read policy is `[owner(id), admin]`.
 - Webhook, mail rule, and audit rows are written in the same database transaction as the record change, so a change is never saved without them, and a failed outbox write rolls the change back.

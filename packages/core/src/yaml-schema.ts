@@ -253,6 +253,7 @@ export const appYamlSchema = z
           .strict()
           .optional(),
         hooks: z.string().optional(),
+        apiDocs: z.enum(["public", "admin"]).optional(),
         trustProxy: z.union([z.boolean(), z.number().int().min(0).max(10), z.array(z.string().min(1)).min(1)]).optional(),
         webhooks: z
           .object({

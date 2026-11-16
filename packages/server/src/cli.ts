@@ -22,6 +22,7 @@ import { installProcessSafety } from "./monitor/process-safety.ts";
 import { runBackup } from "./backup/schedule.ts";
 import { exportPortable, importPortable, readManifest, restoreProjectAssets } from "./backup/archive.ts";
 import { restoreSqliteSnapshot } from "./backup/sqlite.ts";
+import { countPendingDeliveries, discardPendingDeliveries } from "./backup/pending.ts";
 import { migrateToSchema, planMigration } from "./db/migrator.ts";
 import { backupSchema, verifyBackup, type VerifyResult } from "./backup/integrity.ts";
 import { readTar } from "./backup/tar.ts";
@@ -445,11 +446,31 @@ async function openBackupSource(dir: string, src: string): Promise<{ source: str
   };
 }
 
+/**
+ * Backups carry the mail and webhook queues. With --discard-pending they are
+ * dropped (for staging copies of production); otherwise restore says how many
+ * will send when the server starts.
+ */
+async function handlePendingDeliveries(db: Parameters<typeof countPendingDeliveries>[0]): Promise<void> {
+  if (hasFlag("--discard-pending")) {
+    const dropped = await discardPendingDeliveries(db);
+    console.log(`discarded ${dropped.webhooks} pending webhook and ${dropped.mail} pending mail deliveries`);
+    return;
+  }
+  const pending = await countPendingDeliveries(db);
+  if (pending.webhooks + pending.mail > 0) {
+    console.warn(
+      `[bakorin] WARNING: ${pending.webhooks} webhook and ${pending.mail} mail deliveries from the backup are still pending and will be sent when the server starts. ` +
+        "Restoring production into staging? Run this restore again with --discard-pending before you start the server.",
+    );
+  }
+}
+
 async function cmdRestore(): Promise<void> {
   const dir = projectDir();
   const src = process.argv[3];
   if (!src || src.startsWith("-")) {
-    console.error("usage: bakorin restore <backup-dir | backup.tar.gz> [--dry-run] [--no-backup]");
+    console.error("usage: bakorin restore <backup-dir | backup.tar.gz> [--dry-run] [--no-backup] [--discard-pending]");
     process.exit(1);
   }
   const dryRun = hasFlag("--dry-run") || hasFlag("--verify");
@@ -508,11 +529,18 @@ async function cmdRestore(): Promise<void> {
         uploadsPath: resolveRuntimePath(dir, runtime.ast.runtime.files.path),
       });
       console.log("sqlite snapshot restored");
+      const reopened = await loadOrExit(dir, { workers: false });
+      try {
+        await handlePendingDeliveries(reopened.db);
+      } finally {
+        await reopened.close();
+      }
       return;
     }
     const portable = manifest.kind === "sqlite-snapshot" ? join(source, "portable") : source;
     await importPortable({ src: portable, ast: runtime.ast, db: runtime.db, files: runtime.context.files });
     console.log("portable backup restored");
+    await handlePendingDeliveries(runtime.db);
     await runtime.close();
   } finally {
     await cleanup();
@@ -588,8 +616,9 @@ Commands:
   typegen [-o file]   Write bakorin.gen.ts
   schema [--format mermaid|json]  Print the schema as Mermaid or JSON
   backup [dir]        Consistent snapshot (SQLite VACUUM INTO) plus portable export
-  restore <dir|file.tar.gz> [--dry-run]
+  restore <dir|file.tar.gz> [--dry-run] [--discard-pending]
                       Verify checksums, back up current data, then restore.
+                      --discard-pending drops queued mail and webhooks from the backup.
                       --dry-run only verifies and shows what would change
   migrate [--plan] [--allow-destructive <code>]
                       Show or apply schema changes. Removals need the code

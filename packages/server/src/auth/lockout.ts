@@ -3,6 +3,15 @@ import { LOCKOUT_TABLE } from "../db/system.ts";
 
 const LOCK_AFTER = 5;
 
+/**
+ * Locks are per identity and client IP, so someone failing logins from their own
+ * address cannot lock the real owner out everywhere. The per IP login rate limit
+ * still caps guessing across many identities.
+ */
+export function lockoutKey(identity: string, ip: string): string {
+  return `${identity}|${ip}`;
+}
+
 function backoffMs(failures: number): number {
   const extra = Math.max(0, failures - LOCK_AFTER);
   const minutes = Math.min(60, 2 ** extra);

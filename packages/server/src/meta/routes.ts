@@ -14,7 +14,14 @@ export function createMetaRoutes(): Hono {
   });
 
   app.get("/openapi.json", (c) => {
-    return c.json(buildOpenApi(c.get("app").ast));
+    const ast = c.get("app").ast;
+    if (ast.runtime.apiDocs === "admin") {
+      const denied = requireAdmin(c);
+      if (denied) {
+        return denied;
+      }
+    }
+    return c.json(buildOpenApi(ast), 200, { "cache-control": "no-store" });
   });
 
   return app;

@@ -84,4 +84,4 @@ Every successful create, update, and delete emits one event on an in process cha
 
 If an `after*` hook throws or its promise rejects, Bakorin logs it with the request id, reports it to error monitoring (Sentry or `ERROR_WEBHOOK_URL` when set, and the Status page), and keeps serving. The write that triggered it has already succeeded. `bakorin start` and `bakorin dev` also catch stray unhandled rejections and exceptions the same way instead of exiting.
 
-In `bakorin dev`, saving `hooks.ts` reloads it along with `app.yaml`.
+In `bakorin dev`, saving `hooks.ts` reloads it along with `app.yaml`: entity hooks and `verify` use the new code on the next request, and CORS origins follow `app.yaml`. New or changed `routes()` need a restart, and the dev server prints a reminder when they change. Modules that `hooks.ts` imports are not reloaded.

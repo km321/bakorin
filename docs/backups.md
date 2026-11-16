@@ -6,6 +6,7 @@ bakorin backup ./offsite                # explicit destination
 bakorin restore ./data/backups/<stamp> --dry-run   # verify and show what would change
 bakorin restore ./data/backups/<stamp>  # back up current data, then restore
 bakorin restore ./backup.tar.gz         # restore a download from the admin
+bakorin restore ./backup.tar.gz --discard-pending   # staging copy: drop queued mail and webhooks
 bakorin export ./portable               # dialect agnostic NDJSON + files + app.yaml
 bakorin import ./portable               # load that archive into the current dialect
 ```
@@ -17,7 +18,7 @@ Every backup is one folder named after the time it was taken (UTC), for example 
 - **SQLite:** a consistent `VACUUM INTO` copy of `app.db`, `app.yaml`, `hooks.ts`, the `branding/` folder, uploads, and a portable export in `portable/`.
 - **Postgres:** the portable format: one NDJSON file per entity, the schema, uploads, and the project files.
 
-The portable export carries records, users, file metadata, the mail and webhook outbox, the audit log, and the list of soft dropped fields. It leaves out sessions, one time auth tokens, rate limits, lockouts, and leases on purpose: they are short lived, and restoring them would bring old sessions back. People sign in again after a restore.
+The portable export carries records, users, file metadata, the mail and webhook outbox, the audit log, and the list of soft dropped fields. It leaves out sessions, one time auth tokens, rate limits, lockouts, and leases on purpose: they are short lived, and restoring them would bring old sessions back. People sign in again after a restore. Mail and webhooks that were still queued in the backup are sent when the server starts; restore prints how many, and `--discard-pending` marks them discarded instead.
 
 The stored copy of the schema never holds secrets. JWT secrets, bucket keys, the database password, and the alert webhook are replaced with `[redacted]`, because the server always reads them from `app.yaml` and the environment.
 

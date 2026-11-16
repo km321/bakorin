@@ -621,3 +621,4 @@ html[data-theme="dark"] .swagger-ui .opblock-body .opblock-loading-animation {
 .docs-brand span {
   color: var(--docs-muted);
 }
+.docs-notice { margin: 2rem auto; max-width: 40rem; padding: 1rem 1.25rem; border: 1px solid currentColor; border-radius: 8px; }

@@ -250,3 +250,135 @@ describe("L4: one time tokens are consumed atomically", () => {
     expect(results.filter(Boolean)).toHaveLength(1);
   });
 });
+
+describe("L1: dev reload picks up hooks.ts and CORS changes", () => {
+  test("after hooks and CORS origins follow a reload", async () => {
+    const hooks = (tag: string) =>
+      `export default { entities: { items: { afterCreate() { globalThis.__hookTag = "${tag}"; } } } };\n`;
+    const yaml = (origin: string) =>
+      MINI_YAML.replace("  hooks: ./hooks.ts\n", `  hooks: ./hooks.ts\n  cors:\n    origins: ["${origin}"]\n`);
+    const runtime = await started(yaml("http://one.test"), hooks("v1"));
+    const user = (await signup(runtime, "h@x.test")).json.data;
+    await j(runtime, "POST", "/api/v1/items", { title: "a" }, bearer(user.accessToken));
+    await Bun.sleep(20);
+    expect((globalThis as any).__hookTag).toBe("v1");
+
+    await Bun.write(join(runtime.dir, "hooks.ts"), hooks("v2"));
+    // Reload the file boot wrote (it may have been rewritten for Postgres).
+    const current = await Bun.file(join(runtime.dir, "app.yaml")).text();
+    await runtime.reload(current.replace("http://one.test", "http://two.test"));
+    await j(runtime, "POST", "/api/v1/items", { title: "b" }, bearer(user.accessToken));
+    await Bun.sleep(20);
+    expect((globalThis as any).__hookTag).toBe("v2");
+
+    const preflight = await runtime.app.fetch(
+      new Request("http://x/api/v1/items", {
+        method: "OPTIONS",
+        headers: { origin: "http://two.test", "access-control-request-method": "POST" },
+      }),
+    );
+    expect(preflight.headers.get("access-control-allow-origin")).toBe("http://two.test");
+  });
+});
+
+describe("L3 and L5: login lockouts", () => {
+  const login = (runtime: Runtime, email: string, ip: string, password = "wrong-password") =>
+    j(runtime, "POST", "/api/v1/auth/login", { email, password }, from(ip));
+
+  test("an unknown email locks the same way as a known one", async () => {
+    const runtime = await started(TRUSTED);
+    await signup(runtime, "known@x.test");
+    const statuses = async (email: string, ip: string) => {
+      const out: number[] = [];
+      for (let i = 0; i < 6; i++) out.push((await login(runtime, email, ip)).status);
+      return out;
+    };
+    const known = await statuses("known@x.test", "192.0.2.10");
+    const unknown = await statuses("nobody@x.test", "192.0.2.11");
+    expect(unknown).toEqual(known);
+    expect(known.at(-1)).toBe(429);
+  });
+
+  test("failures from one IP do not lock the owner out from another", async () => {
+    const runtime = await started(TRUSTED);
+    await signup(runtime, "owner@x.test");
+    for (let i = 0; i < 6; i++) await login(runtime, "owner@x.test", "192.0.2.20");
+    expect((await login(runtime, "owner@x.test", "192.0.2.20", "password123")).status).toBe(429);
+    expect((await login(runtime, "owner@x.test", "192.0.2.21", "password123")).status).toBe(200);
+  });
+});
+
+describe("L7: API docs are admin only in production", () => {
+  test("production defaults to admin, dev to public, and runtime.apiDocs or BAKORIN_API_DOCS override", async () => {
+    expect(compileAppYaml(MINI_YAML, { env: { JWT_SECRET: STRONG } }).runtime.apiDocs).toBe("admin");
+    expect(compileAppYaml(MINI_YAML, { env: { BAKORIN_ENV: "development" } }).runtime.apiDocs).toBe("public");
+    expect(compileAppYaml(MINI_YAML, { env: { JWT_SECRET: STRONG, BAKORIN_API_DOCS: "public" } }).runtime.apiDocs).toBe("public");
+    const yaml = MINI_YAML.replace("  hooks: ./hooks.ts\n", "  hooks: ./hooks.ts\n  apiDocs: admin\n");
+    expect(compileAppYaml(yaml).runtime.apiDocs).toBe("admin");
+    expect(() => compileAppYaml(MINI_YAML, { env: { BAKORIN_API_DOCS: "everyone", BAKORIN_ENV: "development" } })).toThrow(
+      /BAKORIN_API_DOCS/,
+    );
+  });
+
+  test("the spec needs an admin token when apiDocs is admin", async () => {
+    const runtime = await started(MINI_YAML.replace("  hooks: ./hooks.ts\n", "  hooks: ./hooks.ts\n  apiDocs: admin\n"));
+    expect((await j(runtime, "GET", "/api/v1/openapi.json")).status).toBe(401);
+    const admin = (await j(runtime, "POST", "/api/v1/auth/first-admin", ADMIN)).json.data;
+    const member = (await signup(runtime, "m@x.test")).json.data;
+    expect((await j(runtime, "GET", "/api/v1/openapi.json", undefined, bearer(member.accessToken))).status).toBe(403);
+    const ok = await j(runtime, "GET", "/api/v1/openapi.json", undefined, bearer(admin.accessToken));
+    expect(ok.status).toBe(200);
+    expect(ok.json.openapi).toBeTruthy();
+    expect((await runtime.app.fetch(new Request("http://x/docs"))).status).toBe(200);
+  });
+});
+
+describe("L8: restoring does not have to replay production deliveries", () => {
+  test("pending webhook and mail rows can be counted and discarded", async () => {
+    const { countPendingDeliveries, discardPendingDeliveries } = await import("@bakorin/server");
+    const yaml = MINI_YAML.replace(
+      "entities:\n",
+      "webhooks:\n  - entity: items\n    events: [create]\n    url: http://127.0.0.1:9/hook\nentities:\n",
+    );
+    const dir = await tempProject(yaml);
+    const runtime = await createRuntime({ projectDir: dir, yamlSource: yaml, workers: false });
+    cleanups.push(() => runtime.close());
+    const user = (await j(runtime, "POST", "/api/v1/auth/signup", { email: "p@x.test", password: "password123", name: "P" })).json.data;
+    await j(runtime, "POST", "/api/v1/items", { title: "queued" }, bearer(user.accessToken));
+    const before = await countPendingDeliveries(runtime.db);
+    expect(before.webhooks).toBe(1);
+    const dropped = await discardPendingDeliveries(runtime.db);
+    expect(dropped).toEqual(before);
+    expect(await countPendingDeliveries(runtime.db)).toEqual({ webhooks: 0, mail: 0 });
+  });
+});
+
+describe("L9: database constraint errors are client errors", () => {
+  test("unique and restrict violations return 409, not 500", async () => {
+    const yaml = MINI_YAML.replace(
+      "  items:\n",
+      `  codes:
+    fields:
+      code: { type: text, unique: true, required: true }
+    policies:
+      read: public
+      create: public
+      update: admin
+      delete: admin
+  items:
+`,
+    );
+    const runtime = await started(yaml);
+    expect((await j(runtime, "POST", "/api/v1/codes", { code: "A1" })).status).toBe(201);
+    const dupe = await j(runtime, "POST", "/api/v1/codes", { code: "A1" });
+    expect(dupe.status).toBe(409);
+    expect(dupe.json.error.code).toBe("conflict");
+
+    const admin = (await j(runtime, "POST", "/api/v1/auth/first-admin", ADMIN)).json.data;
+    const member = (await signup(runtime, "owner2@x.test")).json.data;
+    await j(runtime, "POST", "/api/v1/items", { title: "kept" }, bearer(member.accessToken));
+    const removed = await j(runtime, "DELETE", `/api/v1/users/${member.user.id}`, undefined, bearer(admin.accessToken));
+    expect(removed.status).toBe(409);
+    expect(removed.json.error.message).toMatch(/still reference/);
+  });
+});

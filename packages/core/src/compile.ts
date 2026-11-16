@@ -371,6 +371,7 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
     },
     corsOrigins: parseCorsOrigins(runtime.cors?.origins, env),
     hooksPath: runtime.hooks,
+    apiDocs: parseApiDocs(runtime.apiDocs, env, production),
     appUrl: parseAppUrl(env, parsePort(runtime.port, env)),
     webhooksRetainDays: parseWebhookRetainDays(runtime.webhooks?.retainDays, env),
     mailRetainDays: parseMailRetainDays(runtime.mail?.retainDays, env),
@@ -981,6 +982,9 @@ export function deserializeAst(raw: string): SchemaAST {
   if (!parsed.runtime.trustProxy) {
     parsed.runtime.trustProxy = { kind: "none" };
   }
+  if (!parsed.runtime.apiDocs) {
+    parsed.runtime.apiDocs = "admin";
+  }
   if (!parsed.runtime.appUrl) {
     parsed.runtime.appUrl = `http://127.0.0.1:${parsed.runtime.port}`;
   }
@@ -1039,4 +1043,20 @@ function compileEntityRateLimit(raw: Partial<Record<ActionName, RawRateLimit>>):
     }
   }
   return out;
+}
+
+/** BAKORIN_API_DOCS wins over runtime.apiDocs. Production defaults to admin only. */
+function parseApiDocs(
+  value: "public" | "admin" | undefined,
+  env: Record<string, string | undefined>,
+  production: boolean,
+): "public" | "admin" {
+  const fromEnv = (env.BAKORIN_API_DOCS ?? "").trim().toLowerCase();
+  if (fromEnv === "public" || fromEnv === "admin") {
+    return fromEnv;
+  }
+  if (fromEnv) {
+    throw new SchemaError(`BAKORIN_API_DOCS must be public or admin, not ${JSON.stringify(env.BAKORIN_API_DOCS)}`);
+  }
+  return value ?? (production ? "admin" : "public");
 }

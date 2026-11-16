@@ -13,7 +13,7 @@ Every entity in `app.yaml` gets a REST resource under `/api/v1/<entity>`. Polici
 | PATCH | `/api/v1/<entity>/:id` | Update |
 | DELETE | `/api/v1/<entity>/:id` | Delete |
 
-Responses wrap results in `data`. Errors look like `{ "error": { "code": "...", "message": "..." } }`.
+Responses wrap results in `data`. Errors look like `{ "error": { "code": "...", "message": "..." } }`. A duplicate value on a `unique` field answers 409 `conflict`, and so does deleting a record that `restrict` relations still point at.
 
 ## Listing
 
@@ -102,4 +102,4 @@ bakorin typegen -o ../web/src/bakorin.gen.ts
 
 ## OpenAPI
 
-The live OpenAPI 3 document is at `GET /api/v1/openapi.json`. Swagger UI is bundled (no CDN) at `/docs` and `/api/v1/docs`. Try it out uses the admin session token when you are signed in, or a pasted bearer token.
+The live OpenAPI 3 document is at `GET /api/v1/openapi.json`. Swagger UI is bundled (no CDN) at `/docs` and `/api/v1/docs`. Try it out uses the admin session token when you are signed in, or a pasted bearer token. In production the spec is admin only by default, so sign in to the admin in the same browser first. Set `runtime.apiDocs: public` (or `BAKORIN_API_DOCS=public`) to publish it. `bakorin dev` serves it to everyone.

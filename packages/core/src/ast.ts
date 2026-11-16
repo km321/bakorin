@@ -171,6 +171,8 @@ export interface RuntimeAST {
   backups: BackupRuntimeAST;
   corsOrigins: string[];
   hooksPath?: string;
+  /** Who can read /api/v1/openapi.json: everyone, or admins only (the production default). */
+  apiDocs: "public" | "admin";
   appUrl: string;
   webhooksRetainDays: number;
   mailRetainDays: number;

@@ -13,8 +13,9 @@ Commands:
   typegen [-o file]   Write bakorin.gen.ts
   schema [--format mermaid|json]  Print the schema as Mermaid or JSON
   backup [dir]        Consistent snapshot (SQLite VACUUM INTO) plus portable export
-  restore <dir|file.tar.gz> [--dry-run]
+  restore <dir|file.tar.gz> [--dry-run] [--discard-pending]
                       Verify checksums, back up current data, then restore.
+                      --discard-pending drops queued mail and webhooks from the backup.
                       --dry-run only verifies and shows what would change
   migrate [--plan] [--allow-destructive <code>]
                       Show or apply schema changes. Removals need the code
@@ -50,7 +51,7 @@ Prints the schema graph from `app.yaml`. See [Schema visualizer](/docs/schema/).
 
 ## backup, restore, export, import
 
-See [Backup and restore](/docs/backups/). `restore` accepts a backup folder or a `.tar.gz` downloaded from the admin, `--dry-run` to only verify, and `--no-backup` to skip the safety backup.
+See [Backup and restore](/docs/backups/). `restore` accepts a backup folder or a `.tar.gz` downloaded from the admin, `--dry-run` to only verify, `--no-backup` to skip the safety backup, and `--discard-pending` to drop mail and webhooks that were still queued in the backup.
 
 ## migrate
 

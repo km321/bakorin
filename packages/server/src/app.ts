@@ -13,6 +13,7 @@ import { tokenCutoff } from "./auth/refresh.ts";
 import { createAccountRoutes } from "./auth/account.ts";
 import { createMailer, mailFrom } from "./mail/create.ts";
 import { issueSetupTokenIfNeeded, seedAdminOrLog } from "./auth/seed.ts";
+import { constraintFailure } from "./db/errors.ts";
 import { createCrudRouter } from "./crud/router.ts";
 import { createFileRoutes } from "./files/routes.ts";
 import { createLocalFileStore, createS3FileStore, type FileStore } from "./files/store.ts";
@@ -150,6 +151,10 @@ export async function createRuntime(options: {
       return error.getResponse();
     }
     const requestId = c.get("requestId");
+    const constraint = constraintFailure(error, c.req.method);
+    if (constraint) {
+      return c.json({ error: { code: constraint.code, message: constraint.message, requestId } }, constraint.status);
+    }
     monitor.captureError(error, {
       requestId,
       method: c.req.method,
@@ -168,7 +173,8 @@ export async function createRuntime(options: {
         ctx.json({ error: { code: "payload_too_large", message: `request body is larger than ${max} bytes` } }, 413),
     })(c, next);
   });
-  app.use("*", cors(corsOptions(ast.runtime.corsOrigins)));
+  // Read the origins per request so a dev reload of app.yaml or CORS_ORIGINS applies.
+  app.use("*", (c, next) => cors(corsOptions(context.ast.runtime.corsOrigins))(c, next));
   app.use("*", securityHeaders());
   app.use("*", async (c, next) => {
     c.set("app", context);
@@ -229,12 +235,17 @@ export async function createRuntime(options: {
     context,
     async reload(source: string) {
       const next = compileAppYaml(source, { env });
+      assertProductionCors(next, env);
       validateMailTemplates(projectDir, next.mail);
       validateBrandingFiles(projectDir, next.branding);
       logBrandingWarnings(next.branding);
       await migrateToSchema(context.db, next, migrationOptions(next, context.db, context.files, projectDir, env));
       context.ast = next;
-      context.hooks = await loadHooks(projectDir, next.runtime.hooksPath);
+      const previousRoutes = context.hooks.routes;
+      context.hooks = await loadHooks(projectDir, next.runtime.hooksPath, { fresh: true });
+      if (context.hooks.routes && String(context.hooks.routes) !== String(previousRoutes)) {
+        console.warn("[bakorin] hooks.ts routes() changed: restart bakorin dev to register new custom routes");
+      }
       console.log(`[bakorin] reloaded schema for ${next.appName}`);
     },
     async close() {

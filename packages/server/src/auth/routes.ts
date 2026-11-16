@@ -6,7 +6,7 @@ import { signAccessToken, verifyAccessToken } from "./jwt.ts";
 import { issueRefreshToken, revokeAllForUser, revokeToken, rotateRefreshToken } from "./refresh.ts";
 import { rateLimit } from "./rate-limit.ts";
 import { runVerifyHook } from "../hooks/verify.ts";
-import { clearLockout, getLockout, recordFailedLogin } from "./lockout.ts";
+import { clearLockout, getLockout, lockoutKey, recordFailedLogin } from "./lockout.ts";
 import { writeAudit } from "../audit/log.ts";
 import { authTokenValid, retireAuthTokens } from "./tokens.ts";
 import { publicRow } from "../crud/validate.ts";
@@ -17,6 +17,14 @@ import { createFirstAdmin, hasAdmin } from "./seed.ts";
 import { commitChange, recordChange } from "../events/record.ts";
 import type { ChangeEvent } from "@bakorin/core";
 
+
+let dummyHash: Promise<string> | null = null;
+
+/** An argon2 hash of a random value, so unknown identities cost the same as known ones. */
+function dummyPasswordHash(): Promise<string> {
+  dummyHash ??= hashPassword(crypto.randomUUID());
+  return dummyHash;
+}
 
 export function createAuthRoutes(): Hono {
   const app = new Hono();
@@ -231,19 +239,27 @@ export function createAuthRoutes(): Hono {
     const identityRaw = String(body[ctx.ast.auth.identityField] ?? "").trim();
     const identity = identityField?.type === "email" ? identityRaw.toLowerCase() : identityRaw;
     const password = String(body[ctx.ast.auth.passwordField] ?? "");
-    const lock = await getLockout(ctx.db, identity);
+    const lockKey = lockoutKey(identity, ip);
+    const lock = await getLockout(ctx.db, lockKey);
     if (lock.locked) {
       await writeAudit(ctx.db, { action: "failed_login", entity: entity.name, ip, meta: { identity, reason: "locked" } });
       return c.json({ error: { code: "locked", message: `account locked until ${lock.until}` } }, 429);
     }
     const row = await ctx.db.selectFrom(entity.name).selectAll().where(ctx.ast.auth.identityField, "=", identity).executeTakeFirst();
     if (!row) {
+      // Same work and the same answers as a wrong password, so timing and lockouts
+      // do not reveal which identities have accounts.
+      await verifyPassword(password, await dummyPasswordHash());
+      const next = await recordFailedLogin(ctx.db, lockKey);
       await writeAudit(ctx.db, { action: "failed_login", entity: entity.name, ip, meta: { identity, reason: "unknown" } });
+      if (next.locked) {
+        return c.json({ error: { code: "locked", message: `account locked until ${next.until}` } }, 429);
+      }
       return c.json({ error: { code: "unauthenticated", message: "invalid credentials" } }, 401);
     }
     const ok = await verifyPassword(password, String(row[ctx.ast.auth.passwordField] ?? ""));
     if (!ok) {
-      const next = await recordFailedLogin(ctx.db, identity);
+      const next = await recordFailedLogin(ctx.db, lockKey);
       await writeAudit(ctx.db, {
         action: "failed_login",
         actorId: String(row.id),
@@ -261,7 +277,7 @@ export function createAuthRoutes(): Hono {
     if (ctx.ast.auth.requireVerifiedEmail && user.emailVerified !== true) {
       return c.json({ error: { code: "email_unverified", message: "verify your email before signing in" } }, 403);
     }
-    await clearLockout(ctx.db, identity);
+    await clearLockout(ctx.db, lockKey);
     const role = String(user[ctx.ast.auth.roleField]);
     const accessToken = await signAccessToken(
       { sub: String(user.id), role, ent: entity.name },

@@ -135,6 +135,7 @@ Optional white label for the admin, `/docs`, and system emails. Leave it out to 
 | `cors.origins` | | Allowed origins. `CORS_ORIGINS` overrides it |
 | `trustProxy` | `false` | `true` or a hop count, or a list of proxy CIDRs. `TRUST_PROXY` overrides it. See [Client IP and proxies](/docs/configuration/#client-ip-and-proxies) |
 | `hooks` | `./hooks.ts` | Path to the hooks module |
+| `apiDocs` | `admin` in production, `public` in dev | Who can read `/api/v1/openapi.json`. `BAKORIN_API_DOCS` overrides it |
 
 ## auth
 
