@@ -43,7 +43,7 @@ Password hashes and any field marked `secret: true` are stripped from `before` a
 | `content-type` | `application/json` |
 | `x-bakorin-event` | `entity.op`, e.g. `leads.create` |
 | `x-bakorin-delivery` | Stable outbox id. Retries reuse it. |
-| `x-bakorin-timestamp` | ISO-8601 time when the row was enqueued |
+| `x-bakorin-timestamp` | ISO-8601 time of this attempt. Each retry gets a fresh timestamp and signature |
 | `x-bakorin-signature` | `sha256=<hex>` when `secret` is set |
 
 ## Signature verification

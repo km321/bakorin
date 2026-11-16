@@ -137,6 +137,14 @@ describe("account emails go through the mail outbox", () => {
       body: JSON.stringify({ token, password: "new-password-1" }),
     });
     expect(reset.status).toBe(200);
+    // A password reset rejects access tokens issued before it, so the old one is now dead.
+    expect((await client(runtime, ids.member).fetch("/api/v1/auth/me")).status).toBe(401);
+    const login = await http.fetch("/api/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email: "member@studio.test", password: "new-password-1" }),
+    });
+    expect(login.status).toBe(200);
+    ids.member = ((await login.json()) as { data: { accessToken: string } }).data.accessToken;
   });
 
   test("the admin delivery log labels system emails and never returns a token", async () => {

@@ -13,6 +13,7 @@ export const LEASE_TABLE = "_bakorin_leases";
 export const AUDIT_TABLE = "_bakorin_audit";
 export const WEBHOOK_OUTBOX_TABLE = "_bakorin_webhook_outbox";
 export const MAIL_OUTBOX_TABLE = "_bakorin_mail_outbox";
+export const TOKEN_CUTOFF_TABLE = "_bakorin_token_cutoffs";
 
 export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): Promise<void> {
   const text = "text";
@@ -41,6 +42,20 @@ export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): P
   await sql
     .raw(`create index if not exists _bakorin_refresh_user_idx on ${REFRESH_TABLE} (user_id)`)
     .execute(db);
+  await sql
+    .raw(
+      `create table if not exists ${TOKEN_CUTOFF_TABLE} (
+        user_id ${text} primary key,
+        not_before ${int} not null
+      )`,
+    )
+    .execute(db);
+  const refreshColumns = await tableColumns(db, dialect, REFRESH_TABLE);
+  for (const column of ["rotated_at", "successor"]) {
+    if (!refreshColumns.has(column)) {
+      await sql.raw(`alter table ${REFRESH_TABLE} add column ${column} ${text}`).execute(db);
+    }
+  }
   await sql
     .raw(
       `create table if not exists ${AUTH_TOKENS_TABLE} (

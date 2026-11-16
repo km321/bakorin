@@ -130,6 +130,27 @@ export async function postOnce(
   }
 }
 
+/**
+ * Each attempt gets a fresh x-bakorin-timestamp and signature, so a retry hours
+ * later still passes a receiver's 5 minute replay window. x-bakorin-delivery
+ * stays the same across attempts for deduplication.
+ */
+export function signForSend(
+  stored: Record<string, string>,
+  payload: string,
+  secret: string | undefined,
+  now: Date = new Date(),
+): Record<string, string> {
+  const headers = { ...stored };
+  if (!secret) {
+    return headers;
+  }
+  const timestamp = now.toISOString();
+  headers["x-bakorin-timestamp"] = timestamp;
+  headers["x-bakorin-signature"] = `sha256=${signWebhookPayload(secret, timestamp, payload)}`;
+  return headers;
+}
+
 function hookForRow(ast: SchemaAST, row: Record<string, unknown>): WebhookAST | undefined {
   const id = typeof row.webhook_id === "string" ? row.webhook_id : "";
   return ast.webhooks.find((hook) => hook.id === id);
@@ -204,7 +225,7 @@ async function attemptClaimedRow(db: BakorinDb, ast: SchemaAST, row: Record<stri
   const hook = hookForRow(ast, row);
   const timeoutMs = hook?.timeoutMs ?? WEBHOOK_DEFAULT_TIMEOUT_MS;
   const maxAttempts = hook?.maxAttempts ?? WEBHOOK_DEFAULT_MAX_ATTEMPTS;
-  const headers = JSON.parse(String(row.headers)) as Record<string, string>;
+  const headers = signForSend(JSON.parse(String(row.headers)) as Record<string, string>, String(row.payload), hook?.secret);
   const result = await postOnce(String(row.url), String(row.payload), headers, timeoutMs);
   const attempts = Number(row.attempts) + 1;
   if (result.ok) {

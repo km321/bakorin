@@ -41,7 +41,7 @@ GET /api/v1/leads?filter[status]=new&sort=-createdAt&limit=20&offset=0
 | `eq` | Equal (default) |
 | `neq` | Not equal |
 | `gt`, `gte`, `lt`, `lte` | Comparisons |
-| `like` | Contains (`%value%`) |
+| `like` | Contains, ignoring case. `%` and `_` in the value are matched literally. Same on SQLite and Postgres |
 | `in` | Comma separated list |
 | `isnull` | Null check |
 
@@ -79,6 +79,10 @@ GET /api/v1/tasks?expand=leadId,ownerId
 Expansion respects the related entity's `read` policy. If the caller cannot read the related row, its value is `null`. Secret fields on the related entity are removed.
 
 `expand` works on the get route too: `GET /api/v1/tasks/:id?expand=leadId`.
+
+## Relation checks
+
+When a client sets a relation field, the target record must exist and the caller must be able to read it under the target entity's `read` policy. Otherwise the write gets 400 with the same message either way, so record ids cannot be probed. Values set by a `before*` hook, and ownership fields stamped from the session, are not checked.
 
 ## Delete behavior
 

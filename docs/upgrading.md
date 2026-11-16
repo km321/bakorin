@@ -50,3 +50,25 @@ When `auth.signup` is left out, it follows the auth entity's `create` policy: `p
 **What changed.** A throwing `after*` hook used to crash `bakorin start` through an unhandled rejection. Now it is logged with the request id, reported to error monitoring (Sentry, `ERROR_WEBHOOK_URL`, and the Status page), and the server keeps serving. The CLI also catches stray unhandled rejections and exceptions, and shuts down cleanly on SIGTERM, letting in flight requests finish for up to 10 seconds.
 
 **What to do.** Watch the Status page or your error monitor for hook errors that used to show up as restarts.
+
+## More fixes from the review (Medium findings)
+
+**Refresh tokens.** Rotation is now atomic. Parallel refreshes with the same token (for example Next.js server components) all get the same new token for 30 seconds instead of minting extra sessions or logging the user out. Reuse after 30 seconds still revokes every session for that user. Nothing to do.
+
+**Access tokens are checked per request.** Each authenticated request loads the user. A deleted user is signed out at once, the role comes from the database rather than the token, and password resets, role changes, and logout with `all: true` reject access tokens issued before them. This adds one primary key lookup per authenticated request. Nothing to do.
+
+**Reserved entity names.** Entities named `auth`, `audit`, `backups`, `docs`, `files`, `mail`, `status`, `webhooks`, or `_meta` are refused, because those paths were already taken by built in routes. If you have one, rename it in `app.yaml` with `renameFrom` before you upgrade.
+
+**Webhook retries are re-signed.** Each attempt sends a fresh `x-bakorin-timestamp` and signature, so retries after an outage pass the 5 minute replay check. `x-bakorin-delivery` is unchanged across attempts. Nothing to do.
+
+**Migrations are transactional on Postgres.** A failed migration now rolls back every statement and the stored schema. Nothing to do.
+
+**The `like` filter is the same everywhere.** It ignores case on Postgres too, and `%` and `_` in the search text are literal. If you relied on case sensitive `like` on Postgres, or on passing your own wildcards, adjust those queries.
+
+**Request body limits.** JSON bodies over 1 MiB and uploads over `files.maxBytes` plus 64 KiB get 413. If you raise `files.maxBytes`, restart the server so the listener limit follows.
+
+**Safer file downloads.** Only images, PDF, and plain text open inline. Other types, including HTML and SVG, download as sandboxed attachments. Uploads that claim to be PNG, JPEG, GIF, WebP, or PDF must match their bytes.
+
+**Relation checks.** A client can only set a relation to a record it can read. A missing or unreadable id gets 400 instead of 500 or 201. If a front end lets users link to records they cannot read (for example assigning a task to a teammate while `users.read` is `[owner(id), admin]`), widen that entity's `read` policy or set the field from a `before*` hook.
+
+**Consistent Postgres backups.** Portable backups read every table in one snapshot, in batches. Nothing to do.

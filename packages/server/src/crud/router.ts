@@ -31,6 +31,48 @@ function actorRef(actor: Actor | null): { id: string; role: string } | null {
   return actor ? { id: actor.id, role: actor.role } : null;
 }
 
+/**
+ * A client may only point a relation at a record it can read. A missing id and an
+ * unreadable one get the same 400, so ids cannot be probed. Fields set only by a
+ * before hook, and ownership fields stamped from the session, are trusted.
+ */
+async function assertRelationTargets(
+  ctx: AppContext,
+  entity: EntityAST,
+  raw: Record<string, unknown>,
+  body: Record<string, unknown>,
+  actor: Actor | null,
+): Promise<string | null> {
+  for (const field of entity.fields) {
+    const to = field.relation?.to;
+    if (field.type !== "relation" || !to || !(field.name in raw)) {
+      continue;
+    }
+    const value = body[field.name];
+    if (value === undefined || value === null || value === "") {
+      continue;
+    }
+    if (actor && to === ctx.ast.auth.entity && String(value) === actor.id) {
+      continue;
+    }
+    const target = ctx.ast.entityMap[to];
+    if (!target) {
+      continue;
+    }
+    const decision = decideAccess(ctx.ast, target, "read", actor);
+    let found = false;
+    if (decision.allow) {
+      let qb = ctx.db.selectFrom(target.name).select("id").where("id", "=", String(value));
+      qb = applyAccess(qb as never, decision) as typeof qb;
+      found = Boolean(await qb.executeTakeFirst());
+    }
+    if (!found) {
+      return `${field.name} must reference a ${target.name} record that exists and that you can read`;
+    }
+  }
+  return null;
+}
+
 function entityOr404(ast: SchemaAST, name: string): EntityAST | null {
   return ast.entityMap[name] ?? null;
 }
@@ -214,6 +256,10 @@ export function createCrudRouter(): Hono {
     body = await runBefore(ctx, entity.name, "beforeCreate", body, actor);
     body = stripDisallowedWrites(ctx.ast, entity, body, actor);
     body = stripClientOwnership(entity, ctx.ast.auth.entity, body, actor, decision.bypass, "create");
+    const badRelation = await assertRelationTargets(ctx, entity, raw, body, actor);
+    if (badRelation) {
+      return jsonError("invalid_input", badRelation, 400);
+    }
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
     const insert: Record<string, unknown> = { id, createdAt: now, updatedAt: now };
@@ -272,6 +318,10 @@ export function createCrudRouter(): Hono {
     body = await runBefore(ctx, entity.name, "beforeUpdate", body, actor, before);
     body = stripDisallowedWrites(ctx.ast, entity, body, actor);
     body = stripClientOwnership(entity, ctx.ast.auth.entity, body, actor, decision.bypass, "update");
+    const badRelation = await assertRelationTargets(ctx, entity, raw, body, actor);
+    if (badRelation) {
+      return jsonError("invalid_input", badRelation, 400);
+    }
     const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
     for (const [key, value] of Object.entries(body)) {
       const field = entity.fieldMap[key];

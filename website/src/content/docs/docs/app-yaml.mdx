@@ -151,7 +151,7 @@ When `requireVerifiedEmail` is on, Bakorin adds an `emailVerified` boolean to th
 
 ## entities
 
-Each key under `entities` is an entity name. Names must start with a letter or underscore and contain only letters, digits, and underscores (64 characters max).
+Each key under `entities` is an entity name. Names must start with a letter or underscore and contain only letters, digits, and underscores (64 characters max). `auth`, `audit`, `backups`, `docs`, `files`, `mail`, `status`, `webhooks`, and `_meta` are reserved because Bakorin serves built in routes at those paths under `/api/v1`.
 
 | Key | Notes |
 |---|---|

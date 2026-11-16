@@ -38,6 +38,7 @@ export {
   deserializeAst,
   isDevMode,
   parseTrustProxy,
+  RESERVED_ENTITY_NAMES,
   serializeAst,
   weakJwtSecretReason,
   DEFAULT_ALLOWED_MIME_TYPES,

@@ -227,3 +227,86 @@ describe.skipIf(!url)("postgres: idle connection errors", () => {
     await admin.db.destroy();
   });
 });
+
+describe.skipIf(!url)("postgres: review mediums", () => {
+  const ENV = { JWT_SECRET: "test-jwt-secret-0123456789-abcdefghijklmnop" };
+
+  test("M6: a failed migration rolls back DDL and the stored schema", async () => {
+    const { compileAppYaml } = await import("@bakorin/core");
+    const { migrateToSchema } = await import("@bakorin/server");
+    const { postgresYaml } = await import("./helpers.ts");
+    const runtime = await bootPostgres();
+    try {
+      const before = (await runtime.db.selectFrom("_bakorin_meta").select("value").where("key", "=", "schema_ast").executeTakeFirstOrThrow()).value;
+      const { openPostgres } = await import("../packages/server/src/db/dialects.ts");
+      const direct = openPostgres(runtime.ast.runtime.postgresUrl!);
+      await direct.pool.query(`create function bakorin_boom() returns trigger language plpgsql as $$ begin if new.key = 'applied_at' then raise exception 'boom'; end if; return new; end $$`);
+      await direct.pool.query(`create trigger boom before update on _bakorin_meta for each row execute function bakorin_boom()`);
+      const dbUrl = runtime.ast.runtime.postgresUrl!;
+      const v2 = compileAppYaml(`${postgresYaml(dbUrl)}  extras:\n    fields:\n      label: { type: text }\n`, { env: ENV });
+      await expect(migrateToSchema(runtime.db, v2)).rejects.toThrow(/boom/);
+      const exists = await direct.pool.query(`select count(*) as n from information_schema.tables where table_name = 'extras'`);
+      expect(Number(exists.rows[0].n)).toBe(0);
+      await direct.db.destroy();
+      const after = (await runtime.db.selectFrom("_bakorin_meta").select("value").where("key", "=", "schema_ast").executeTakeFirstOrThrow()).value;
+      expect(after).toBe(before);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test("M7: like matches case insensitively and treats % literally", async () => {
+    const runtime = await bootPostgres();
+    try {
+      const signup = await client(runtime).fetch("/api/v1/auth/signup", { method: "POST", body: JSON.stringify({ email: "l@x.test", password: "password123", name: "L" }) });
+      const token = (await signup.json()).data.accessToken;
+      const api = client(runtime, token);
+      for (const title of ["Hello World", "50% off", "plain"]) {
+        await api.fetch("/api/v1/items", { method: "POST", body: JSON.stringify({ title }) });
+      }
+      const hello = await (await api.fetch("/api/v1/items?filter[title][like]=hello")).json();
+      expect(hello.data.map((row: any) => row.title)).toEqual(["Hello World"]);
+      const percent = await (await api.fetch(`/api/v1/items?filter[title][like]=${encodeURIComponent("%")}`)).json();
+      expect(percent.data.map((row: any) => row.title)).toEqual(["50% off"]);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test("M1: parallel refreshes on separate connections mint one successor", async () => {
+    const runtime = await bootPostgres();
+    try {
+      const signup = await client(runtime).fetch("/api/v1/auth/signup", { method: "POST", body: JSON.stringify({ email: "r@x.test", password: "password123", name: "R" }) });
+      const data = (await signup.json()).data;
+      const results = await Promise.all(
+        [1, 2, 3, 4].map(() => client(runtime).fetch("/api/v1/auth/refresh", { method: "POST", body: JSON.stringify({ refreshToken: data.refreshToken }) })),
+      );
+      expect(results.map((res) => res.status)).toEqual([200, 200, 200, 200]);
+      const tokens = new Set(await Promise.all(results.map(async (res) => (await res.json()).data.refreshToken)));
+      expect(tokens.size).toBe(1);
+      const live = await runtime.db.selectFrom("_bakorin_refresh_tokens").selectAll().where("user_id", "=", data.user.id).where("revoked_at", "is", null).execute();
+      expect(live.length).toBe(1);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  test("M3 and M13 on Postgres: deleted user's token and cross user relations", async () => {
+    const runtime = await bootPostgres();
+    try {
+      const first = await client(runtime).fetch("/api/v1/auth/first-admin", { method: "POST", body: JSON.stringify({ email: "boss@x.test", password: "password123", name: "Boss" }) });
+      const admin = (await first.json()).data;
+      const signup = await client(runtime).fetch("/api/v1/auth/signup", { method: "POST", body: JSON.stringify({ email: "u@x.test", password: "password123", name: "U" }) });
+      const user = (await signup.json()).data;
+      const adminItem = await client(runtime, admin.accessToken).fetch("/api/v1/items", { method: "POST", body: JSON.stringify({ title: "admin", ownerId: admin.user.id }) });
+      expect(adminItem.status).toBe(201);
+      // A non admin cannot claim a missing user id as owner (bad id gives 400 or 403, never 500).
+      const bad = await client(runtime, user.accessToken).fetch("/api/v1/items", { method: "POST", body: JSON.stringify({ title: "x", ownerId: crypto.randomUUID() }) });
+      expect([400, 403]).toContain(bad.status);
+      await client(runtime, admin.accessToken).fetch(`/api/v1/users/${user.user.id}`, { method: "DELETE" });
+      expect((await client(runtime, user.accessToken).fetch("/api/v1/auth/me")).status).toBe(401);
+    } finally {
+      await runtime.close();
+    }
+  });
+});

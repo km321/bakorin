@@ -39,7 +39,9 @@ When you leave it out, Bakorin follows the auth entity's `create` policy: `publi
 
 - Access tokens are HS256 JWTs that last 15 minutes by default (`runtime.jwt.accessTtlSeconds`).
 - Refresh tokens last 30 days by default, are stored as SHA-256 hashes, and rotate on every use.
-- Reusing a revoked refresh token revokes every token for that user.
+- Rotation is atomic: when the same refresh token is sent several times at once (parallel server renders), every request gets the same new token, so no extra session is created.
+- For 30 seconds after a rotation, the old token keeps returning that same new token. After that, reusing it counts as theft and revokes every token for that user.
+- Every request checks the access token against the database. A deleted user is signed out at once, a role change takes effect on the next request, and password resets, role changes, and logout with `all: true` reject access tokens issued before them.
 - Role changes and password resets revoke that user's refresh tokens.
 - Passwords are hashed with argon2id.
 
@@ -49,7 +51,7 @@ Set `auth.requireVerifiedEmail: true` to block login until `POST /auth/verify-em
 
 ## Password reset
 
-`forgot-password` always returns 200 so it cannot be used to discover accounts. Reset links expire after 1 hour.
+`forgot-password` always returns 200, so its response does not reveal whether an account exists. Reset links expire after 1 hour.
 
 ## Invites
 
@@ -67,7 +69,7 @@ The Astro and Next.js starters include these pages. These emails go through the 
 
 ## Lockout and rate limits
 
-Login, signup, forgot password, and resend verification are rate limited per client IP in the database, so limits survive restarts and are shared across instances. The client IP is the socket address unless you trust a proxy with `TRUST_PROXY` (see [Configuration](/docs/configuration/#client-ip-and-proxies)). A client sent `X-Forwarded-For` header is ignored by default, so rotating it does not get around the limits. After 5 failed logins for a known identity, Bakorin locks that account with exponential backoff capped at 60 minutes. Unknown emails still return 401 so the lock table cannot be used to enumerate accounts.
+Login, signup, forgot password, and resend verification are rate limited per client IP in the database, so limits survive restarts and are shared across instances. The client IP is the socket address unless you trust a proxy with `TRUST_PROXY` (see [Configuration](/docs/configuration/#client-ip-and-proxies)). A client sent `X-Forwarded-For` header is ignored by default, so rotating it does not get around the limits. After 5 failed logins for a known identity, Bakorin locks that account with exponential backoff capped at 60 minutes. Unknown emails return 401. Signup still answers 409 for an email that already has an account, and a locked account answers differently from an unknown one, so do not rely on Bakorin to hide which emails have accounts.
 
 ## First admin
 

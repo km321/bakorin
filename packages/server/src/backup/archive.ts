@@ -97,24 +97,31 @@ export async function exportPortable(options: {
   await mkdir(join(dest, "data"), { recursive: true });
   await copyProjectFiles(options.projectDir, dest);
   await writeFile(join(dest, "schema.ast.json"), serializeAst(options.ast));
-  for (const name of options.ast.order) {
-    const entity = options.ast.entityMap[name]!;
-    const rows = await options.db.selectFrom(entity.name).selectAll().execute();
-    const lines = rows.map((row) => JSON.stringify(decodeRow(entity, row as Record<string, unknown>)));
-    await writeFile(join(dest, "data", `${entity.name}.ndjson`), lines.length ? `${lines.join("\n")}\n` : "");
+  const dialect = options.ast.runtime.dialect;
+  const dumpAll = async (db: BakorinDb) => {
+    for (const name of options.ast.order) {
+      const entity = options.ast.entityMap[name]!;
+      await dumpTable(db, dialect, entity.name, join(dest, "data", `${entity.name}.ndjson`), (row) => decodeRow(entity, row));
+    }
+    for (const table of PORTABLE_SYSTEM_TABLES) {
+      await dumpTable(db, dialect, table, join(dest, "data", `${table}.ndjson`), (row) => row);
+    }
+    await dumpTable(db, dialect, META_TABLE, join(dest, "data", `${META_TABLE}.ndjson`), (row) => row);
+  };
+  if (dialect === "postgres") {
+    // One read only snapshot for every table, so a backup taken under write
+    // load never has a child row without its parent.
+    await options.db
+      .transaction()
+      .setIsolationLevel("repeatable read")
+      .execute(async (trx) => {
+        await sql`set transaction read only`.execute(trx);
+        await dumpAll(trx);
+      });
+  } else {
+    // SQLite: one transaction on the shared connection gives the same snapshot.
+    await options.db.transaction().execute(dumpAll);
   }
-  for (const table of PORTABLE_SYSTEM_TABLES) {
-    const rows = await options.db.selectFrom(table).selectAll().execute();
-    await writeFile(
-      join(dest, "data", `${table}.ndjson`),
-      rows.length ? `${rows.map((row) => JSON.stringify(row)).join("\n")}\n` : "",
-    );
-  }
-  const astMeta = await options.db.selectFrom(META_TABLE).selectAll().execute();
-  await writeFile(
-    join(dest, "data", `${META_TABLE}.ndjson`),
-    astMeta.length ? `${astMeta.map((row) => JSON.stringify(row)).join("\n")}\n` : "",
-  );
   await options.files.copyAllTo(join(dest, "files"));
   await writeManifest(dest, {
     format: BACKUP_FORMAT,
@@ -126,6 +133,34 @@ export async function exportPortable(options: {
   });
   await sealBackup(dest);
   return dest;
+}
+
+/** Rows per batch when exporting, so large tables are never held in memory at once. */
+export const EXPORT_BATCH_ROWS = 1000;
+
+async function dumpTable(
+  db: BakorinDb,
+  dialect: "sqlite" | "postgres",
+  table: string,
+  path: string,
+  map: (row: Record<string, unknown>) => Record<string, unknown>,
+): Promise<void> {
+  const writer = Bun.file(path).writer();
+  const order = dialect === "postgres" ? sql`ctid` : sql`rowid`;
+  try {
+    for (let offset = 0; ; offset += EXPORT_BATCH_ROWS) {
+      const rows = await db.selectFrom(table).selectAll().orderBy(order).limit(EXPORT_BATCH_ROWS).offset(offset).execute();
+      for (const row of rows) {
+        writer.write(`${JSON.stringify(map(row as Record<string, unknown>))}\n`);
+      }
+      await writer.flush();
+      if (rows.length < EXPORT_BATCH_ROWS) {
+        break;
+      }
+    }
+  } finally {
+    await writer.end();
+  }
 }
 
 async function readNdjson(path: string): Promise<Record<string, unknown>[]> {

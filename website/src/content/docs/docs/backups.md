@@ -18,7 +18,7 @@ bakorin import ./portable               # load that archive into the current dia
 Every backup is one folder named after the time it was taken (UTC), for example `2026-11-15T22-11-05.250Z`.
 
 - **SQLite:** a consistent `VACUUM INTO` copy of `app.db`, `app.yaml`, `hooks.ts`, the `branding/` folder, uploads, and a portable export in `portable/`.
-- **Postgres:** the portable format: one NDJSON file per entity, the schema, uploads, and the project files.
+- **Postgres:** the portable format: one NDJSON file per entity, the schema, uploads, and the project files. Every table is read inside one read only `repeatable read` transaction, so the backup is a consistent snapshot even under write load, and rows are written in batches of 1000 so large tables are not held in memory.
 
 The portable export carries records, users, file metadata, the mail and webhook outbox, the audit log, and the list of soft dropped fields. It leaves out sessions, one time auth tokens, rate limits, lockouts, and leases on purpose: they are short lived, and restoring them would bring old sessions back. People sign in again after a restore.
 

@@ -405,8 +405,8 @@ Point `APP_URL` at that front end so reset, verify, and invite emails use its or
 - SQL is parameterized. Table and column names come from the AST and are identifier-checked.
 - The auth role field is admin-only on every write path. Non-admin create/update that includes it returns 403. `/auth/signup` strips it instead and always assigns the non-admin default.
 - Owner ids cannot be taken over: sending `ownerId` (or another ownership field) as a non-admin returns 403. Omitting it still stamps the session user. `owner()` row filters keep another user's row at 404.
-- Password updates through CRUD require an admin, or the current password for self-service, and are always hashed. Role changes and password resets revoke that user's refresh tokens.
-- Passwords are argon2id. Access JWTs last 15 minutes. Refresh tokens are stored as SHA-256 hashes, rotated on use, and reuse of a revoked token revokes every token for that user.
+- Password updates through CRUD require an admin, or the current password for self-service, and are always hashed. Role changes and password resets revoke that user's refresh tokens and reject access tokens issued before them. Every request checks the token's user in the database.
+- Passwords are argon2id. Access JWTs last 15 minutes. Refresh tokens are stored as SHA-256 hashes, rotated on use, and reuse of a rotated token more than 30 seconds later revokes every token for that user (parallel refreshes within 30 seconds share one new token).
 - Auth routes are rate limited per client IP in the database (shared across instances). The IP is the socket address unless `TRUST_PROXY` trusts a proxy, so a client sent `X-Forwarded-For` cannot dodge the limits. Five failed logins lock that account with backoff.
 - `bakorin start` refuses to boot without a strong `JWT_SECRET`. The development secret is only for `bakorin dev` and tests. Set `JWT_SECRET_PREVIOUS` while rotating.
 - Signup follows `auth.signup` (`open`, `invite`, or `closed`). Users' email, role, and `emailVerified` are private to the user and admins.

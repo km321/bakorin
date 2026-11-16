@@ -255,7 +255,9 @@ export function createAuthRoutes(): Hono {
     if (!presented) {
       return c.json({ error: { code: "invalid_input", message: "refreshToken is required" } }, 400);
     }
-    const rotated = await rotateRefreshToken(ctx.db, presented, ctx.ast.runtime.refreshTtlSeconds);
+    const rotated = await rotateRefreshToken(ctx.db, presented, ctx.ast.runtime.refreshTtlSeconds, {
+      secrets: [ctx.ast.runtime.jwtSecret, ctx.ast.runtime.jwtSecretPrevious],
+    });
     if (!rotated) {
       return c.json({ error: { code: "unauthenticated", message: "invalid refresh token" } }, 401);
     }

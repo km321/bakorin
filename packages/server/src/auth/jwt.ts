@@ -4,6 +4,8 @@ export interface AccessClaims {
   sub: string;
   role: string;
   ent: string;
+  /** Issued at in milliseconds. Set on verified tokens (from `iat_ms`, or `iat` for older tokens). */
+  issuedAtMs?: number;
 }
 
 export async function signAccessToken(
@@ -12,7 +14,7 @@ export async function signAccessToken(
   ttlSeconds: number,
 ): Promise<string> {
   const key = new TextEncoder().encode(secret);
-  return new SignJWT({ role: claims.role, ent: claims.ent })
+  return new SignJWT({ role: claims.role, ent: claims.ent, iat_ms: Date.now() })
     .setProtectedHeader({ alg: "HS256" })
     .setSubject(claims.sub)
     .setIssuedAt()
@@ -34,7 +36,7 @@ export async function verifyAccessToken(
       if (!payload.sub || typeof payload.role !== "string" || typeof payload.ent !== "string") {
         throw new Error("invalid token");
       }
-      return { sub: payload.sub, role: payload.role, ent: payload.ent };
+      return { sub: payload.sub, role: payload.role, ent: payload.ent, issuedAtMs: typeof payload.iat_ms === "number" ? payload.iat_ms : typeof payload.iat === "number" ? payload.iat * 1000 : undefined };
     } catch (error) {
       lastError = error;
     }

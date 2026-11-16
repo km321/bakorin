@@ -381,6 +381,17 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
  * runtime.trustProxy (or TRUST_PROXY): false or 0 for none, a hop count such as 1,
  * true for one hop, or a list of proxy CIDRs. The env var wins so a host can set it.
  */
+/** API prefixes Bakorin mounts under /api/v1. An entity with one of these names would be shadowed. */
+export const RESERVED_ENTITY_NAMES = ["auth", "audit", "backups", "docs", "files", "mail", "status", "webhooks", "_meta"] as const;
+
+function assertEntityRouteFree(name: string): void {
+  if ((RESERVED_ENTITY_NAMES as readonly string[]).includes(name.toLowerCase())) {
+    throw new SchemaError(
+      `entity name "${name}" is reserved because /api/v1/${name.toLowerCase()} is a built in route. Rename the entity, for example to "${name}_items" or a more specific name.`,
+    );
+  }
+}
+
 export function parseTrustProxy(
   yaml: boolean | number | string[] | undefined,
   env: Record<string, string | undefined>,
@@ -841,6 +852,7 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
 
   const entities: EntityAST[] = Object.entries(yaml.entities).map(([name, raw]) => {
     assertIdent(name, "entity");
+    assertEntityRouteFree(name);
     const compiledFields = Object.entries(raw.fields).map(([fieldName, fieldRaw]) =>
       compileField(name, fieldName, asFieldObject(fieldRaw)),
     );

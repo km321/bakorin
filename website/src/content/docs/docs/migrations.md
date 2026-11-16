@@ -93,4 +93,4 @@ The same goes for making a field required: give it a `default`, or fill every ro
 
 ## Several servers
 
-Migrations take a lock (an advisory lock on Postgres, `begin immediate` on SQLite), so only one instance applies a change. The plan is checked again inside the lock.
+Each migration runs in one transaction with a lock (a transaction scoped advisory lock on Postgres, `begin immediate` on SQLite), so only one instance applies a change and the plan is checked again inside the lock. If any statement fails, every change in the plan and the stored schema roll back together, on both databases.

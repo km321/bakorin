@@ -291,24 +291,20 @@ async function applyDeprecate(db: BakorinDb, plan: DiffPlan): Promise<void> {
   }
 }
 
-async function withLock<T>(db: BakorinDb, dialect: DialectName, fn: () => Promise<T>): Promise<T> {
-  if (dialect === "postgres") {
-    await sql`select pg_advisory_lock(hashtext('bakorin.migrate'))`.execute(db);
-    try {
-      return await fn();
-    } finally {
-      await sql`select pg_advisory_unlock(hashtext('bakorin.migrate'))`.execute(db);
+/**
+ * Runs the whole migration in one transaction on one connection. Postgres has
+ * transactional DDL, so a failure partway rolls back every statement and the
+ * stored schema together. The transaction scoped advisory lock keeps two
+ * instances from migrating at once and is released on commit or rollback.
+ * SQLite takes `begin immediate` through the driver.
+ */
+async function withLock<T>(db: BakorinDb, dialect: DialectName, fn: (trx: BakorinDb) => Promise<T>): Promise<T> {
+  return db.transaction().execute(async (trx) => {
+    if (dialect === "postgres") {
+      await sql`select pg_advisory_xact_lock(hashtext('bakorin.migrate'))`.execute(trx);
     }
-  }
-  await sql`begin immediate`.execute(db);
-  try {
-    const result = await fn();
-    await sql`commit`.execute(db);
-    return result;
-  } catch (error) {
-    await sql`rollback`.execute(db);
-    throw error;
-  }
+    return fn(trx);
+  });
 }
 
 export async function migrateToSchema(db: BakorinDb, ast: SchemaAST, options: MigrateOptions = {}): Promise<MigrateResult> {
@@ -320,17 +316,17 @@ export async function migrateToSchema(db: BakorinDb, ast: SchemaAST, options: Mi
   if (first.previous && touchesExistingData(first.plan) && options.beforeChange) {
     backup = await options.beforeChange(first.previous, first.plan);
   }
-  return withLock(db, ast.runtime.dialect, async () => {
-    const stored = await metaGet(db, "schema_ast");
+  return withLock(db, ast.runtime.dialect, async (trx) => {
+    const stored = await metaGet(trx, "schema_ast");
     const previous = stored ? deserializeAst(stored) : null;
     const plan = diffSchemas(previous, ast);
     assertPlanApplyable(plan);
     assertConfirmed(plan, options.allowDestructive);
-    await applyAuto(db, ast.runtime.dialect, plan);
-    await applySafe(db, ast.runtime.dialect, plan);
-    await applyDeprecate(db, plan);
-    await metaSet(db, "schema_ast", serializeAst(ast));
-    await metaSet(db, "applied_at", new Date().toISOString());
+    await applyAuto(trx, ast.runtime.dialect, plan);
+    await applySafe(trx, ast.runtime.dialect, plan);
+    await applyDeprecate(trx, plan);
+    await metaSet(trx, "schema_ast", serializeAst(ast));
+    await metaSet(trx, "applied_at", new Date().toISOString());
     return { plan, applied: true, ...(backup ? { backup } : {}) };
   });
 }

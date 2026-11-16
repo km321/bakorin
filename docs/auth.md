@@ -21,7 +21,7 @@ Access tokens are HS256 JWTs (15 minutes by default). Refresh tokens are SHA-256
 
 ## Lockout and rate limits
 
-Login, signup, forgot-password, and resend-verification are rate limited per client IP in the database (they survive restarts and multiple instances). The client IP is the socket address unless `TRUST_PROXY` is set, so a client sent `X-Forwarded-For` cannot dodge the limits. After 5 failed logins for a known identity, Bakorin locks that account with exponential backoff (capped at 60 minutes). Unknown emails still return 401 so the lock table cannot be used to enumerate accounts.
+Login, signup, forgot-password, and resend-verification are rate limited per client IP in the database (they survive restarts and multiple instances). Refresh rotation is atomic with a 30 second grace window that returns the same new token to parallel requests; later reuse revokes every token for the user. Access tokens are checked against the database on every request, so deleted users, role changes, password resets, and logout everywhere take effect at once. The client IP is the socket address unless `TRUST_PROXY` is set, so a client sent `X-Forwarded-For` cannot dodge the limits. After 5 failed logins for a known identity, Bakorin locks that account with exponential backoff (capped at 60 minutes). Unknown emails still return 401 so the lock table cannot be used to enumerate accounts.
 
 ## JWT rotation
 

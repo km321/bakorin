@@ -3,10 +3,14 @@
 - Parameterized SQL. Table and column names come from the AST and are identifier-checked.
 - Auth `role` is always `writable: admin`. Signup ignores a client-supplied role.
 - Ownership fields cannot be taken over (403 if a non-admin sends `ownerId`).
-- Passwords are argon2id. Access JWTs last 15 minutes. Refresh tokens are hashed, rotated, and reuse-detected.
+- Passwords are argon2id. Access JWTs last 15 minutes. Refresh tokens are hashed, rotated atomically, and reuse more than 30 seconds after a rotation revokes every token for the user.
 - Rate limits live in the database and key on the socket address unless `TRUST_PROXY` trusts a proxy, so a client sent `X-Forwarded-For` is ignored by default. Failed logins lock the account after 5 tries with backoff.
 - `bakorin start` refuses to boot without a strong `JWT_SECRET` (32+ characters, not a placeholder). The development secret is only for `bakorin dev` and tests.
 - Signup follows `auth.signup` (`open`, `invite`, `closed`). Users' email, role, and `emailVerified` are private to the user and admins, and the default users read policy is `[owner(id), admin]`.
+- Access tokens are checked against the database per request. Refresh rotation is atomic with a 30 second grace window.
+- JSON bodies are capped at 1 MiB and uploads at `files.maxBytes` (413 above that). Active file types download as sandboxed attachments, and image or PDF uploads must match their bytes.
+- Relation fields must point at records the writer can read.
+- Entity names that would shadow built in routes (`auth`, `audit`, `backups`, `docs`, `files`, `mail`, `status`, `webhooks`, `_meta`) are refused.
 - Webhook, mail rule, and audit rows commit in the same transaction as the record change.
 - A throwing `after*` hook or a stray unhandled rejection is logged with the request id and reported, and the server keeps running.
 - Admin and docs responses set `Content-Security-Policy` (including `frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, and `Strict-Transport-Security` when the request is HTTPS (`x-forwarded-proto` or the URL).

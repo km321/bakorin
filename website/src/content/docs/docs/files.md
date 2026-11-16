@@ -45,7 +45,9 @@ curl -X POST http://127.0.0.1:4371/api/v1/files \
 }
 ```
 
-Uploads over `maxBytes` or with a type that is not allowed return 400. Signed out callers get 401.
+Uploads over `maxBytes` or with a type that is not allowed return 400. Signed out callers get 401. A PNG, JPEG, GIF, WebP, or PDF whose bytes do not match its declared type is refused with 400.
+
+Downloads of images, PDF, and plain text open inline. Every other type, including HTML and SVG, downloads as an attachment with `Content-Security-Policy: sandbox`, so an uploaded page cannot run script on your API or admin origin even with `allowedMimeTypes: ["*"]`. All downloads send `X-Content-Type-Options: nosniff`.
 
 ## Attach to a record
 

@@ -7,6 +7,9 @@ import { createChangeBus } from "./bus.ts";
 import { openPostgres, openSqlite, type BakorinDb } from "./db/dialects.ts";
 import { migrateToSchema, type MigrateOptions } from "./db/migrator.ts";
 import { createAuthRoutes, verifyAccessToken } from "./auth/routes.ts";
+import type { AccessClaims } from "./auth/jwt.ts";
+import { bodyLimit } from "hono/body-limit";
+import { tokenCutoff } from "./auth/refresh.ts";
 import { createAccountRoutes } from "./auth/account.ts";
 import { createMailer, mailFrom } from "./mail/create.ts";
 import { seedAdminOrLog } from "./auth/seed.ts";
@@ -151,6 +154,14 @@ export async function createRuntime(options: {
     console.error(`[bakorin] unhandled error (request ${requestId})`, error);
     return c.json({ error: { code: "internal", message: "Something went wrong on the server.", requestId } }, 500);
   });
+  app.use("/api/*", (c, next) => {
+    const max = requestBodyLimit(context.ast, c.req.method, new URL(c.req.url).pathname);
+    return bodyLimit({
+      maxSize: max,
+      onError: (ctx) =>
+        ctx.json({ error: { code: "payload_too_large", message: `request body is larger than ${max} bytes` } }, 413),
+    })(c, next);
+  });
   app.use("*", cors(corsOptions(ast.runtime.corsOrigins)));
   app.use("*", securityHeaders());
   app.use("*", async (c, next) => {
@@ -161,7 +172,7 @@ export async function createRuntime(options: {
     if (token) {
       try {
         const claims = await verifyAccessToken(token, context.ast.runtime.jwtSecret, context.ast.runtime.jwtSecretPrevious);
-        c.set("actor", { id: claims.sub, role: claims.role });
+        c.set("actor", await currentActor(context, claims));
       } catch {
         c.set("actor", null);
       }
@@ -291,4 +302,49 @@ function assertProductionCors(ast: SchemaAST, env: Record<string, string | undef
   throw new SchemaError(
     'CORS origin "*" is not allowed in production. Set CORS_ORIGINS to an explicit comma-separated list, or set BAKORIN_ALLOW_ANY_ORIGIN=true',
   );
+}
+
+/**
+ * Turns verified token claims into the request actor, checked against the
+ * database: a deleted user gets nothing, a demoted user gets their current role,
+ * and tokens issued before a sign out everywhere (password reset, role change,
+ * logout all) are rejected.
+ */
+async function currentActor(context: AppContext, claims: AccessClaims): Promise<{ id: string; role: string } | null> {
+  const entity = context.ast.entityMap[context.ast.auth.entity];
+  if (!entity || claims.ent !== entity.name) {
+    return null;
+  }
+  const row = await context.db
+    .selectFrom(entity.name)
+    .select(["id", context.ast.auth.roleField])
+    .where("id", "=", claims.sub)
+    .executeTakeFirst();
+  if (!row) {
+    return null;
+  }
+  const cutoff = await tokenCutoff(context.db, claims.sub);
+  if (cutoff && (claims.issuedAtMs ?? 0) < cutoff) {
+    return null;
+  }
+  return { id: claims.sub, role: String((row as Record<string, unknown>)[context.ast.auth.roleField]) };
+}
+
+/** JSON request bodies (CRUD, auth, admin) are capped at 1 MiB. */
+export const JSON_BODY_LIMIT_BYTES = 1024 * 1024;
+/** Multipart framing on top of the file itself. */
+export const UPLOAD_OVERHEAD_BYTES = 64 * 1024;
+
+/** The largest body a request may send: uploads get the file limit, everything else 1 MiB. */
+export function requestBodyLimit(ast: SchemaAST, method: string, pathname: string): number {
+  const path = pathname.replace(/\/+$/, "");
+  if (method === "POST" && path === "/api/v1/files") {
+    return ast.runtime.files.maxBytes + UPLOAD_OVERHEAD_BYTES;
+  }
+  return JSON_BODY_LIMIT_BYTES;
+}
+
+/** Bun's own ceiling, so oversized bodies are refused before they are buffered. */
+export function serverBodyLimit(ast: SchemaAST): number {
+  return Math.max(JSON_BODY_LIMIT_BYTES, ast.runtime.files.maxBytes + UPLOAD_OVERHEAD_BYTES);
 }

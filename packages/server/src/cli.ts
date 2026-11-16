@@ -15,7 +15,7 @@ import {
   schemaToJson,
   schemaToMermaid,
 } from "@bakorin/core";
-import { createFiles, loadProject, migrationOptions, openDb } from "./app.ts";
+import { createFiles, loadProject, migrationOptions, openDb, serverBodyLimit } from "./app.ts";
 import { createDebounced } from "./dev-watch.ts";
 import { applyProjectEnv } from "./env-files.ts";
 import { installProcessSafety } from "./monitor/process-safety.ts";
@@ -179,6 +179,7 @@ async function serve(mode: "dev" | "start"): Promise<void> {
       port,
       hostname,
       fetch: runtime.app.fetch,
+      maxRequestBodySize: serverBodyLimit(runtime.ast),
     });
   } catch (error) {
     console.error(`[bakorin] could not listen on ${hostname}:${port}: ${error instanceof Error ? error.message : String(error)}`);

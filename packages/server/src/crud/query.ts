@@ -1,8 +1,13 @@
-import type { SelectQueryBuilder } from "kysely";
+import { sql, type SelectQueryBuilder } from "kysely";
 import { quoteChecked, type EntityAST, type FieldAST } from "@bakorin/core";
 import { decodeValue, encodeValue } from "../db/types.ts";
 import type { BakorinDb } from "../db/dialects.ts";
 import type { AccessDecision } from "./policies-sql.ts";
+
+/** `%text%` with LIKE wildcards in the text escaped, lowercased for a case insensitive match. */
+export function likePattern(value: string): string {
+  return `%${value.toLowerCase().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
+}
 
 const OPS = new Set(["eq", "neq", "gt", "gte", "lt", "lte", "like", "in", "isnull"]);
 
@@ -88,7 +93,9 @@ export function applyFilters(
         next = next.where(filter.field, "<=", encoded);
         break;
       case "like":
-        next = next.where(filter.field, "like", `%${String(filter.value)}%`);
+        // Same on SQLite and Postgres: a case insensitive substring match where
+        // % and _ in the search text are literal characters.
+        next = next.where(sql<boolean>`lower(cast(${sql.ref(filter.field)} as text)) like ${likePattern(String(filter.value))} escape '\\'`);
         break;
       case "in":
         next = next.where(filter.field, "in", encoded as unknown[]);

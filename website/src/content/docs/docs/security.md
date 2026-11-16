@@ -7,9 +7,13 @@ description: What Bakorin does to keep a client backend safe by default.
 - The auth `role` field is admin only on every write path. `/auth/signup` ignores a client supplied role and always assigns the non admin default.
 - Ownership fields cannot be taken over. A non admin who sends `ownerId` gets 403. `owner()` row filters keep another user's row at 404.
 - Password updates through CRUD require an admin, or the current password for self service, and are always hashed with argon2id.
-- Access JWTs last 15 minutes. Refresh tokens are stored as SHA-256 hashes, rotated on use, and reuse revokes every token for that user.
+- Access JWTs last 15 minutes. Refresh tokens are stored as SHA-256 hashes, rotated atomically on use, and reuse more than 30 seconds after a rotation revokes every token for that user.
 - Auth routes are rate limited per client IP in the database. The IP is the socket address unless `TRUST_PROXY` says a proxy is in front, so a client cannot dodge limits by sending its own `X-Forwarded-For`. Five failed logins lock the account with backoff.
 - `bakorin start` refuses to boot without a `JWT_SECRET` of at least 32 characters that is not a placeholder. The built in development secret is used only by `bakorin dev` and tests. `JWT_SECRET_PREVIOUS` supports rotation and gets the same check.
+- Access tokens are checked against the database on every request: deleted users, role changes, password resets, and logout everywhere take effect at once. Refresh rotation is atomic, with a 30 second grace window for parallel requests.
+- Request bodies are capped: 1 MiB for JSON, and `files.maxBytes` plus framing for uploads. Larger bodies get 413.
+- Uploaded HTML, SVG, and other active types download as sandboxed attachments. Declared image and PDF types must match their bytes.
+- A client can only point a relation at a record it can read.
 - Signup follows `auth.signup` (`open`, `invite`, or `closed`). Apps whose users `create` policy is not public are invite only unless they opt in.
 - Ordinary users never see another user's email, role, or verification status. Those fields are private to the user and admins, and the default users read policy is `[owner(id), admin]`.
 - Webhook, mail rule, and audit rows are written in the same database transaction as the record change, so a change is never saved without them, and a failed outbox write rolls the change back.
