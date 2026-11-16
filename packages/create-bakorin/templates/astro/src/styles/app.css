@@ -172,3 +172,14 @@ button.secondary,
   border-radius: var(--radius);
   margin-bottom: 24px;
 }
+
+.live {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.list li button {
+  padding: 4px 12px;
+  font-size: 0.85rem;
+}

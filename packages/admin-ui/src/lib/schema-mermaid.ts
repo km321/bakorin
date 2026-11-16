@@ -34,6 +34,10 @@ export function metaToMermaid(meta: MetaResponse): string {
       if (!field.relation) {
         continue;
       }
+      if (field.relation.many) {
+        lines.push(`  ${ident(entity.name)} }o--o{ ${ident(field.relation.to)} : "${field.name} many"`);
+        continue;
+      }
       const onDelete = field.relation.onDelete ?? "restrict";
       lines.push(`  ${ident(entity.name)} }o--|| ${ident(field.relation.to)} : "${field.name} ${onDelete}"`);
     }

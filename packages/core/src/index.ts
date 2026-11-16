@@ -96,3 +96,4 @@ export {
   normalizeHex,
 } from "./branding.ts";
 export type { BrandingAST, BrandingPalette, RawBranding } from "./branding.ts";
+export { columnFields, isManyField, joinTableName, manyFields, MAX_LINKS_PER_FIELD } from "./relations.ts";

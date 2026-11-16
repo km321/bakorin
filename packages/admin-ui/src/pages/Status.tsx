@@ -203,6 +203,49 @@ export function Status() {
             </section>
           </div>
 
+          {report.realtime?.enabled ? (
+            <>
+              <h2 class="section-title">Realtime</h2>
+              <div class="stat-grid">
+                <section class="stat-card" aria-label="Realtime connections">
+                  <h3>Open streams</h3>
+                  <p class="stat-value">{report.realtime.connections.toLocaleString()}</p>
+                  <p class="muted">
+                    {report.realtime.users.toLocaleString()} {report.realtime.users === 1 ? "reader" : "readers"}, limit{" "}
+                    {report.realtime.maxConnections.toLocaleString()} on this instance
+                  </p>
+                </section>
+                <section class="stat-card" aria-label="Realtime broker">
+                  <h3>Broker</h3>
+                  <p class="stat-value">{report.realtime.broker === "postgres" ? "Postgres" : "In process"}</p>
+                  <p class="muted">
+                    {report.realtime.brokerHealthy ? (
+                      <span class="badge yes">Connected</span>
+                    ) : (
+                      <span class="badge status-failed">Not connected</span>
+                    )}
+                  </p>
+                </section>
+                <section class="stat-card" aria-label="Realtime events">
+                  <h3>Events</h3>
+                  <p class="stat-value">{report.realtime.eventsTotal.toLocaleString()}</p>
+                  <p class="muted">{report.realtime.deliveriesTotal.toLocaleString()} delivered since start</p>
+                </section>
+                <section class="stat-card" aria-label="Slow clients">
+                  <h3>Slow clients dropped</h3>
+                  <p class="stat-value">{report.realtime.droppedSlowTotal.toLocaleString()}</p>
+                  <p class="muted">They reconnect and resume on their own</p>
+                </section>
+              </div>
+              <p class="muted realtime-entities">
+                Live entities:{" "}
+                {report.realtime.entities
+                  .map((item) => `${item.name} (${item.mode === "ids" ? "ids only" : "full"}, ${report.realtime!.connectionsByEntity[item.name] ?? 0} open)`)
+                  .join(", ")}
+              </p>
+            </>
+          ) : null}
+
           <h2 class="section-title">Queues</h2>
           <div class="stat-grid two">
             <QueueCard title="Email" stats={report.queues.mail} />
@@ -318,6 +361,12 @@ export function Status() {
                   : "Alerts (runtime.alerts in app.yaml)"}
               </OnOff>
               <OnOff on={report.metrics}>Prometheus metrics at /metrics (METRICS_TOKEN)</OnOff>
+              <OnOff on={Boolean(report.realtime?.enabled)}>Realtime streams (realtime: true on an entity)</OnOff>
+              <OnOff on={Boolean(report.mcp?.enabled)}>
+                {report.mcp?.enabled
+                  ? `MCP dev server at /mcp${report.mcp.tokenConfigured ? " (editor token set)" : " (admin sign in token)"}`
+                  : "MCP dev server (runtime.mcp or BAKORIN_MCP)"}
+              </OnOff>
             </ul>
           </section>
         </>

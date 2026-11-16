@@ -277,8 +277,10 @@ describe("webhooks", () => {
         created_at: old,
       })
       .execute();
+    // The runtime's own dispatcher tick may run the same cleanup concurrently,
+    // so assert the outcome rather than which caller deleted the row.
     const removed = await cleanupDelivered(runtime.db, 30);
-    expect(removed).toBe(1);
+    expect(removed).toBeLessThanOrEqual(1);
     const left = await runtime.db.selectFrom(WEBHOOK_OUTBOX_TABLE).select("id").execute();
     expect(left.map((row) => row.id)).toEqual(["old-failed"]);
     await runtime.close();

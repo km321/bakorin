@@ -18,7 +18,7 @@ export interface MetaEntity {
     secret: boolean;
     writable?: "any" | "admin" | "none";
     enumValues?: string[];
-    relation?: { to: string; display?: string; onDelete?: "restrict" | "cascade" | "set_null" };
+    relation?: { to: string; display?: string; onDelete?: "restrict" | "cascade" | "set_null"; many?: boolean };
     defaultValue?: unknown;
     description?: string;
   }>;
@@ -378,6 +378,22 @@ export interface StatusReport {
   alerts: { email: boolean; webhook: boolean; backupMaxAgeHours: number | null; checkIntervalMinutes: number };
   logging: "json" | "pretty" | "off";
   metrics: boolean;
+  /** Absent on servers older than the realtime release. */
+  realtime?: {
+    enabled: boolean;
+    entities: Array<{ name: string; mode: "full" | "ids" }>;
+    broker: string;
+    brokerHealthy: boolean;
+    connections: number;
+    connectionsByEntity: Record<string, number>;
+    users: number;
+    maxConnections: number;
+    eventsTotal: number;
+    deliveriesTotal: number;
+    droppedSlowTotal: number;
+    lastEventId: number;
+  };
+  mcp?: { enabled: boolean; tokenConfigured: boolean };
 }
 
 export async function getStatus(): Promise<StatusReport> {

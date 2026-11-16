@@ -29,6 +29,8 @@ export interface FieldDraft {
   values: string[];
   to: string;
   onDelete: "" | (typeof ON_DELETE)[number];
+  /** Relation only: a list of ids (many to many) instead of one. */
+  many: boolean;
   secret: boolean;
   description: string;
   writable: Writable;
@@ -49,6 +51,8 @@ export interface EntityDraft {
   policies: Record<PolicyAction, string[]>;
   /** Optional request limits per action. An empty limit means no limit for that action. */
   rateLimit: Record<PolicyAction, RateLimitDraft>;
+  /** Realtime change events: off (empty), full records, or ids only. */
+  realtime: "" | "full" | "ids";
 }
 
 export interface RateLimitDraft {
@@ -163,6 +167,7 @@ export function emptyField(name = "", type: BuilderFieldType = "text"): FieldDra
     values: [],
     to: "",
     onDelete: "",
+    many: false,
     secret: false,
     description: "",
     writable: "any",
@@ -186,6 +191,7 @@ export function emptyEntity(name = ""): EntityDraft {
     indexes: [],
     policies: emptyPolicies(),
     rateLimit: emptyRateLimits(),
+    realtime: "",
   };
 }
 
@@ -245,6 +251,7 @@ function fieldFromRaw(name: string, raw: unknown, warnings: string[], where: str
   field.values = strList(obj.values);
   field.to = str(obj.to);
   field.onDelete = (ON_DELETE as readonly string[]).includes(str(obj.onDelete)) ? (str(obj.onDelete) as FieldDraft["onDelete"]) : "";
+  field.many = field.type === "relation" && obj.many === true;
   field.secret = obj.secret === true;
   field.description = str(obj.description);
   field.renameFrom = str(obj.renameFrom);
@@ -315,6 +322,7 @@ export function importAppYaml(source: string): ImportResult {
     entity.display = str(raw.display);
     entity.description = str(raw.description);
     entity.auth = raw.auth === true;
+    entity.realtime = raw.realtime === true || raw.realtime === "full" ? "full" : raw.realtime === "ids" ? "ids" : "";
     entity.fields = Object.entries(record(raw.fields)).map(([fieldName, value]) =>
       fieldFromRaw(fieldName, value, warnings, `entities.${name}.fields.${fieldName}`),
     );
@@ -385,7 +393,8 @@ function fieldToRaw(field: FieldDraft): Record<string, unknown> {
   if (field.type === "enum" || field.values.length > 0) out.values = [...field.values];
   if (value !== undefined) out.default = value;
   if (field.type === "relation" || field.to) out.to = field.to;
-  if (field.type === "relation" && field.onDelete) out.onDelete = field.onDelete;
+  if (field.type === "relation" && field.many) out.many = true;
+  else if (field.type === "relation" && field.onDelete) out.onDelete = field.onDelete;
   if (field.secret) out.secret = true;
   if (field.writable !== "any") out.writable = field.writable;
   if (field.renameFrom) out.renameFrom = field.renameFrom;
@@ -527,6 +536,8 @@ export function toAppObject(config: BuilderConfig): Record<string, unknown> {
       limits[action] = out;
     }
     if (Object.keys(limits).length > 0) raw.rateLimit = limits;
+    if (entity.realtime === "full") raw.realtime = true;
+    else if (entity.realtime === "ids") raw.realtime = "ids";
     entities[entity.name] = raw;
   }
   out.entities = entities;

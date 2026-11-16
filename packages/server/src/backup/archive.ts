@@ -1,7 +1,7 @@
 import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { sql } from "kysely";
-import { BRANDING_DIR, serializeAst, type SchemaAST } from "@bakorin/core";
+import { BRANDING_DIR, joinTableName, manyFields, serializeAst, type SchemaAST } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
 import {
   AUDIT_TABLE,
@@ -103,6 +103,9 @@ export async function exportPortable(options: {
       const entity = options.ast.entityMap[name]!;
       await dumpTable(db, dialect, entity.name, join(dest, "data", `${entity.name}.ndjson`), (row) => decodeRow(entity, row));
     }
+    for (const table of linkTables(options.ast)) {
+      await dumpTable(db, dialect, table, join(dest, "data", `${table}.ndjson`), (row) => row);
+    }
     for (const table of PORTABLE_SYSTEM_TABLES) {
       await dumpTable(db, dialect, table, join(dest, "data", `${table}.ndjson`), (row) => row);
     }
@@ -133,6 +136,11 @@ export async function exportPortable(options: {
   });
   await sealBackup(dest);
   return dest;
+}
+
+/** Join tables of many to many fields, in schema order. */
+export function linkTables(ast: SchemaAST): string[] {
+  return ast.order.flatMap((name) => manyFields(ast.entityMap[name]!).map((field) => joinTableName(name, field.name)));
 }
 
 /** Rows per batch when exporting, so large tables are never held in memory at once. */
@@ -204,6 +212,11 @@ export async function importPortable(options: {
       .filter((row) => Object.keys(row).length > 0);
     tables.push({ name: entity.name, rows: encoded });
   }
+  // Many to many links, restored after both sides exist.
+  const links: Array<{ name: string; rows: Record<string, unknown>[] }> = [];
+  for (const table of linkTables(options.ast)) {
+    links.push({ name: table, rows: await readNdjson(join(src, "data", `${table}.ndjson`)) });
+  }
   const systemTables: Array<{ name: string; rows: Record<string, unknown>[] }> = [];
   for (const table of PORTABLE_SYSTEM_TABLES) {
     const path = join(src, "data", `${table}.ndjson`);
@@ -214,12 +227,23 @@ export async function importPortable(options: {
   }
   // One transaction: a failed import leaves the database as it was.
   await options.db.transaction().execute(async (trx) => {
+    for (const { name } of links) {
+      await trx.deleteFrom(name).execute();
+    }
     for (const { name } of [...tables].reverse()) {
       await trx.deleteFrom(name).execute();
     }
     for (const { name, rows } of tables) {
       for (const row of rows) {
         await trx.insertInto(name).values(row).execute();
+      }
+    }
+    for (const { name, rows } of links) {
+      for (const row of rows) {
+        await trx
+          .insertInto(name)
+          .values({ source_id: row.source_id, target_id: row.target_id, position: Number(row.position ?? 0) })
+          .execute();
       }
     }
     for (const { name, rows } of systemTables) {

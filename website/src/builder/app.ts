@@ -276,6 +276,22 @@ function appSection(): HTMLElement {
         }),
       ),
       control(
+        "runtime.mcp",
+        "MCP dev server",
+        select(
+          runtime.mcp === true || (runtime.mcp as { enabled?: boolean } | undefined)?.enabled === true ? "on" : "off",
+          [
+            ["off", "Off (default)"],
+            ["on", "On at /mcp (read only, admin token)"],
+          ],
+          (v) => {
+            if (v === "on") runtime.mcp = true;
+            else delete runtime.mcp;
+          },
+        ),
+        { hint: "Lets an AI editor read your schema, policies and a few sample records." },
+      ),
+      control(
         "runtime.cors",
         "Allowed origins (CORS)",
         textInput(cors, (v) => {
@@ -478,6 +494,30 @@ function fieldCard(entity: EntityDraft, i: number, field: FieldDraft, j: number)
     );
     typeSpecific.push(
       control(
+        `${at}.many`,
+        "How many",
+        select(
+          field.many ? "many" : "one",
+          [
+            ["one", "One record"],
+            ["many", "Many records (many: true)"],
+          ],
+          (v) => {
+            field.many = v === "many";
+            if (field.many) {
+              field.onDelete = "";
+              field.unique = false;
+              field.index = false;
+              field.defaultValue = "";
+            }
+          },
+          true,
+        ),
+        { hint: field.many ? "A list of ids in a hidden join table. Links go away when either record is deleted." : undefined },
+      ),
+    );
+    if (!field.many) typeSpecific.push(
+      control(
         `${at}.onDelete`,
         "When the linked record is deleted",
         select(
@@ -527,6 +567,7 @@ function fieldCard(entity: EntityDraft, i: number, field: FieldDraft, j: number)
           if (field.type !== "relation") {
             field.to = "";
             field.onDelete = "";
+            field.many = false;
           }
           field.defaultValue = "";
         }, true),
@@ -765,6 +806,20 @@ function entityCard(entity: EntityDraft, i: number): HTMLElement {
       ),
       control(`entities.${i}.description`, "Description", textInput(entity.description, (v) => (entity.description = v)), { wide: true }),
       checkbox(`entities.${i}.auth`, "This entity stores accounts (auth: true)", entity.auth, (v) => (entity.auth = v), true),
+      control(
+        `entities.${i}.realtime`,
+        "Realtime",
+        select(
+          entity.realtime,
+          [
+            ["", "Off"],
+            ["full", "Live changes with the record (realtime: true)"],
+            ["ids", "Live changes, ids only (realtime: ids)"],
+          ],
+          (v) => (entity.realtime = v as EntityDraft["realtime"]),
+        ),
+        { hint: "Clients subscribe over server sent events. Each reader only gets what they may read." },
+      ),
       h(
         "fieldset",
         { class: "fields", "data-target": `entities.${i}.fields` },
@@ -1224,9 +1279,13 @@ function renderDiagram(ast: SchemaAST | undefined, stale: boolean): void {
   const graph = buildSchemaGraph(ast);
   const hidden = new Set(["createdAt", "updatedAt"]);
   const entities = graph.entities.map((entity) => ({ ...entity, fields: entity.fields.filter((field) => !hidden.has(field.name)) }));
-  const layout = layoutSchema(graph.layers, entities, graph.relations);
+  const layout = layoutSchema(
+    graph.layers,
+    entities,
+    graph.relations.map((rel) => (rel.many ? { ...rel, onDelete: "many" } : rel)),
+  );
   const desc = graph.relations.length
-    ? graph.relations.map((rel) => `${rel.from}.${rel.field} points to ${rel.to} (on delete ${rel.onDelete})`).join(". ")
+    ? graph.relations.map((rel) => (rel.many ? `${rel.from}.${rel.field} links to many ${rel.to}` : `${rel.from}.${rel.field} points to ${rel.to} (on delete ${rel.onDelete})`)).join(". ")
     : "No relations yet.";
   const svg = s(
     "svg",

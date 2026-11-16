@@ -2,6 +2,7 @@ import type { MetaEntity } from "../lib/api.ts";
 import { listRelated, signFile, uploadFile } from "../lib/api.ts";
 import { relatedLabel } from "../lib/label.ts";
 import { SearchSelect } from "./SearchSelect.tsx";
+import { MultiSelect } from "./MultiSelect.tsx";
 import { useEffect, useState } from "preact/hooks";
 
 interface Props {
@@ -158,6 +159,20 @@ export function FieldInput({ field, value, invalid, onChange }: Props) {
         </div>
       );
     case "relation":
+      if (field.relation?.many) {
+        return (
+          <MultiSelect
+            name={field.name}
+            value={Array.isArray(value) ? (value as string[]) : []}
+            options={options.map((row) => ({
+              id: String(row.id),
+              label: relatedLabel(row, field.relation?.display),
+            }))}
+            placeholder="Search to link records"
+            onChange={onChange}
+          />
+        );
+      }
       return (
         <SearchSelect
           name={field.name}

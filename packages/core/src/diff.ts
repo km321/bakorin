@@ -144,7 +144,7 @@ export function describeChange(change: DiffChange): string {
     case "add_entity":
       return `add entity ${change.entity.name}`;
     case "add_field":
-      return `add field ${change.entity}.${change.field.name} (${change.field.type})`;
+      return `add field ${change.entity}.${change.field.name} (${change.field.type}${change.field.relation?.many ? ", many" : ""})`;
     case "add_index":
       return `add index on ${change.entity} (${change.fields.join(", ")})`;
     case "rename_entity":
@@ -291,6 +291,14 @@ function compareField(entity: string, from: FieldAST, to: FieldAST, plan: DiffPl
       tier: "abort",
       kind: "breaking",
       message: `cannot change ${entity}.${from.name} from ${from.type} to ${to.type}. Add a new field, copy the data in a hook or script, then remove the old one`,
+    });
+    return;
+  }
+  if (from.type === "relation" && to.type === "relation" && Boolean(from.relation?.many) !== Boolean(to.relation?.many)) {
+    plan.abort.push({
+      tier: "abort",
+      kind: "breaking",
+      message: `cannot switch ${entity}.${from.name} between a single relation and many: true. Add a new field, copy the links in a script, then remove the old one`,
     });
     return;
   }

@@ -37,6 +37,7 @@ const fieldObject = z
     values: z.array(z.string().min(1)).min(1).optional(),
     to: ident.optional(),
     onDelete: z.enum(["restrict", "cascade", "set_null"]).optional(),
+    many: z.boolean().optional(),
     renameFrom: ident.optional(),
     secret: z.boolean().optional(),
     description: z.string().optional(),

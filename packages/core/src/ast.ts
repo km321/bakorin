@@ -44,6 +44,11 @@ export interface FieldAST {
   relation?: {
     to: string;
     onDelete: OnDelete;
+    /**
+     * Many to many: the field holds a list of ids, stored in a hidden join table
+     * (see joinTableName). Links are removed when either record is deleted.
+     */
+    many?: boolean;
   };
   renameFrom?: string;
   secret: boolean;

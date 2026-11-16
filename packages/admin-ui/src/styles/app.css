@@ -674,6 +674,35 @@ textarea:focus {
   background: var(--bg-hover);
 }
 
+.multiselect .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0 0 6px;
+  padding: 0;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 4px 2px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg-hover);
+  font-size: 0.875rem;
+}
+
+.chip button {
+  border: 0;
+  background: transparent;
+  padding: 0 6px;
+  line-height: 1.4;
+  cursor: pointer;
+  color: inherit;
+}
+
 .file-preview {
   display: flex;
   align-items: center;

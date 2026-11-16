@@ -15,7 +15,10 @@ import {
   type EntityAST,
   type FieldAST,
   type SchemaAST,
+  columnFields,
+  joinTableName,
 } from "@bakorin/core";
+import { ensureLinkTables, renameLinkTable } from "../crud/links.ts";
 import type { BakorinDb } from "./dialects.ts";
 import { DEPRECATED_TABLE, ensureSystemTables, metaGet, metaSet } from "./system.ts";
 import { sqlType } from "./types.ts";
@@ -108,8 +111,8 @@ function literal(dialect: DialectName, value: unknown): string {
 }
 
 function createTableSql(dialect: DialectName, entity: EntityAST): string {
-  const cols = entity.fields.map((field) => columnSql(dialect, field));
-  for (const field of entity.fields) {
+  const cols = columnFields(entity).map((field) => columnSql(dialect, field));
+  for (const field of columnFields(entity)) {
     if (field.relation) {
       const action =
         field.relation.onDelete === "set_null"
@@ -161,7 +164,7 @@ async function columnExists(db: BakorinDb, dialect: DialectName, table: string, 
 
 async function addIndexes(db: BakorinDb, entity: EntityAST): Promise<void> {
   for (const field of entity.fields) {
-    if (field.name === "id") {
+    if (field.name === "id" || field.relation?.many) {
       continue;
     }
     if (field.unique) {
@@ -204,6 +207,11 @@ async function applyAuto(db: BakorinDb, dialect: DialectName, plan: DiffPlan): P
         break;
       }
       case "add_field": {
+        if (change.field.relation?.many) {
+          // No column: the join table is created by ensureLinkTables.
+          await db.deleteFrom(DEPRECATED_TABLE).where("entity", "=", change.entity).where("field", "=", change.field.name).execute();
+          break;
+        }
         if (await columnExists(db, dialect, change.entity, change.field.name)) {
           // A field that was removed earlier and is added back: the column and its data are still there.
           await db
@@ -245,10 +253,14 @@ async function applyAuto(db: BakorinDb, dialect: DialectName, plan: DiffPlan): P
   }
 }
 
-async function applySafe(db: BakorinDb, dialect: DialectName, plan: DiffPlan): Promise<void> {
+async function applySafe(db: BakorinDb, dialect: DialectName, plan: DiffPlan, ast: SchemaAST): Promise<void> {
   for (const change of plan.safe) {
     switch (change.kind) {
       case "rename_field": {
+        if (ast.entityMap[change.entity]?.fieldMap[change.to]?.relation?.many) {
+          await renameLinkTable(db, dialect, joinTableName(change.entity, change.from), joinTableName(change.entity, change.to));
+          break;
+        }
         if (dialect === "sqlite") {
           await sql
             .raw(
@@ -266,6 +278,12 @@ async function applySafe(db: BakorinDb, dialect: DialectName, plan: DiffPlan): P
       }
       case "rename_entity": {
         await sql.raw(`alter table ${quoteChecked(change.from)} rename to ${quoteChecked(change.to)}`).execute(db);
+        for (const field of ast.entityMap[change.to]?.fields ?? []) {
+          if (field.relation?.many) {
+            const oldName = field.renameFrom ?? field.name;
+            await renameLinkTable(db, dialect, joinTableName(change.from, oldName), joinTableName(change.to, oldName));
+          }
+        }
         break;
       }
       default:
@@ -323,8 +341,9 @@ export async function migrateToSchema(db: BakorinDb, ast: SchemaAST, options: Mi
     assertPlanApplyable(plan);
     assertConfirmed(plan, options.allowDestructive);
     await applyAuto(trx, ast.runtime.dialect, plan);
-    await applySafe(trx, ast.runtime.dialect, plan);
+    await applySafe(trx, ast.runtime.dialect, plan, ast);
     await applyDeprecate(trx, plan);
+    await ensureLinkTables(trx, ast);
     await metaSet(trx, "schema_ast", serializeAst(ast));
     await metaSet(trx, "applied_at", new Date().toISOString());
     return { plan, applied: true, ...(backup ? { backup } : {}) };

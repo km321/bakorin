@@ -193,7 +193,18 @@ export function buildFrame(ast: SchemaAST, entity: EntityAST, row: RealtimeRow, 
   }
   const payload: Record<string, unknown> = { entity: entity.name, op, id: row.recordId, at: row.at };
   if (op !== "delete" && entity.realtime === "full" && row.after) {
-    payload.record = visibleRow(ast, entity, row.after, actor);
+    const record = visibleRow(ast, entity, row.after, actor);
+    // Linked ids are only sent when anyone may read the linked entity (or to
+    // admins). Otherwise the field is left out and clients refetch the record,
+    // which filters ids per reader. Keeps one shared frame per policy group.
+    if (!(actor && actor.role === ast.auth.adminRole)) {
+      for (const field of entity.fields) {
+        if (!field.relation?.many) continue;
+        const target = ast.entityMap[field.relation.to];
+        if (!target?.policies.read.some((policy) => policy.kind === "public")) delete record[field.name];
+      }
+    }
+    payload.record = record;
   }
   return encoder.encode(`id: ${row.seq}\nevent: change\ndata: ${JSON.stringify(payload)}\n\n`);
 }

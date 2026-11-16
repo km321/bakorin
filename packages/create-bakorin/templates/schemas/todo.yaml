@@ -56,6 +56,8 @@ entities:
     label: Task
     plural: Tasks
     display: title
+    # Live updates for the starter's task list (owner only, like reads).
+    realtime: true
     fields:
       title: { type: text, required: true }
       done: { type: boolean, default: false }

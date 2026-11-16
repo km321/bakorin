@@ -1,4 +1,4 @@
-import { buildSchemaGraph, type EntityAST, type FieldAST, type SchemaAST } from "@bakorin/core";
+import { buildSchemaGraph, MAX_LINKS_PER_FIELD, type EntityAST, type FieldAST, type SchemaAST } from "@bakorin/core";
 
 function jsonSchemaForField(field: FieldAST, write: boolean): Record<string, unknown> {
   let schema: Record<string, unknown>;
@@ -28,8 +28,12 @@ function jsonSchemaForField(field: FieldAST, write: boolean): Record<string, unk
       schema = { type: "string", format: "date-time" };
       break;
     case "file":
-    case "relation":
       schema = { type: "string", format: "uuid" };
+      break;
+    case "relation":
+      schema = field.relation?.many
+        ? { type: "array", items: { type: "string", format: "uuid" }, uniqueItems: true, maxItems: MAX_LINKS_PER_FIELD }
+        : { type: "string", format: "uuid" };
       break;
     case "text":
       schema = { type: "string" };
@@ -143,6 +147,15 @@ function listParameters(entity: EntityAST): unknown[] {
       continue;
     }
     const detail = field.description ?? `${entity.label} ${field.name}`;
+    if (field.relation?.many) {
+      params.push({
+        name: `filter[${field.name}][has]`,
+        in: "query",
+        description: `${detail}. Records linked to this ${field.relation.to} id (or any of a comma separated list).`,
+        schema: { type: "string" },
+      });
+      continue;
+    }
     params.push({
       name: `filter[${field.name}]`,
       in: "query",
@@ -1096,6 +1109,7 @@ export function metaPayload(ast: SchemaAST): Record<string, unknown> {
             ? {
                 to: field.relation.to,
                 onDelete: field.relation.onDelete,
+                many: Boolean(field.relation.many),
                 display: ast.entityMap[field.relation.to]?.display ?? "id",
               }
             : undefined,

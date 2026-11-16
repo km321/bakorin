@@ -1,5 +1,5 @@
 import { sql, type SelectQueryBuilder } from "kysely";
-import { quoteChecked, type EntityAST, type FieldAST } from "@bakorin/core";
+import { joinTableName, quoteChecked, type EntityAST, type FieldAST } from "@bakorin/core";
 import { decodeValue, encodeValue } from "../db/types.ts";
 import type { BakorinDb } from "../db/dialects.ts";
 import type { AccessDecision } from "./policies-sql.ts";
@@ -9,7 +9,7 @@ export function likePattern(value: string): string {
   return `%${value.toLowerCase().replace(/[\\%_]/g, (ch) => `\\${ch}`)}%`;
 }
 
-const OPS = new Set(["eq", "neq", "gt", "gte", "lt", "lte", "like", "in", "isnull"]);
+const OPS = new Set(["eq", "neq", "gt", "gte", "lt", "lte", "like", "in", "isnull", "has"]);
 
 export interface ListQuery {
   limit: number;
@@ -29,7 +29,12 @@ export function parseListQuery(entity: EntityAST, search: URLSearchParams, optio
   for (const part of sortRaw.split(",").map((item) => item.trim()).filter(Boolean)) {
     const dir = part.startsWith("-") ? "desc" : "asc";
     const field = part.replace(/^-/, "");
-    if (!entity.fieldMap[field] || entity.fieldMap[field]?.secret || (!privateAllowed && entity.fieldMap[field]?.private)) {
+    if (
+      !entity.fieldMap[field] ||
+      entity.fieldMap[field]?.secret ||
+      entity.fieldMap[field]?.relation?.many ||
+      (!privateAllowed && entity.fieldMap[field]?.private)
+    ) {
       continue;
     }
     sort.push({ field, dir });
@@ -45,11 +50,13 @@ export function parseListQuery(entity: EntityAST, search: URLSearchParams, optio
     if (!field || field.secret || (!privateAllowed && field.private)) {
       continue;
     }
-    const op = match[2] ?? "eq";
-    if (!OPS.has(op)) {
+    const many = Boolean(field.relation?.many);
+    // Many to many fields filter with has (one id, or a comma list for any of them).
+    const op = match[2] ?? (many ? "has" : "eq");
+    if (!OPS.has(op) || (many ? op !== "has" : op === "has")) {
       continue;
     }
-    filters.push({ field: fieldName, op, value: op === "in" ? value.split(",") : value });
+    filters.push({ field: fieldName, op, value: op === "in" || op === "has" ? value.split(",").filter(Boolean) : value });
   }
   const expand = (search.get("expand") ?? "")
     .split(",")
@@ -69,6 +76,17 @@ export function applyFilters(
   let next = qb;
   for (const filter of query.filters) {
     const field = entity.fieldMap[filter.field] as FieldAST;
+    if (filter.op === "has") {
+      const ids = (filter.value as string[]).slice(0, 100);
+      const table = joinTableName(entity.name, field.name);
+      next =
+        ids.length === 0
+          ? next
+          : next.where(
+              sql<boolean>`${sql.ref("id")} in (select source_id from ${sql.table(table)} where target_id in (${sql.join(ids)}))`,
+            );
+      continue;
+    }
     const encoded = Array.isArray(filter.value)
       ? filter.value.map((item) => encodeValue(dialect, field, item))
       : encodeValue(dialect, field, filter.value);
@@ -145,7 +163,13 @@ export async function expandRows(
     if (!target) {
       continue;
     }
-    const ids = [...new Set(rows.map((row) => row[fieldName]).filter((id): id is string => typeof id === "string"))];
+    const ids = [
+      ...new Set(
+        rows
+          .flatMap((row) => (Array.isArray(row[fieldName]) ? (row[fieldName] as unknown[]) : [row[fieldName]]))
+          .filter((id): id is string => typeof id === "string"),
+      ),
+    ];
     if (ids.length === 0) {
       expansions[fieldName] = {};
       continue;
@@ -177,6 +201,12 @@ export async function expandRows(
     const $expand: Record<string, unknown> = {};
     for (const fieldName of expand) {
       const id = row[fieldName];
+      if (entity.fieldMap[fieldName]?.relation?.many) {
+        // Many to many: the linked records the reader may see, in link order.
+        const list = Array.isArray(id) ? (id as string[]) : [];
+        $expand[fieldName] = list.map((item) => expansions[fieldName]?.[item]).filter(Boolean);
+        continue;
+      }
       $expand[fieldName] = typeof id === "string" ? (expansions[fieldName]?.[id] ?? null) : null;
     }
     return { ...row, $expand };

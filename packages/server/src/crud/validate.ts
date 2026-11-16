@@ -1,4 +1,4 @@
-import type { EntityAST, FieldAST, SchemaAST } from "@bakorin/core";
+import { MAX_LINKS_PER_FIELD, type EntityAST, type FieldAST, type SchemaAST } from "@bakorin/core";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -17,6 +17,30 @@ function asString(value: unknown): string {
 }
 
 export function validateValue(field: FieldAST, value: unknown, writing: boolean): unknown {
+  if (field.relation?.many && value !== undefined) {
+    // Many to many: a list of ids (null clears the links).
+    if (value !== null && !Array.isArray(value)) {
+      throw new InputError(field.name, `${field.name} must be a list of ids`);
+    }
+    const ids: string[] = [];
+    const seen = new Set<string>();
+    for (const item of value ?? []) {
+      if (typeof item !== "string" || item.trim() === "") {
+        throw new InputError(field.name, `${field.name} must be a list of ids`);
+      }
+      if (!seen.has(item)) {
+        seen.add(item);
+        ids.push(item);
+      }
+    }
+    if (ids.length > MAX_LINKS_PER_FIELD) {
+      throw new InputError(field.name, `${field.name} accepts at most ${MAX_LINKS_PER_FIELD} ids`);
+    }
+    if (field.required && ids.length === 0) {
+      throw new InputError(field.name, `${field.name} needs at least one id`);
+    }
+    return ids;
+  }
   if (value === undefined) {
     if (field.required && field.defaultValue === undefined && writing) {
       throw new InputError(field.name, `${field.name} is required`);

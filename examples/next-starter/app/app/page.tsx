@@ -1,6 +1,7 @@
 import { api, type Task } from "../../lib/bakorin.ts";
 import { createTaskAction } from "../actions.ts";
 import { TaskForm } from "./task-form.tsx";
+import { LiveTasks } from "./live-tasks.tsx";
 
 export default async function AppPage() {
   const client = await api();
@@ -21,18 +22,7 @@ export default async function AppPage() {
           {error}
         </div>
       ) : null}
-      {tasks.length === 0 ? (
-        <p className="empty">No tasks yet. Add one below.</p>
-      ) : (
-        <ul className="list">
-          {tasks.map((task) => (
-            <li key={task.id}>
-              <span>{task.title}</span>
-              <span>{task.done ? "done" : "open"}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+      <LiveTasks initial={tasks} />
       <TaskForm action={createTaskAction} />
     </section>
   );

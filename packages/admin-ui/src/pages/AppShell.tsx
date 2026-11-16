@@ -67,6 +67,11 @@ function relationCell(row: Record<string, unknown>, fieldName: string, display?:
   const expand = row.$expand;
   if (expand && typeof expand === "object") {
     const related = (expand as Record<string, unknown>)[fieldName];
+    if (Array.isArray(related)) {
+      // Many to many: the first few labels, then a count.
+      const labels = related.map((item) => relatedLabel(item as Record<string, unknown>, display));
+      return labels.length > 3 ? `${labels.slice(0, 3).join(", ")} +${labels.length - 3} more` : labels.join(", ");
+    }
     if (related && typeof related === "object") {
       return relatedLabel(related as Record<string, unknown>, display);
     }
@@ -476,6 +481,10 @@ export function AppShell({ onLogout, onForbidden }: Props) {
                       {columns.map((field) => {
                         const active = sort === field.name || sort === `-${field.name}`;
                         const dir = sort === `-${field.name}` ? "descending" : sort === field.name ? "ascending" : "none";
+                        if (field.relation?.many) {
+                          // Lists of links have no sort order.
+                          return <th key={field.name}>{fieldLabel(field.name)}</th>;
+                        }
                         return (
                           <th key={field.name} class="sortable" aria-sort={dir}>
                             <button type="button" onClick={() => toggleSort(field.name)}>

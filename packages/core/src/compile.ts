@@ -72,6 +72,20 @@ function compileField(entityName: string, name: string, raw: RawField): FieldAST
   if (raw.to && type !== "relation") {
     throw new SchemaError(`${entityName}.${name} has to: but is not a relation`);
   }
+  if (raw.many !== undefined && type !== "relation") {
+    throw new SchemaError(`${entityName}.${name} has many: but is not a relation`);
+  }
+  if (raw.many === true) {
+    if (raw.unique === true || raw.index === true) {
+      throw new SchemaError(`${entityName}.${name} is a many to many relation and cannot be unique or indexed (its join table is indexed already)`);
+    }
+    if (raw.default !== undefined) {
+      throw new SchemaError(`${entityName}.${name} is a many to many relation and cannot have a default`);
+    }
+    if (raw.onDelete !== undefined) {
+      throw new SchemaError(`${entityName}.${name} is a many to many relation: links are always removed when either record is deleted, so leave out onDelete`);
+    }
+  }
   if (raw.values && type !== "enum") {
     throw new SchemaError(`${entityName}.${name} has values: but is not an enum`);
   }
@@ -83,13 +97,14 @@ function compileField(entityName: string, name: string, raw: RawField): FieldAST
     type,
     required: raw.required === true || raw.default !== undefined ? raw.required !== false : false,
     unique: raw.unique === true,
-    indexed: raw.index === true || raw.unique === true || type === "relation",
+    indexed: raw.index === true || raw.unique === true || (type === "relation" && raw.many !== true),
     defaultValue: raw.default,
     enumValues: raw.values,
     relation: raw.to
       ? {
           to: raw.to,
           onDelete: raw.onDelete ?? "restrict",
+          ...(raw.many === true ? { many: true } : {}),
         }
       : undefined,
     renameFrom: raw.renameFrom,

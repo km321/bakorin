@@ -16,6 +16,10 @@ export function topologicalLayers(entities: EntityAST[]): string[][] {
       if (!names.has(target)) {
         throw new SchemaError(`entity ${entity.name} field ${field.name} relates to unknown entity ${target}`);
       }
+      // Many to many links live in their own table, created after both entities.
+      if (field.relation?.many) {
+        continue;
+      }
       incoming.get(entity.name)?.add(target);
     }
   }

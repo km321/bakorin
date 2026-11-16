@@ -10,7 +10,7 @@ export interface SchemaGraphField {
   unique: boolean;
   secret: boolean;
   description?: string;
-  relation?: { to: string; onDelete: OnDelete };
+  relation?: { to: string; onDelete: OnDelete; many?: boolean };
 }
 
 export interface SchemaGraphEntity {
@@ -30,6 +30,8 @@ export interface SchemaGraphRelation {
   field: string;
   to: string;
   onDelete: OnDelete;
+  /** Many to many (a join table), not a column. */
+  many?: boolean;
 }
 
 export interface SchemaGraphWebhook {
@@ -65,7 +67,7 @@ export function buildSchemaGraph(ast: SchemaAST): SchemaGraph {
       secret: field.secret,
       description: field.description,
       relation: field.relation
-        ? { to: field.relation.to, onDelete: field.relation.onDelete }
+        ? { to: field.relation.to, onDelete: field.relation.onDelete, ...(field.relation.many ? { many: true } : {}) }
         : undefined,
     })),
     indexes: entity.indexes,
@@ -87,6 +89,7 @@ export function buildSchemaGraph(ast: SchemaAST): SchemaGraph {
         field: field.name,
         to: field.relation.to,
         onDelete: field.relation.onDelete,
+        ...(field.relation.many ? { many: true } : {}),
       });
     }
   }
@@ -120,7 +123,7 @@ export function schemaToMermaid(graph: SchemaGraph): string {
       if (field.unique && field.name !== "id") {
         flags.push("UK");
       }
-      if (field.relation) {
+      if (field.relation && !field.relation.many) {
         flags.push("FK");
       }
       const type = mermaidIdent(field.displayType);
@@ -130,6 +133,10 @@ export function schemaToMermaid(graph: SchemaGraph): string {
     lines.push("  }");
   }
   for (const rel of graph.relations) {
+    if (rel.many) {
+      lines.push(`  ${mermaidIdent(rel.from)} }o--o{ ${mermaidIdent(rel.to)} : "${rel.field} many"`);
+      continue;
+    }
     const label = `${rel.field} ${rel.onDelete}`;
     lines.push(`  ${mermaidIdent(rel.from)} }o--|| ${mermaidIdent(rel.to)} : "${label}"`);
   }

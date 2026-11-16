@@ -66,7 +66,7 @@ export function Schema({ initial, onOpenEntity }: Props) {
             from: entity.name,
             field: field.name,
             to: field.relation.to,
-            onDelete: field.relation.onDelete ?? "restrict",
+            onDelete: field.relation.many ? "many" : (field.relation.onDelete ?? "restrict"),
           },
         ];
       }),
@@ -368,7 +368,7 @@ export function Schema({ initial, onOpenEntity }: Props) {
                 </strong>
                 <span class="muted">
                   {field.secret ? "hidden" : field.type}
-                  {field.relation ? ` to ${field.relation.to} (${field.relation.onDelete ?? "restrict"})` : ""}
+                  {field.relation ? ` to ${field.relation.to} (${field.relation.many ? "many" : (field.relation.onDelete ?? "restrict")})` : ""}
                 </span>
                 <p>{field.description ?? "No field description."}</p>
               </li>

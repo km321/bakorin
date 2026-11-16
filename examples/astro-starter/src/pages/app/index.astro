@@ -27,18 +27,16 @@ try {
     <h1>Your tasks</h1>
     <p class="lede">Private to your account. Create a record and it is stored in Bakorin.</p>
     {error ? <div class="error" role="alert">{error}</div> : null}
-    {tasks.length === 0 ? (
-      <p class="empty">No tasks yet. Add one below.</p>
-    ) : (
-      <ul class="list">
-        {tasks.map((task) => (
-          <li>
-            <span>{task.title}</span>
-            <span>{task.done ? "done" : "open"}</span>
-          </li>
-        ))}
-      </ul>
-    )}
+    <p class="live" data-live aria-live="polite">Connecting</p>
+    <p class="empty" data-empty hidden={tasks.length > 0}>No tasks yet. Add one below.</p>
+    <ul class="list" data-tasks>
+      {tasks.map((task) => (
+        <li data-id={task.id}>
+          <span>{task.title}</span>
+          <button type="button" class="secondary" data-toggle data-done={String(task.done)}>{task.done ? "Done" : "Open"}</button>
+        </li>
+      ))}
+    </ul>
     <form method="post">
       <label>
         New task
@@ -50,3 +48,58 @@ try {
     </form>
   </section>
 </Layout>
+
+<script>
+  // Live updates and writes from the browser go through /api/bakorin (see
+  // src/pages/api/bakorin/[...path].ts), so the session stays in httpOnly cookies.
+  import { createBrowserClient } from "@bakorin/sdk/browser";
+
+  type Task = { id: string; title: string; done: boolean; ownerId: string };
+  const api = createBrowserClient<{ tasks: Task }>();
+  const list = document.querySelector<HTMLUListElement>("[data-tasks]")!;
+  const empty = document.querySelector<HTMLElement>("[data-empty]")!;
+  const live = document.querySelector<HTMLElement>("[data-live]")!;
+
+  function render(task: Task) {
+    let item = list.querySelector<HTMLLIElement>(`li[data-id="${CSS.escape(task.id)}"]`);
+    if (!item) {
+      item = document.createElement("li");
+      item.dataset.id = task.id;
+      item.innerHTML = '<span></span><button type="button" class="secondary" data-toggle></button>';
+      list.prepend(item);
+    }
+    item.querySelector("span")!.textContent = task.title;
+    const button = item.querySelector<HTMLButtonElement>("[data-toggle]")!;
+    button.dataset.done = String(task.done);
+    button.textContent = task.done ? "Done" : "Open";
+    empty.hidden = true;
+  }
+
+  api.subscribe(
+    "tasks",
+    (change) => {
+      if (change.op === "delete") {
+        list.querySelector(`li[data-id="${CSS.escape(change.id)}"]`)?.remove();
+        empty.hidden = list.children.length > 0;
+      } else if (change.record) {
+        render(change.record);
+      }
+    },
+    {
+      onStatus: (status) => (live.textContent = status === "open" ? "Live" : "Connecting"),
+      onReset: () => location.reload(),
+    },
+  );
+
+  list.addEventListener("click", async (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("[data-toggle]");
+    const id = button?.closest("li")?.dataset.id;
+    if (!button || !id) return;
+    button.disabled = true;
+    try {
+      await api.entity("tasks").update(id, { done: button.dataset.done !== "true" });
+    } finally {
+      button.disabled = false;
+    }
+  });
+</script>

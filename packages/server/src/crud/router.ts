@@ -13,6 +13,7 @@ import type { Context } from "hono";
 import { decideAccess, ownedByFields } from "./policies-sql.ts";
 import { applyAccess, applyFilters, decodeRow, expandRows, parseListQuery } from "./query.ts";
 import { InputError, parseBody, visibleRow } from "./validate.ts";
+import { attachLinks, deleteLinksFor, readableIds, writeLinks } from "./links.ts";
 import {
   applyAuthCreateDefaults,
   assertClientFieldWrites,
@@ -54,6 +55,22 @@ async function assertRelationTargets(
     if (value === undefined || value === null || value === "") {
       continue;
     }
+    if (field.relation?.many) {
+      // Every linked id must exist and be readable by the writer.
+      const ids = (value as string[]).filter((id) => !(actor && to === ctx.ast.auth.entity && id === actor.id));
+      if (ids.length === 0) continue;
+      const readable = await readableIds(ctx.db, ctx.ast, to, ids, actor);
+      let missing = ids.some((id) => !readable.has(id));
+      if (!missing) {
+        // readableIds trusts public reads without a query; confirm the ids exist.
+        const found = await ctx.db.selectFrom(to).select("id").where("id", "in", ids).execute();
+        missing = found.length !== ids.length;
+      }
+      if (missing) {
+        return `${field.name} must only reference ${to} records that exist and that you can read`;
+      }
+      continue;
+    }
     if (actor && to === ctx.ast.auth.entity && String(value) === actor.id) {
       continue;
     }
@@ -89,6 +106,23 @@ async function entityRateLimit(
   const ctx = c.get("app");
   const allowed = await checkRateRule(ctx.db, `crud:${entity.name}:${action}`, rule, clientIp(c), actor?.id ?? null);
   return allowed ? null : rateLimitedResponse(rule, `too many ${action} requests for ${entity.name}`);
+}
+
+/** A copy of the row whose linked id lists only hold records this reader may read. */
+async function linksForReader(
+  ctx: AppContext,
+  entity: EntityAST,
+  row: Record<string, unknown>,
+  actor: Actor | null,
+): Promise<Record<string, unknown>> {
+  const out = { ...row };
+  for (const field of entity.fields) {
+    if (!field.relation?.many || !Array.isArray(out[field.name])) continue;
+    const ids = out[field.name] as string[];
+    const readable = await readableIds(ctx.db, ctx.ast, field.relation.to, ids, actor);
+    out[field.name] = ids.filter((id) => readable.has(id));
+  }
+  return out;
 }
 
 function entityOr404(ast: SchemaAST, name: string): EntityAST | null {
@@ -186,7 +220,9 @@ export function createCrudRouter(): Hono {
     }
     const rows = await qb.limit(query.limit).offset(query.offset).execute();
     const view = (target: EntityAST, row: Record<string, unknown>) => visibleRow(ctx.ast, target, row, actor);
-    let decoded = rows.map((row) => view(entity, decodeRow(entity, row as Record<string, unknown>)));
+    const plain = rows.map((row) => decodeRow(entity, row as Record<string, unknown>));
+    await attachLinks(ctx.db, ctx.ast, entity, plain, { actor });
+    let decoded = plain.map((row) => view(entity, row));
     decoded = await expandRows(
       ctx.db,
       entity,
@@ -232,7 +268,9 @@ export function createCrudRouter(): Hono {
       .map((item) => item.trim())
       .filter(Boolean);
     const view = (target: EntityAST, item: Record<string, unknown>) => visibleRow(ctx.ast, target, item, actor);
-    let data = [view(entity, decodeRow(entity, row as Record<string, unknown>))];
+    const plain = [decodeRow(entity, row as Record<string, unknown>)];
+    await attachLinks(ctx.db, ctx.ast, entity, plain, { actor });
+    let data = [view(entity, plain[0]!)];
     data = await expandRows(
       ctx.db,
       entity,
@@ -299,9 +337,14 @@ export function createCrudRouter(): Hono {
     const now = new Date().toISOString();
     const id = crypto.randomUUID();
     const insert: Record<string, unknown> = { id, createdAt: now, updatedAt: now };
+    const links: Array<[string, string[]]> = [];
     for (const [key, value] of Object.entries(body)) {
       const field = entity.fieldMap[key];
       if (!field) {
+        continue;
+      }
+      if (field.relation?.many) {
+        links.push([key, (value as string[] | null) ?? []]);
         continue;
       }
       insert[key] =
@@ -309,11 +352,15 @@ export function createCrudRouter(): Hono {
     }
     const after = await commitChange(ctx, changeMeta(c), async (trx) => {
       await trx.insertInto(entity.name).values(insert).execute();
+      for (const [key, ids] of links) {
+        await writeLinks(trx, entity, entity.fieldMap[key]!, id, ids);
+      }
       const stored = await trx.selectFrom(entity.name).selectAll().where("id", "=", id).executeTakeFirstOrThrow();
       const row = decodeRow(entity, stored as Record<string, unknown>);
+      await attachLinks(trx, ctx.ast, entity, [row]);
       return { event: { entity: entity.name, op: "create", before: null, after: row, actor: actorRef(actor) }, result: row };
     });
-    return c.json({ data: visibleRow(ctx.ast, entity, after, actor) }, 201);
+    return c.json({ data: visibleRow(ctx.ast, entity, await linksForReader(ctx, entity, after, actor), actor) }, 201);
   });
 
   app.patch("/:entity/:id", async (c) => {
@@ -342,6 +389,7 @@ export function createCrudRouter(): Hono {
     let body: Record<string, unknown>;
     let passwordChanged = false;
     const before = decodeRow(entity, existing as Record<string, unknown>);
+    await attachLinks(ctx.db, ctx.ast, entity, [before]);
     try {
       raw = (await c.req.json()) as Record<string, unknown>;
       assertClientFieldWrites(ctx.ast, entity, raw, actor, forced, "update");
@@ -363,9 +411,20 @@ export function createCrudRouter(): Hono {
       return jsonError("invalid_input", badRelation, 400);
     }
     const patch: Record<string, unknown> = { updatedAt: new Date().toISOString() };
+    const links: Array<[string, string[]]> = [];
     for (const [key, value] of Object.entries(body)) {
       const field = entity.fieldMap[key];
       if (!field) {
+        continue;
+      }
+      if (field.relation?.many) {
+        // Links to records this writer cannot see are kept: a client only knows the
+        // ids it was shown, so leaving them out of a PATCH must not drop them.
+        const sent = (value as string[] | null) ?? [];
+        const previous = Array.isArray(before[key]) ? (before[key] as string[]) : [];
+        const visible = await readableIds(ctx.db, ctx.ast, field.relation.to, previous, actor);
+        const hidden = previous.filter((id) => !visible.has(id) && !sent.includes(id));
+        links.push([key, [...sent, ...hidden]]);
         continue;
       }
       patch[key] =
@@ -374,8 +433,12 @@ export function createCrudRouter(): Hono {
     const recordId = c.req.param("id");
     const after = await commitChange(ctx, changeMeta(c), async (trx) => {
       await trx.updateTable(entity.name).set(patch).where("id", "=", recordId).execute();
+      for (const [key, ids] of links) {
+        await writeLinks(trx, entity, entity.fieldMap[key]!, recordId, ids);
+      }
       const stored = await trx.selectFrom(entity.name).selectAll().where("id", "=", recordId).executeTakeFirstOrThrow();
       const row = decodeRow(entity, stored as Record<string, unknown>);
+      await attachLinks(trx, ctx.ast, entity, [row]);
       const roleChanged =
         entity.name === ctx.ast.auth.entity &&
         ctx.ast.auth.roleField in body &&
@@ -385,7 +448,7 @@ export function createCrudRouter(): Hono {
       }
       return { event: { entity: entity.name, op: "update", before, after: row, actor: actorRef(actor) }, result: row };
     });
-    return c.json({ data: visibleRow(ctx.ast, entity, after, actor) });
+    return c.json({ data: visibleRow(ctx.ast, entity, await linksForReader(ctx, entity, after, actor), actor) });
   });
 
   app.delete("/:entity/:id", async (c) => {
@@ -410,9 +473,11 @@ export function createCrudRouter(): Hono {
       return jsonError("not_found", "not found", 404);
     }
     const before = decodeRow(entity, existing as Record<string, unknown>);
+    await attachLinks(ctx.db, ctx.ast, entity, [before]);
     await runBefore(ctx, entity.name, "beforeDelete", before, actor, before);
     const recordId = c.req.param("id");
     await commitChange(ctx, changeMeta(c), async (trx) => {
+      await deleteLinksFor(trx, ctx.ast, entity.name, recordId);
       await trx.deleteFrom(entity.name).where("id", "=", recordId).execute();
       return { event: { entity: entity.name, op: "delete", before, after: null, actor: actorRef(actor) }, result: null };
     });

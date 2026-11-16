@@ -18,7 +18,7 @@ function tsType(field: FieldAST): string {
     case "enum":
       return (field.enumValues ?? []).map((value) => JSON.stringify(value)).join(" | ") || "string";
     case "relation":
-      return "string";
+      return field.relation?.many ? "string[]" : "string";
     default: {
       const _never: never = field.type;
       return _never;
@@ -34,7 +34,8 @@ function fieldLine(field: FieldAST): string {
   if (field.secret) {
     return `  // ${field.name} is write-only and never returned`;
   }
-  const optional = field.required ? "" : "?";
+  // Many to many fields always come back as a list (empty when nothing is linked).
+  const optional = field.required || field.relation?.many ? "" : "?";
   return `  ${field.name}${optional}: ${tsType(field)};`;
 }
 

@@ -13,7 +13,7 @@ interface Props {
 }
 
 function isEmpty(value: unknown): boolean {
-  return value === undefined || value === null || value === "";
+  return value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
 }
 
 export function Drawer({ entity, record, onClose, onSaved }: Props) {
@@ -78,7 +78,7 @@ export function Drawer({ entity, record, onClose, onSaved }: Props) {
     try {
       const body = { ...form };
       for (const field of fields) {
-        if (field.type === "file" || field.type === "boolean") {
+        if (field.type === "file" || field.type === "boolean" || field.relation?.many) {
           continue;
         }
         const raw = data.get(field.name);
