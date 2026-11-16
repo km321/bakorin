@@ -19,3 +19,4 @@ With more than one instance:
 - Scheduled backups and webhook delivery take leases (`backup-scheduler`, `webhook-dispatcher`).
 - The change bus and `after*` hooks are in process. A second instance does not see the first instance's bus. Webhooks still fire because each writer enqueues to the outbox.
 - Local disk is per instance, so use the S3 driver for files behind a load balancer.
+- Realtime works across instances: each change is written to a log table, and the Postgres broker (`LISTEN/NOTIFY`) tells every instance to read it. See [Realtime scaling](/docs/realtime/#scaling) for measured numbers.

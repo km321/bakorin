@@ -136,6 +136,8 @@ Optional white label for the admin, `/docs`, and system emails. Leave it out to 
 | `trustProxy` | `false` | `true` or a hop count, or a list of proxy CIDRs. `TRUST_PROXY` overrides it. See [Client IP and proxies](/docs/configuration/#client-ip-and-proxies) |
 | `hooks` | `./hooks.ts` | Path to the hooks module |
 | `apiDocs` | `admin` in production, `public` in dev | Who can read `/api/v1/openapi.json`. `BAKORIN_API_DOCS` overrides it |
+| `realtime.*` | see [Realtime](/docs/realtime/#settings) | `broker`, `maxConnections`, `maxPerUser`, `heartbeatSeconds`, `replayEvents`, `retainMinutes`, `maxBufferKb` |
+| `mcp` | `false` | `true` or `{ enabled, sampleLimit }`. Read only MCP server at `/mcp` for AI coding tools. `BAKORIN_MCP` overrides it. See [MCP dev server](/docs/mcp/) |
 
 ## auth
 
@@ -153,7 +155,7 @@ When `requireVerifiedEmail` is on, Bakorin adds an `emailVerified` boolean to th
 
 ## entities
 
-Each key under `entities` is an entity name. Names must start with a letter or underscore and contain only letters, digits, and underscores (64 characters max). `auth`, `audit`, `backups`, `docs`, `files`, `mail`, `status`, `webhooks`, and `_meta` are reserved because Bakorin serves built in routes at those paths under `/api/v1`.
+Each key under `entities` is an entity name. Names must start with a letter or underscore and contain only letters, digits, and underscores (64 characters max). `auth`, `audit`, `backups`, `docs`, `files`, `mail`, `realtime`, `status`, `webhooks`, and `_meta` are reserved because Bakorin serves built in routes at those paths under `/api/v1`.
 
 | Key | Notes |
 |---|---|
@@ -166,6 +168,7 @@ Each key under `entities` is an entity name. Names must start with a letter or u
 | `indexes` | List of field names or arrays of field names |
 | `policies` | `read`, `create`, `update`, `delete`. See [Permissions](/docs/permissions/) |
 | `rateLimit` | Optional request limits per action. See [Rate limits](#rate-limits) |
+| `realtime` | `true` (send records) or `ids` (send ids only). Off by default. See [Realtime](/docs/realtime/) |
 
 Every entity gets three system fields you cannot redefine: `id`, `createdAt`, and `updatedAt`.
 
@@ -185,6 +188,7 @@ A field can be a bare type (`title: text`) or an object:
 | `values` | Enum values (required for `enum`) |
 | `to` | Target entity (required for `relation`) |
 | `onDelete` | `restrict` (default), `cascade`, or `set_null` |
+| `many` | `true` on a relation for many to many: the field holds an array of ids. See [Many to many](/docs/data/#many-to-many) |
 | `writable` | `admin` or `none` |
 | `adminOnly` | Same as `writable: admin` |
 | `readonly` | Same as `writable: none` |

@@ -17,3 +17,5 @@ Markdown sources for a future bakorin.dev.
 - [Webhooks](webhooks.md)
 - [Security notes](security.md)
 - [Scaling notes](scaling.md)
+- [Realtime](realtime.md)
+- [MCP dev server](mcp.md)

@@ -78,6 +78,32 @@ await tasks.delete(created.id);
 
 Errors throw an `Error` with the server's message.
 
+Many to many fields take and return arrays of ids. Filter them with `has`, which matches records linked to any of the given ids:
+
+```ts
+await api.entity("projects").list({ filter: { tagIds: { op: "has", value: [designId, urgentId] } } });
+```
+
+## Realtime
+
+```ts
+const stop = api.subscribe("tasks", (change) => {
+  // change.eventId, change.entity, change.op ("create" | "update" | "delete"), change.id, change.record
+}, {
+  onReset: () => refetch(),        // missed too much, reload
+  onStatus: (status) => {},        // "connecting" | "open" | "reconnecting" | "closed"
+  onError: (error) => {},          // 400, 401 after a failed refresh, 403, or 404: no retry
+});
+stop();
+api.closeRealtime(); // close the shared stream
+```
+
+All subscriptions on a client share one stream, which reconnects with backoff and resumes from the last event. See [Realtime](/docs/realtime/).
+
+## Browser client
+
+`createBrowserClient()` from `@bakorin/sdk/browser` talks to the pass through route on your own site (`/api/bakorin` by default), so the session stays in httpOnly cookies. Set it up with the [Astro](/docs/astro/#browser-calls-and-live-updates) or [Next.js](/docs/nextjs/#browser-calls-and-live-updates) route. Options: `basePath`, `origin`, and `fetch`.
+
 ## Generated types
 
 `bakorin typegen` writes `bakorin.gen.ts`. Pass its entity map to `createClient`, `createAstroClient`, or `createNextClient` for typed `entity()` names and records.

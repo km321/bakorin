@@ -62,6 +62,7 @@ export default defineConfig({
             { label: "Files", slug: "docs/files" },
             { label: "Branding", slug: "docs/branding" },
             { label: "Webhooks", slug: "docs/webhooks" },
+            { label: "Realtime", slug: "docs/realtime" },
             { label: "Admin UI", slug: "docs/admin-ui" },
             { label: "Schema visualizer", slug: "docs/schema" },
           ],
@@ -72,6 +73,7 @@ export default defineConfig({
             { label: "SDK", slug: "docs/sdk" },
             { label: "Astro", slug: "docs/astro" },
             { label: "Next.js", slug: "docs/nextjs" },
+            { label: "MCP for AI tools", slug: "docs/mcp" },
           ],
         },
         {
