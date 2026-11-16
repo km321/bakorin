@@ -84,6 +84,7 @@ const ok = verifyBakorinWebhook(
 
 - Each POST uses `timeoutMs` (default 10 seconds).
 - Failures retry with exponential backoff (`100ms * 2^attempts`), capped at 60 seconds.
+- Deliveries are grouped by receiving host. Each host gets its events in order, one at a time, and up to 8 hosts are sent to at once, so a slow or down receiver does not delay the others.
 - After `maxAttempts` (default 10) the row is marked `failed` and is not retried automatically.
 - The last HTTP status and a short error are stored on the row.
 - Admins can retry a failed row from the Webhooks page.

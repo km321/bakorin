@@ -8,7 +8,7 @@ import {
 } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
 import { WEBHOOK_OUTBOX_TABLE } from "../db/system.ts";
-import { acquireLease, instanceHolder } from "../db/leases.ts";
+import { cleanupFinished, discardFailed, drainQueue, retryDelayMs, startQueueWorker, type DrainOptions } from "../delivery/queue.ts";
 import { redactChangeEvent } from "./redact.ts";
 
 export type WebhookDeliveryStatus = "pending" | "delivered" | "failed" | "discarded";
@@ -157,68 +157,52 @@ function hookForRow(ast: SchemaAST, row: Record<string, unknown>): WebhookAST | 
 }
 
 export function startWebhookWorker(db: BakorinDb, getAst: () => SchemaAST): () => void {
-  const holder = instanceHolder();
-  let stopped = false;
-  const timer = setInterval(() => {
-    if (stopped) {
-      return;
-    }
-    void drainWebhookOutbox(db, getAst, { stopped: () => stopped, holder });
-  }, 1000);
-  void drainWebhookOutbox(db, getAst, { stopped: () => stopped, holder });
-  return () => {
-    stopped = true;
-    clearInterval(timer);
-  };
+  return startQueueWorker((options) => drainWebhookOutbox(db, getAst, options));
 }
 
-export async function drainWebhookOutbox(
-  db: BakorinDb,
-  getAst: () => SchemaAST,
-  options: { stopped?: () => boolean; holder?: string } = {},
-): Promise<void> {
-  const stopped = options.stopped ?? (() => false);
-  const holder = options.holder ?? instanceHolder();
-  if (stopped()) {
-    return;
-  }
-  try {
-    const got = await acquireLease(db, "webhook-dispatcher", holder, 15_000);
-    if (!got || stopped()) {
-      return;
-    }
-    const ast = getAst();
-    await cleanupDelivered(db, ast.runtime.webhooksRetainDays);
-    const now = new Date().toISOString();
-    const rows = await db
-      .selectFrom(WEBHOOK_OUTBOX_TABLE)
-      .selectAll()
-      .where("status", "=", "pending")
-      .where("next_attempt_at", "<=", now)
-      .where((eb) => eb.or([eb("locked_until", "is", null), eb("locked_until", "<=", now)]))
-      .orderBy("created_at", "asc")
-      .limit(20)
-      .execute();
-    for (const row of rows) {
-      if (stopped()) {
-        return;
-      }
-      const lockUntil = new Date(Date.now() + 30_000).toISOString();
-      const claimed = await db
-        .updateTable(WEBHOOK_OUTBOX_TABLE)
-        .set({ locked_until: lockUntil })
-        .where("id", "=", String(row.id))
-        .where("status", "=", "pending")
-        .where((eb) => eb.or([eb("locked_until", "is", null), eb("locked_until", "<=", now)]))
-        .executeTakeFirst();
-      if (Number(claimed?.numUpdatedRows ?? 0) < 1) {
-        continue;
-      }
-      await attemptClaimedRow(db, ast, row);
-    }
-  } catch {
-    // Database already closed during shutdown.
-  }
+/**
+ * One pass over the webhook outbox. Rows are grouped by receiving host: each host
+ * gets its deliveries in order, and a slow or down host does not hold up the rest.
+ */
+export async function drainWebhookOutbox(db: BakorinDb, getAst: () => SchemaAST, options: DrainOptions = {}): Promise<void> {
+  const ast = getAst();
+  await drainQueue<Record<string, unknown>>(
+    db,
+    {
+      lease: "webhook-dispatcher",
+      prepare: async () => {
+        await cleanupDelivered(db, ast.runtime.webhooksRetainDays);
+      },
+      due: (limit) => {
+        const now = new Date().toISOString();
+        return db
+          .selectFrom(WEBHOOK_OUTBOX_TABLE)
+          .selectAll()
+          .where("status", "=", "pending")
+          .where("next_attempt_at", "<=", now)
+          .where((eb) => eb.or([eb("locked_until", "is", null), eb("locked_until", "<=", now)]))
+          .orderBy("created_at", "asc")
+          .limit(limit)
+          .execute() as Promise<Array<Record<string, unknown>>>;
+      },
+      laneOf: (row) => webhookHost(String(row.url)),
+      deliver: async (row) => {
+        const now = new Date().toISOString();
+        const claimed = await db
+          .updateTable(WEBHOOK_OUTBOX_TABLE)
+          .set({ locked_until: new Date(Date.now() + 30_000).toISOString() })
+          .where("id", "=", String(row.id))
+          .where("status", "=", "pending")
+          .where((eb) => eb.or([eb("locked_until", "is", null), eb("locked_until", "<=", now)]))
+          .executeTakeFirst();
+        if (Number(claimed?.numUpdatedRows ?? 0) < 1) {
+          return;
+        }
+        await attemptClaimedRow(db, ast, row);
+      },
+    },
+    options,
+  );
 }
 
 async function attemptClaimedRow(db: BakorinDb, ast: SchemaAST, row: Record<string, unknown>): Promise<void> {
@@ -244,7 +228,7 @@ async function attemptClaimedRow(db: BakorinDb, ast: SchemaAST, row: Record<stri
     return;
   }
   const failed = attempts >= maxAttempts;
-  const delay = Math.min(60_000, 100 * 2 ** Math.min(attempts, 8));
+  const delay = retryDelayMs(attempts);
   await db
     .updateTable(WEBHOOK_OUTBOX_TABLE)
     .set({
@@ -279,31 +263,12 @@ export async function deliverById(db: BakorinDb, getAst: () => SchemaAST, id: st
 }
 
 export async function cleanupDelivered(db: BakorinDb, retainDays: number): Promise<number> {
-  const cutoff = new Date(Date.now() - retainDays * 24 * 60 * 60 * 1000).toISOString();
-  const result = await db
-    .deleteFrom(WEBHOOK_OUTBOX_TABLE)
-    .where("status", "=", "delivered")
-    .where("delivered_at", "<", cutoff)
-    .executeTakeFirst();
-  const discarded = await db
-    .deleteFrom(WEBHOOK_OUTBOX_TABLE)
-    .where("status", "=", "discarded")
-    .where("created_at", "<", cutoff)
-    .executeTakeFirst();
-  return Number(result?.numDeletedRows ?? 0) + Number(discarded?.numDeletedRows ?? 0);
+  return cleanupFinished(db, WEBHOOK_OUTBOX_TABLE, { status: "delivered", at: "delivered_at" }, retainDays);
 }
 
 /** Marks a failed delivery as discarded so it stops counting as a failure. The row is kept for the record. */
 export async function discardDelivery(db: BakorinDb, id: string): Promise<"ok" | "missing" | "not_failed"> {
-  const row = await db.selectFrom(WEBHOOK_OUTBOX_TABLE).select(["status"]).where("id", "=", id).executeTakeFirst();
-  if (!row) {
-    return "missing";
-  }
-  if (String(row.status) !== "failed") {
-    return "not_failed";
-  }
-  await db.updateTable(WEBHOOK_OUTBOX_TABLE).set({ status: "discarded", locked_until: null }).where("id", "=", id).execute();
-  return "ok";
+  return discardFailed(db, WEBHOOK_OUTBOX_TABLE, id);
 }
 
 export async function retryDelivery(db: BakorinDb, id: string): Promise<"ok" | "missing" | "not_failed"> {

@@ -1,7 +1,7 @@
 import { MAIL_DEFAULT_MAX_ATTEMPTS, type ChangeEvent, type MailRuleAST, type SchemaAST } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
 import { MAIL_OUTBOX_TABLE } from "../db/system.ts";
-import { acquireLease, instanceHolder } from "../db/leases.ts";
+import { cleanupFinished, discardFailed, drainQueue, retryDelayMs, startQueueWorker, type DrainOptions } from "../delivery/queue.ts";
 import { shortError } from "../webhooks/dispatcher.ts";
 import { compileTemplate } from "./engine.ts";
 import { renderMail, type RenderedMail } from "./files.ts";
@@ -304,30 +304,11 @@ function parseList(value: unknown): string[] {
   }
 }
 
-export interface WorkerOptions {
-  stopped?: () => boolean;
-  holder?: string;
-}
+/** Options for one drain: stop early, and the lease holder id. */
+export type WorkerOptions = DrainOptions;
 
 export function startMailWorker(db: BakorinDb, getAst: () => SchemaAST, getMailer: () => Mailer): () => void {
-  const holder = instanceHolder();
-  let stopped = false;
-  let running = false;
-  const tick = () => {
-    if (stopped || running) {
-      return;
-    }
-    running = true;
-    void drainMailOutbox(db, getAst, getMailer, { stopped: () => stopped, holder }).finally(() => {
-      running = false;
-    });
-  };
-  const timer = setInterval(tick, 1000);
-  tick();
-  return () => {
-    stopped = true;
-    clearInterval(timer);
-  };
+  return startQueueWorker((options) => drainMailOutbox(db, getAst, getMailer, options));
 }
 
 /**
@@ -361,46 +342,44 @@ export interface DeliverOptions {
   secrets?: Array<string | undefined>;
 }
 
+/**
+ * One pass over the mail outbox. All mail goes through one provider, so it is one
+ * lane, sent in order one at a time (provider rate limits stay as they were).
+ */
 export async function drainMailOutbox(
   db: BakorinDb,
   getAst: () => SchemaAST,
   getMailer: () => Mailer,
   options: WorkerOptions = {},
 ): Promise<void> {
-  const stopped = options.stopped ?? (() => false);
-  const holder = options.holder ?? instanceHolder();
-  if (stopped()) {
-    return;
-  }
-  try {
-    const got = await acquireLease(db, "mail-dispatcher", holder, 15_000);
-    if (!got || stopped()) {
-      return;
-    }
-    const ast = getAst();
-    const mailer = getMailer();
-    await cleanupSentMail(db, ast.runtime.mailRetainDays);
-    await recoverStuckSends(db, mailer);
-    const now = new Date().toISOString();
-    const rows = await db
-      .selectFrom(MAIL_OUTBOX_TABLE)
-      .select("id")
-      .where("status", "=", "pending")
-      .where("next_attempt_at", "<=", now)
-      .orderBy("created_at", "asc")
-      .limit(20)
-      .execute();
-    for (const row of rows) {
-      if (stopped()) {
-        return;
-      }
-      await deliverMailById(db, mailer, String(row.id), {
-        secrets: [ast.runtime.jwtSecret, ast.runtime.jwtSecretPrevious],
-      });
-    }
-  } catch {
-    // Database already closed during shutdown.
-  }
+  const ast = getAst();
+  const mailer = getMailer();
+  await drainQueue<{ id: unknown }>(
+    db,
+    {
+      lease: "mail-dispatcher",
+      prepare: async () => {
+        await cleanupSentMail(db, ast.runtime.mailRetainDays);
+        await recoverStuckSends(db, mailer);
+      },
+      due: (limit) =>
+        db
+          .selectFrom(MAIL_OUTBOX_TABLE)
+          .select("id")
+          .where("status", "=", "pending")
+          .where("next_attempt_at", "<=", new Date().toISOString())
+          .orderBy("created_at", "asc")
+          .limit(limit)
+          .execute(),
+      laneOf: () => mailer.driver,
+      deliver: async (row) => {
+        await deliverMailById(db, mailer, String(row.id), {
+          secrets: [ast.runtime.jwtSecret, ast.runtime.jwtSecretPrevious],
+        });
+      },
+    },
+    options,
+  );
 }
 
 /** Claims one pending row and sends it. A row that is not pending is never sent. */
@@ -465,7 +444,7 @@ export async function deliverMailById(
   } catch (error) {
     const maxAttempts = Number(row.max_attempts) || MAIL_DEFAULT_MAX_ATTEMPTS;
     const failed = attempts >= maxAttempts;
-    const delay = Math.min(60_000, 100 * 2 ** Math.min(attempts, 8));
+    const delay = retryDelayMs(attempts);
     const message = error instanceof Error ? error.message : String(error);
     await db
       .updateTable(MAIL_OUTBOX_TABLE)
@@ -497,31 +476,12 @@ export async function deliverMailById(
 }
 
 export async function cleanupSentMail(db: BakorinDb, retainDays: number): Promise<number> {
-  const cutoff = new Date(Date.now() - retainDays * 24 * 60 * 60 * 1000).toISOString();
-  const result = await db
-    .deleteFrom(MAIL_OUTBOX_TABLE)
-    .where("status", "=", "sent")
-    .where("sent_at", "<", cutoff)
-    .executeTakeFirst();
-  const discarded = await db
-    .deleteFrom(MAIL_OUTBOX_TABLE)
-    .where("status", "=", "discarded")
-    .where("created_at", "<", cutoff)
-    .executeTakeFirst();
-  return Number(result?.numDeletedRows ?? 0) + Number(discarded?.numDeletedRows ?? 0);
+  return cleanupFinished(db, MAIL_OUTBOX_TABLE, { status: "sent", at: "sent_at" }, retainDays);
 }
 
 /** Marks a failed delivery as discarded so it stops counting as a failure. The row is kept for the record. */
 export async function discardMailDelivery(db: BakorinDb, id: string): Promise<"ok" | "missing" | "not_failed"> {
-  const row = await db.selectFrom(MAIL_OUTBOX_TABLE).select(["status"]).where("id", "=", id).executeTakeFirst();
-  if (!row) {
-    return "missing";
-  }
-  if (String(row.status) !== "failed") {
-    return "not_failed";
-  }
-  await db.updateTable(MAIL_OUTBOX_TABLE).set({ status: "discarded", locked_until: null }).where("id", "=", id).execute();
-  return "ok";
+  return discardFailed(db, MAIL_OUTBOX_TABLE, id);
 }
 
 /** Only failed rows can be retried. A sent row is final and is never sent again. */

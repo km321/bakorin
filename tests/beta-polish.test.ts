@@ -263,3 +263,57 @@ describe("N4 unreachable Bakorin", () => {
     expect(String(logged[0])).toContain("ECONNREFUSED");
   });
 });
+
+describe("L10 shared delivery queue", () => {
+  test("lanes keep order inside a lane and do not wait on each other", async () => {
+    const { runLanes } = await import("../packages/server/src/delivery/queue.ts");
+    const log: string[] = [];
+    const rows = [
+      { lane: "slow", n: 1 },
+      { lane: "slow", n: 2 },
+      { lane: "fast", n: 1 },
+      { lane: "fast", n: 2 },
+      { lane: "fast", n: 3 },
+    ];
+    await runLanes(rows, {
+      laneOf: (row) => row.lane,
+      deliver: async (row) => {
+        await Bun.sleep(row.lane === "slow" ? 150 : 5);
+        log.push(`${row.lane}${row.n}`);
+      },
+    });
+    expect(log.filter((item) => item.startsWith("slow"))).toEqual(["slow1", "slow2"]);
+    expect(log.filter((item) => item.startsWith("fast"))).toEqual(["fast1", "fast2", "fast3"]);
+    // Every fast row finished before the first slow one.
+    expect(log.indexOf("fast3")).toBeLessThan(log.indexOf("slow1"));
+  });
+
+  test("a slow webhook endpoint does not hold up another endpoint", async () => {
+    const hits = { slow: 0, fast: 0 };
+    const slow = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: async () => { await Bun.sleep(2000); hits.slow += 1; return new Response("ok"); } });
+    const fast = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch: () => { hits.fast += 1; return new Response("ok"); } });
+    cleanups.push(() => slow.stop(true), () => fast.stop(true));
+    const yaml = `${YAML}
+webhooks:
+  - entity: users
+    events: [create]
+    url: http://127.0.0.1:${slow.port}/hook
+    secret: webhook-secret-webhook-secret
+    timeoutMs: 5000
+  - entity: users
+    events: [create]
+    url: http://127.0.0.1:${fast.port}/hook
+    secret: webhook-secret-webhook-secret
+`;
+    resetRateLimit();
+    const runtime = await boot(yaml);
+    cleanups.push(() => runtime.close());
+    const started = Date.now();
+    await signup(runtime, "lanes@example.test");
+    for (let i = 0; i < 300 && hits.fast === 0; i += 1) await Bun.sleep(10);
+    expect(hits.fast).toBe(1);
+    // The fast endpoint got its call while the slow one was still answering.
+    expect(hits.slow).toBe(0);
+    expect(Date.now() - started).toBeLessThan(1900);
+  });
+});
