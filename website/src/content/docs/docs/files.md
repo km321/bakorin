@@ -5,6 +5,8 @@ description: Upload files to local disk or S3 compatible storage and serve them 
 
 Signed in users can upload files. Files are stored on local disk or in an S3 compatible bucket (Railway buckets, Cloudflare R2, MinIO), and downloads always use a short lived signed URL.
 
+![Edit Client drawer in light mode with a logo file field showing a preview of the uploaded image and a file picker to replace it](../../../assets/screens/admin-files-light.webp)
+
 ## Configure
 
 ```yaml

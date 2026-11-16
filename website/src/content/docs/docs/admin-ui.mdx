@@ -3,16 +3,18 @@ title: Admin UI
 description: The built in admin at /admin/ with light and dark themes, data tables, invites, backups, audit, and webhooks.
 ---
 
-import schemaLight from "../../../assets/screens/schema-light.png";
-import listDark from "../../../assets/screens/admin-list-dark.png";
-import editLight from "../../../assets/screens/admin-edit-light.png";
-import signin from "../../../assets/screens/admin-signin-light.png";
-import adminsOnly from "../../../assets/screens/admin-admins-only.png";
+import projectsDark from "../../../assets/screens/admin-projects-dark.webp";
+import editorLight from "../../../assets/screens/admin-editor-light.webp";
+import usersLight from "../../../assets/screens/admin-users-light.webp";
+import signin from "../../../assets/screens/admin-signin-light.webp";
+import adminsOnly from "../../../assets/screens/admin-admins-only-light.webp";
+import statusLight from "../../../assets/screens/admin-status-light.webp";
+import schemaLight from "../../../assets/screens/admin-schema-light.webp";
 import { Image } from "astro:assets";
 
 Every project serves an admin UI at `/admin/`. It is built from your `app.yaml`, embedded in the binary, and needs no extra setup.
 
-<Image src={listDark} alt="Bakorin admin in dark mode showing a Leads table with company, contact, email, status, notes, and owner columns" />
+<Image src={projectsDark} alt="Bakorin admin in dark mode showing a Projects table with name, client, status, budget, due date, and tags columns" />
 
 ## Sign in and first admin
 
@@ -26,7 +28,7 @@ The admin UI is only for users whose role matches `auth.adminRole` (default `adm
 
 After sign in, the admin UI asks the server whether the session is an admin before it shows anything. A user without the admin role sees an **Admins only** screen with their email and a **Sign out** button. The sidebar, tables, and project pages are not rendered for them. If an admin loses the role while signed in, the next schema refresh sends them to the same screen.
 
-<Image src={adminsOnly} alt="Admins only screen telling sam@studio.test the account is not an admin, with a Sign out button" />
+<Image src={adminsOnly} alt="Admins only screen telling juno@fernwood.example the account is not an admin, with a Sign out button" />
 
 The real enforcement is on the server. These endpoints return 401 when signed out and 403 for non-admins:
 
@@ -48,18 +50,20 @@ A **System, Light, Dark** switch sits in the top bar. System follows your operat
 Each entity appears under **Data** in the sidebar.
 
 - Tables are sortable and searchable, with pagination.
-- Relation columns show the related row's `display` field instead of a raw id.
-- **New** and **Edit** open a side drawer with a field for each column, using each field's `description` as help text. Enums become selects, relations become searchable pickers, and `file` fields become file pickers.
+- Relation columns show the related row's `display` field instead of a raw id. Many to many columns list the first few labels and a "+N more" count.
+- **New** and **Edit** open a side drawer with a field for each column, using each field's `description` as help text. Enums become selects, relations become searchable pickers, many to many relations become a multi select with removable chips, and `file` fields become file pickers with a preview.
 - Deletes ask for confirmation.
 - On the auth entity, **Invite user** sends an invite email, and unverified users get a **Resend verification** action.
 
-<Image src={editLight} alt="Edit Lead drawer in light mode with company, contact name, email, status, notes, owner, and brief fields" />
+<Image src={editorLight} alt="Edit Project drawer in light mode with name, client, status, budget, and due date fields, chips for the linked tags and members, and a brief file picker" />
+
+<Image src={usersLight} alt="Users table in light mode with Invite user and New User buttons and a Resend verification action on unverified users" />
 
 ## Project pages
 
 | Page | What it does |
 |---|---|
-| **Status** | Uptime, version, database size, the email and webhook queues with Retry and Discard for failed items, recent errors, and the last backup. See [Monitoring](/docs/monitoring/#status-page) |
+| **Status** | Uptime, version, database size, realtime streams, the email and webhook queues with Retry and Discard for failed items, recent errors, and the last backup. See [Monitoring](/docs/monitoring/#status-page) |
 | **Backups** | Lists snapshots, takes a live backup (`POST /api/v1/backups`), and downloads any backup as a `.tar.gz`. Restore stays CLI only. See [Backup and restore](/docs/backups/#download-a-backup) |
 | **Schema** | Draws your entities and relations. See [Schema visualizer](/docs/schema/) |
 | **Webhooks** | Lists configured webhooks and deliveries, filters by status, retries failed rows, sends a test event |
@@ -67,4 +71,6 @@ Each entity appears under **Data** in the sidebar.
 | **Audit** | The append only audit log: signups, logins, failed logins, resets, invites, role changes, admin writes, backups |
 | **API docs** | Opens the bundled Swagger UI at `/docs` |
 
-<Image src={schemaLight} alt="Admin Schema page showing User, Lead, and Task cards connected by relation arrows" />
+<Image src={statusLight} alt="Status page in light mode with uptime, version, database, last backup, a Realtime section with open streams and broker, and email and webhook queues" />
+
+<Image src={schemaLight} alt="Schema page in light mode with Client, Project, Task, Tag, and User cards connected by relation arrows, including many to many links" />

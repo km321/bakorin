@@ -46,6 +46,8 @@ data: {"entity":"tasks","op":"update","id":"...","at":1794801466459,"record":{..
 - **Limits.** `maxConnections` per instance (503) and `maxPerUser` (429) answer with `Retry-After`.
 - **Restarts.** On shutdown each stream gets `closed` reason `server_restart` with a randomized retry delay, so clients do not all reconnect in the same second.
 
+![Status page in dark mode with the Realtime section showing 10 open streams for 5 readers, the in process broker connected, and events delivered](../../../assets/screens/admin-status-dark.webp)
+
 ## Using it from the SDK
 
 ```ts

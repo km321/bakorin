@@ -55,6 +55,8 @@ These emails are queued and sent in the background. Each one appears in the admi
 
 If nothing arrives, check the delivery log first, then check that `MAIL_DRIVER` is set in the process environment, the key belongs to the right account, and `MAIL_FROM` uses a verified domain. Failed Resend calls are logged as `Resend {status}: {body}`.
 
+![Mail page in light mode previewing the project shipped template for a real project record, with subject, recipient, and the rendered HTML](../../../assets/screens/admin-mail-light.webp)
+
 ## Transactional email
 
 Bakorin can send transactional email (receipts, notifications, status changes) without writing code. You describe *when* to send in `app.yaml`, keep the message in a template file next to it, and Bakorin queues every message in a mail outbox with retries and a delivery log.

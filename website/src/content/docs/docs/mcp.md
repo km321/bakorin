@@ -38,6 +38,8 @@ The endpoint is `POST /mcp` (JSON-RPC over Streamable HTTP). Every tool is read 
 
 It never writes, never returns password hashes or secret fields, and every call is written to the audit log as `mcp.call`. Calls without a valid token are refused, rate limited, and logged as `mcp.denied`. Browser requests from origins outside `CORS_ORIGINS` are refused.
 
+![Monitoring setup checklist on the Status page in light mode with realtime streams and the MCP dev server switched on](../../../assets/screens/admin-monitoring-light.webp)
+
 ## Cursor
 
 ```json title=".cursor/mcp.json"

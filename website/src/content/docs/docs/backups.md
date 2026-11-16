@@ -13,6 +13,8 @@ bakorin export ./portable               # dialect agnostic NDJSON + files + app.
 bakorin import ./portable               # load that archive into the current dialect
 ```
 
+![Backups page in light mode listing snapshots with size, location, the restore command, and a Download button for each](../../../assets/screens/admin-backups-light.webp)
+
 ## What a backup contains
 
 Every backup is one folder named after the time it was taken (UTC), for example `2026-11-15T22-11-05.250Z`.

@@ -1,5 +1,6 @@
 export function fieldLabel(name: string): string {
-  return name.replace(/Id$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
+  // ownerId -> owner, tagIds -> tags (many to many fields hold a list of ids).
+  return name.replace(/Ids$/, "s").replace(/Id$/, "").replace(/([a-z])([A-Z])/g, "$1 $2");
 }
 
 export function relatedLabel(row: Record<string, unknown> | null | undefined, display?: string): string {

@@ -93,6 +93,8 @@ entities:
       tagIds: { type: relation, to: tags, many: true }
 ```
 
+![Edit Project drawer in light mode where the Tags and Members fields are multi select pickers showing the linked records as removable chips](../../../assets/screens/admin-editor-light.webp)
+
 - **Reads and writes use arrays of ids:** `{ "tagIds": ["...", "..."] }`. Order is kept, duplicates are dropped, and a field holds up to 1,000 links. `null` clears it. `required: true` means at least one link.
 - **Expand** returns an array: `?expand=tagIds` gives `$expand.tagIds` as the linked records, in order, leaving out any the caller cannot read.
 - **Filter** with `has`: `?filter[tagIds]=<id>` or `?filter[tagIds][has]=<id1>,<id2>` matches records linked to any of them.

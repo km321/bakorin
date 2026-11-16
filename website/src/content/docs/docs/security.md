@@ -36,3 +36,9 @@ description: What Bakorin does to keep a client backend safe by default.
 - Backup downloads are admin only. The admin gets a link that works for 60 seconds for one backup, and the server checks again that the person is still an admin before it streams the file. There are no public backup URLs.
 - `bakorin restore` checks each file's sha256 before it changes anything, and takes a safety backup first.
 - Request logs and error reports leave out query strings, headers, bodies, and tokens. Error messages are scrubbed of email addresses and token looking strings. `/metrics` is off unless `METRICS_TOKEN` is set.
+
+## Audit log
+
+Logins, failed logins, resets, invites, role changes, admin writes, backups, and MCP calls are written to an append only audit log. Admins read it on the **Audit** page.
+
+![Audit log page in light mode listing logins, invites, admin writes, and backups with actor, entity, record, and IP](../../../assets/screens/admin-audit-light.webp)

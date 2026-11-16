@@ -2,13 +2,26 @@
 import { Image } from "astro:assets";
 import Marketing from "../layouts/Marketing.astro";
 import CodeBlock from "../components/CodeBlock.astro";
-import schemaLight from "../assets/screens/schema-light.png";
-import schemaDark from "../assets/screens/schema-dark.png";
-import editLight from "../assets/screens/admin-edit-light.png";
-import editDark from "../assets/screens/admin-edit-dark.png";
-import listLight from "../assets/screens/admin-list-light.png";
-import listDark from "../assets/screens/admin-list-dark.png";
-
+import projectsLight from "../assets/screens/admin-projects-light.webp";
+import projectsDark from "../assets/screens/admin-projects-dark.webp";
+import editorLight from "../assets/screens/admin-editor-light.webp";
+import editorDark from "../assets/screens/admin-editor-dark.webp";
+import schemaLight from "../assets/screens/admin-schema-light.webp";
+import schemaDark from "../assets/screens/admin-schema-dark.webp";
+import statusLight from "../assets/screens/admin-status-light.webp";
+import statusDark from "../assets/screens/admin-status-dark.webp";
+import mailLight from "../assets/screens/admin-mail-light.webp";
+import mailDark from "../assets/screens/admin-mail-dark.webp";
+import webhooksLight from "../assets/screens/admin-webhooks-light.webp";
+import webhooksDark from "../assets/screens/admin-webhooks-dark.webp";
+import backupsLight from "../assets/screens/admin-backups-light.webp";
+import backupsDark from "../assets/screens/admin-backups-dark.webp";
+import auditLight from "../assets/screens/admin-audit-light.webp";
+import auditDark from "../assets/screens/admin-audit-dark.webp";
+import brandedLight from "../assets/screens/admin-branded-light.webp";
+import brandedDark from "../assets/screens/admin-branded-dark.webp";
+import filesLight from "../assets/screens/admin-files-light.webp";
+import filesDark from "../assets/screens/admin-files-dark.webp";
 const heroYaml = `app:
   name: studio-leads
 
@@ -69,7 +82,7 @@ const { data: tasks } = await client.entity("tasks").list({ sort: "-createdAt" }
 const features = [
   {
     title: "Data and relations",
-    body: "Eleven field types, relations with restrict, cascade, or set_null on delete, indexes, filters, sorting, and expand. Every entity gets a REST resource.",
+    body: "Eleven field types, one to many and many to many relations, indexes, filters, sorting, and expand. Every entity gets a REST resource.",
     tag: "GET /api/v1/tasks?expand=leadId",
   },
   {
@@ -96,6 +109,21 @@ const features = [
     title: "Admin UI, light and dark",
     body: "Sortable, searchable tables, create and edit drawers, invites, backups, audit log, and webhooks. Generated from your schema.",
     tag: "/admin/",
+  },
+  {
+    title: "Realtime, when you want it",
+    body: "Turn on live updates per entity. Server sent events filtered by each reader's permissions, with resume, backpressure, and a Postgres broker for more than one instance.",
+    tag: "realtime: true",
+  },
+  {
+    title: "Many to many",
+    body: "Link a record to any number of others with many: true. Arrays of ids in and out, expand, a has filter, and permission checks on every link.",
+    tag: "tagIds: { type: relation, to: tags, many: true }",
+  },
+  {
+    title: "MCP for AI tools",
+    body: "An optional, read only MCP server lets Cursor or Claude read your schema, policies, API spec, and types while you build the front end.",
+    tag: "POST /mcp",
   },
   {
     title: "Schema map",
@@ -132,7 +160,7 @@ const faqs = [
   },
   {
     q: "Does it do realtime?",
-    a: "Not yet. Realtime over WebSocket or SSE is planned and will build on the existing change bus. Webhooks cover most integration needs today.",
+    a: "Yes, and it is off until you turn it on per entity. Clients get server sent events filtered by their own read permissions, resume after a disconnect, and work across instances on Postgres. The SDK has subscribe, and the Astro and Next.js starters use it for a live task list.",
   },
   {
     q: "How is it licensed?",
@@ -140,7 +168,7 @@ const faqs = [
   },
   {
     q: "Many to many relations?",
-    a: "There is no built in many to many type. Model it with a join entity that has two relation fields.",
+    a: "Yes. Add many: true to a relation and the field holds an array of ids, with expand, a has filter, permission checks on every link, and a multi select picker in the admin. Bakorin keeps the join table for you.",
   },
   {
     q: "Where does my data live?",
@@ -180,10 +208,10 @@ const faqs = [
     <div class="wrap">
       <div class="browser">
         <div class="browser-bar" aria-hidden="true"><span class="dots"><i></i><i></i><i></i></span><span class="url">127.0.0.1:4371/admin/</span></div>
-        <Image class="only-light" src={schemaLight} alt="Bakorin admin Schema page in light mode showing User, Lead, and Task entities connected by relation arrows" widths={[640, 1024]} sizes="(max-width: 1100px) 100vw, 1024px" loading="eager" />
-        <Image class="only-dark" src={schemaDark} alt="Bakorin admin Schema page in dark mode showing User, Lead, and Task entities connected by relation arrows" widths={[640, 1024]} sizes="(max-width: 1100px) 100vw, 1024px" loading="eager" />
+        <Image class="only-light" src={projectsLight} alt="Bakorin admin in light mode showing a Projects table with client, status, budget, due date, and tags columns" widths={[640, 1024, 1440]} sizes="(max-width: 1100px) 100vw, 1024px" loading="eager" />
+        <Image class="only-dark" src={projectsDark} alt="Bakorin admin in dark mode showing a Projects table with client, status, budget, due date, and tags columns" widths={[640, 1024, 1440]} sizes="(max-width: 1100px) 100vw, 1024px" loading="eager" />
       </div>
-      <p class="caption">The real admin UI, generated from the example project's app.yaml.</p>
+      <p class="caption">The real admin UI, generated from a demo project's app.yaml. The studio and its clients are fictional.</p>
     </div>
   </section>
 
@@ -238,7 +266,7 @@ const faqs = [
       <div>
         <p class="kicker">Admin UI</p>
         <h2>An admin panel your clients can actually use.</h2>
-        <p>Tables show names instead of ids, forms use your field descriptions as help text, and relations become searchable pickers. Pick System, Light, or Dark.</p>
+        <p>Tables show names instead of ids, forms use your field descriptions as help text, and relations become searchable pickers, with chips for many to many links. Pick System, Light, or Dark.</p>
         <ul class="checks">
           <li>Create and edit in a side drawer</li>
           <li>Invite users and resend verification</li>
@@ -249,18 +277,78 @@ const faqs = [
       </div>
       <div class="stack-shots">
         <div class="shot shot-back">
-          <Image class="only-light" src={listLight} alt="Leads table in the Bakorin admin, light mode" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
-          <Image class="only-dark" src={listDark} alt="Leads table in the Bakorin admin, dark mode" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
+          <Image class="only-light" src={schemaLight} alt="Schema page in light mode with Client, Project, Task, Tag, and User cards and relation arrows, including many to many links from projects to tags and users" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
+          <Image class="only-dark" src={schemaDark} alt="Schema page in dark mode with Client, Project, Task, Tag, and User cards and relation arrows, including many to many links from projects to tags and users" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
         </div>
         <div class="shot shot-front">
-          <Image class="only-light" src={editLight} alt="Edit Lead drawer with company, contact, email, status, notes, owner, and brief fields, light mode" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
-          <Image class="only-dark" src={editDark} alt="Edit Lead drawer with company, contact, email, status, notes, owner, and brief fields, dark mode" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
+          <Image class="only-light" src={editorLight} alt="Edit Project drawer in light mode with a client picker, status select, and multi select chips for tags and members" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
+          <Image class="only-dark" src={editorDark} alt="Edit Project drawer in dark mode with a client picker, status select, and multi select chips for tags and members" widths={[640, 1024]} sizes="(max-width: 900px) 100vw, 560px" />
         </div>
       </div>
     </div>
   </section>
 
-  <section id="who" class="section section-alt">
+  <section class="section section-alt" aria-labelledby="tour-title">
+    <div class="wrap">
+      <div class="section-head">
+        <p class="kicker">Inside the admin</p>
+        <h2 id="tour-title">Everything a handoff needs, already built.</h2>
+        <p>Operations pages ship in the same binary. Screens are from a demo project with fictional data.</p>
+      </div>
+      <div class="tour-grid">
+        <a class="tour-card" href="/docs/monitoring/">
+          <div class="shot">
+            <Image class="only-light" src={statusLight} alt="Status page with uptime, database, last backup, realtime open streams and broker, and email and webhook queues, light mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+            <Image class="only-dark" src={statusDark} alt="Status page with uptime, database, last backup, realtime open streams and broker, and email and webhook queues, dark mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+          </div>
+          <h3>Status</h3>
+          <p>Health, realtime streams, queues, and failed deliveries with Retry</p>
+        </a>
+        <a class="tour-card" href="/docs/email/">
+          <div class="shot">
+            <Image class="only-light" src={mailLight} alt="Mail page previewing a project shipped email rendered for a real project record, light mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+            <Image class="only-dark" src={mailDark} alt="Mail page previewing a project shipped email rendered for a real project record, dark mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+          </div>
+          <h3>Mail preview</h3>
+          <p>Preview a template against a real record, then send a test to yourself</p>
+        </a>
+        <a class="tour-card" href="/docs/webhooks/">
+          <div class="shot">
+            <Image class="only-light" src={webhooksLight} alt="Webhooks page listing delivered project events with status, attempts, and response codes, light mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+            <Image class="only-dark" src={webhooksDark} alt="Webhooks page listing delivered project events with status, attempts, and response codes, dark mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+          </div>
+          <h3>Webhooks</h3>
+          <p>Every delivery with its status, attempts, and response</p>
+        </a>
+        <a class="tour-card" href="/docs/backups/">
+          <div class="shot">
+            <Image class="only-light" src={backupsLight} alt="Backups page with a list of snapshots, their sizes, the restore command, and Download buttons, light mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+            <Image class="only-dark" src={backupsDark} alt="Backups page with a list of snapshots, their sizes, the restore command, and Download buttons, dark mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+          </div>
+          <h3>Backups</h3>
+          <p>Run a live backup and download any snapshot</p>
+        </a>
+        <a class="tour-card" href="/docs/security/">
+          <div class="shot">
+            <Image class="only-light" src={auditLight} alt="Audit log table with logins, invites, admin writes, and backups, light mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+            <Image class="only-dark" src={auditDark} alt="Audit log table with logins, invites, admin writes, and backups, dark mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+          </div>
+          <h3>Audit log</h3>
+          <p>Logins, invites, admin writes, backups, and MCP calls</p>
+        </a>
+        <a class="tour-card" href="/docs/branding/">
+          <div class="shot">
+            <Image class="only-light" src={brandedLight} alt="Admin branded as Fernwood Studio with a green leaf logo and green buttons, light mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+            <Image class="only-dark" src={brandedDark} alt="Admin branded as Fernwood Studio with a green leaf logo and green buttons, dark mode" widths={[480, 800]} sizes="(max-width: 700px) 100vw, (max-width: 1100px) 50vw, 380px" />
+          </div>
+          <h3>Your client's brand</h3>
+          <p>Their name, colors, and logo on the admin, docs, and emails</p>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <section id="who" class="section">
     <div class="wrap">
       <div class="section-head">
         <p class="kicker">Who it is for</p>
@@ -277,13 +365,13 @@ const faqs = [
         </article>
         <article class="muted-card">
           <h3>Maybe not for you yet</h3>
-          <p>If you need realtime subscriptions today, a plugin ecosystem, or a hosted service someone else runs, Bakorin is not there. It is a small, self-hosted v0.1.</p>
+          <p>If you need a plugin ecosystem, GraphQL, or a hosted service someone else runs, Bakorin is not there. It is a small, self-hosted v0.1.</p>
         </article>
       </div>
     </div>
   </section>
 
-  <section id="quickstart" class="section">
+  <section id="quickstart" class="section section-alt">
     <div class="wrap">
       <div class="section-head">
         <p class="kicker">Quickstart</p>
@@ -306,7 +394,7 @@ const faqs = [
     </div>
   </section>
 
-  <section id="faq" class="section section-alt">
+  <section id="faq" class="section">
     <div class="wrap narrow">
       <div class="section-head">
         <p class="kicker">FAQ</p>

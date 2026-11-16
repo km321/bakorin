@@ -1,0 +1,114 @@
+app:
+  name: fernwood-studio
+  version: "0.4.0"
+runtime:
+  dialect: sqlite
+  host: 127.0.0.1
+  port: 4371
+  sqlite:
+    path: ./data/app.db
+  files:
+    driver: local
+    path: ./data/uploads
+  backups:
+    destination: ./data/backups
+  mcp: true
+auth:
+  entity: users
+  adminRole: admin
+  signup: invite
+entities:
+  users:
+    auth: true
+    label: User
+    plural: Users
+    display: name
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      name: { type: text, required: true }
+      role: { type: enum, values: [user, admin], default: user, writable: admin }
+      title: { type: text }
+    policies:
+      read: [authenticated]
+      create: admin
+      update: owner(id)
+      delete: admin
+  clients:
+    label: Client
+    plural: Clients
+    display: name
+    fields:
+      name: { type: text, required: true }
+      industry: { type: enum, values: [hospitality, retail, nonprofit, health, education] }
+      website: { type: text }
+      contactEmail: { type: email }
+      logo: { type: file }
+    policies:
+      read: authenticated
+      create: admin
+      update: admin
+      delete: admin
+  tags:
+    label: Tag
+    plural: Tags
+    display: name
+    fields:
+      name: { type: text, required: true, unique: true }
+      color: { type: text }
+    policies:
+      read: public
+      create: admin
+      update: admin
+      delete: admin
+  projects:
+    label: Project
+    plural: Projects
+    display: name
+    realtime: true
+    fields:
+      name: { type: text, required: true }
+      clientId: { type: relation, to: clients, required: true }
+      status: { type: enum, values: [proposal, active, review, shipped], default: proposal }
+      budget: { type: number }
+      dueOn: { type: date }
+      tagIds: { type: relation, to: tags, many: true }
+      memberIds: { type: relation, to: users, many: true }
+      brief: { type: file }
+    policies:
+      read: authenticated
+      create: admin
+      update: authenticated
+      delete: admin
+  tasks:
+    label: Task
+    plural: Tasks
+    display: title
+    realtime: true
+    fields:
+      title: { type: text, required: true }
+      projectId: { type: relation, to: projects, required: true, onDelete: cascade }
+      assigneeId: { type: relation, to: users }
+      done: { type: boolean, default: false }
+      dueOn: { type: date }
+    policies:
+      read: authenticated
+      create: authenticated
+      update: authenticated
+      delete: admin
+webhooks:
+  - entity: projects
+    events: [create, update, delete]
+    url: http://127.0.0.1:4599/hooks/projects
+    secret: demo-webhook-secret-not-real-000000
+mail:
+  - name: project-shipped
+    entity: projects
+    events: [update]
+    changed: [status]
+    when:
+      status: shipped
+    to: "{{ expand.clientId.contactEmail }}"
+    subject: "{{ record.name }} has shipped"
+    template: project-shipped
+    expand: [clientId]

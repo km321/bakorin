@@ -5,6 +5,8 @@ description: Durable, signed, retried webhook deliveries for create, update, and
 
 Bakorin posts JSON to your URL after a successful create, update, or delete. Delivery is durable: each event is written to the `_bakorin_webhook_outbox` table in the same database transaction as the record change, then a worker POSTs it with retries. If the change rolls back, no delivery is queued. If the outbox write fails, the change rolls back too.
 
+![Webhooks page in light mode with the projects webhook, a Send test event button, and a delivery log of delivered events with attempts and response codes](../../../assets/screens/admin-webhooks-light.webp)
+
 ## Setup
 
 ```yaml title="app.yaml"

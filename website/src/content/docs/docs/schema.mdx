@@ -3,17 +3,17 @@ title: Schema visualizer
 description: See entities and relations as a diagram in the admin, or print them as Mermaid or JSON with bakorin schema.
 ---
 
-import schemaDark from "../../../assets/screens/schema-dark.png";
-import schemaPanel from "../../../assets/screens/schema-panel.png";
+import schemaDark from "../../../assets/screens/admin-schema-dark.webp";
+import schemaPanel from "../../../assets/screens/admin-schema-panel-dark.webp";
 import { Image } from "astro:assets";
 
 Bakorin can draw your schema two ways: in the admin UI, and from the CLI.
 
 ## In the admin
 
-Open **Project, then Schema**. Each entity is a card listing its fields and types. Relation fields are highlighted, and arrows point from the relation field to the target entity, labeled with the field name and its `onDelete` rule.
+Open **Project, then Schema**. Each entity is a card listing its fields and types. Relation fields are highlighted, and arrows point from the relation field to the target entity, labeled with the field name and its `onDelete` rule, or `many` for a many to many field.
 
-<Image src={schemaDark} alt="Schema page in dark mode with User, Lead, and Task cards and relation arrows labeled ownerId restrict and leadId restrict" />
+<Image src={schemaDark} alt="Schema page in dark mode with Client, Project, Task, Tag, and User cards and relation arrows labeled clientId restrict, projectId cascade, tagIds many, and memberIds many" />
 
 - Drag to pan, scroll to zoom, or use the **-**, **+**, and **Fit** buttons.
 - `*` marks a required field and `U` marks a unique one. Secret fields show as `hidden`.
@@ -21,7 +21,7 @@ Open **Project, then Schema**. Each entity is a card listing its fields and type
 - **Download SVG** saves the diagram in the current theme's colors.
 - **Copy as Mermaid** copies an `erDiagram` you can paste into a README or a docs page.
 
-<Image src={schemaPanel} alt="Schema details panel for Lead showing policies, indexes, and fields" />
+<Image src={schemaPanel} alt="Schema details panel for Project in dark mode showing its policies, indexes, and fields" />
 
 ## From the CLI
 

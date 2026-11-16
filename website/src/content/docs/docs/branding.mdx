@@ -4,6 +4,9 @@ description: Put your client's name, colors, logo, and favicon on the admin, the
 ---
 
 import { Aside } from "@astrojs/starlight/components";
+import { Image } from "astro:assets";
+import brandedLight from "../../../assets/screens/admin-branded-light.webp";
+import brandedSignin from "../../../assets/screens/admin-branded-signin-dark.webp";
 
 Branding is optional. Without a `branding:` section, the admin, `/docs`, and system emails look exactly as they always have. Add the section when you hand a project to a client and want it to carry their name instead of Bakorin.
 
@@ -20,6 +23,10 @@ branding:
   logo: branding/logo.svg         # optional
   favicon: branding/favicon.png   # optional
 ```
+
+<Image src={brandedLight} alt="Admin branded as Fernwood Studio in light mode, with a green leaf logo in the sidebar and green primary buttons" />
+
+<Image src={brandedSignin} alt="Branded admin sign in screen in dark mode with the Fernwood Studio name and logo and a lighter green button adjusted for contrast" />
 
 Every key is optional, but the section needs at least one. You can also set it with forms in the [app.yaml builder](/builder/).
 

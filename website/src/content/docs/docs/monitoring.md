@@ -15,6 +15,10 @@ Everything here is built in and off or quiet by default. Turn on what you need w
 | Alerts | `runtime.alerts` | off |
 | Metrics | `METRICS_TOKEN` | off (`/metrics` returns 404) |
 
+![Status page in light mode with uptime, version, database size, last backup, a Realtime section with open streams, broker, events, and slow clients dropped, and the email and webhook queues](../../../assets/screens/admin-status-light.webp)
+
+![Bottom of the Status page in dark mode showing failed deliveries, recent errors, and the Monitoring setup checklist with realtime streams and the MCP dev server switched on](../../../assets/screens/admin-monitoring-dark.webp)
+
 ## Request logs
 
 With `BAKORIN_REQUEST_LOG=json` (the default when `NODE_ENV=production`), each request writes one line to stdout:
