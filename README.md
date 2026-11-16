@@ -264,7 +264,7 @@ The production image bakes the `examples/studio-leads` project into `/project` a
 
 Health: `GET /health` (also `GET /healthz`) for liveness, `GET /ready` for readiness (database and storage).
 
-`bakorin start` refuses to boot without a strong `JWT_SECRET` (32 or more random characters, not a placeholder; generate one with `openssl rand -base64 48`). On Railway also set `TRUST_PROXY=1` so rate limits see each visitor's IP. See [Upgrade notes](docs/upgrading.md).
+`bakorin start` refuses to boot without a strong `JWT_SECRET` (32 or more random characters, not a placeholder; generate one with `openssl rand -base64 48`). On Railway also set `TRUST_PROXY=1` so rate limits see each visitor's IP.
 
 ### Docker
 

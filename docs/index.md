@@ -11,7 +11,6 @@ Markdown sources for a future bakorin.dev.
 - [Connecting Astro](connecting-astro.md)
 - [Connecting Next.js](connecting-next.md)
 - [Deploy on Railway](deploy-railway.md)
-- [Upgrade notes](upgrading.md)
 - [Backups and restore](backups.md)
 - [Schema changes](migrations.md)
 - [Monitoring](monitoring.md)
