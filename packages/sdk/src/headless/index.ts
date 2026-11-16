@@ -26,6 +26,7 @@ export {
   createUpload,
   formatBytes,
   signedFileUrl,
+  siteFileUrl,
   uploadFile,
   type UploadController,
   type UploadOptions,

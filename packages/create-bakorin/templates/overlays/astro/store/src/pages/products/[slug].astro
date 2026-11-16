@@ -1,0 +1,60 @@
+---
+import Layout from "../../layouts/Base.astro";
+import { api, imageOf } from "../../lib/bakorin.ts";
+import { money } from "../../lib/store.ts";
+
+const client = api(Astro);
+const { data } = await client.entity("products").list({ filter: { slug: String(Astro.params.slug), active: true }, limit: 1, expand: "image" });
+const product = data[0];
+if (!product) {
+  return new Response("Not found", { status: 404 });
+}
+
+let error = "";
+if (Astro.request.method === "POST") {
+  if (!Astro.locals.user) {
+    return Astro.redirect("/login", 303);
+  }
+  const form = await Astro.request.formData();
+  const quantity = Math.max(1, Math.min(99, Number(form.get("quantity") ?? 1) || 1));
+  try {
+    // One row per product: add to the quantity when it is already in the cart.
+    const { data: existing } = await client.entity("cartItems").list({ filter: { productId: product.id }, limit: 1 });
+    if (existing[0]) {
+      await client.entity("cartItems").update(existing[0].id, { quantity: (existing[0].quantity ?? 1) + quantity });
+    } else {
+      await client.entity("cartItems").create({ productId: product.id, quantity });
+    }
+    return Astro.redirect("/cart", 303);
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Could not add to the cart";
+  }
+}
+const image = imageOf(product, "image");
+---
+<Layout title={product.name}>
+  <div class="split">
+    <section class="card">
+      {image ? <img class="media" src={image} alt={product.imageAlt ?? ""} /> : null}
+      <h1>{product.name}</h1>
+      <p class="meta">{money(product.priceCents)}</p>
+      {product.description ? <p class="prose">{product.description}</p> : null}
+    </section>
+    <section class="card">
+      <h2>Buy</h2>
+      {error ? <div class="error" role="alert">{error}</div> : null}
+      {Astro.locals.user ? (
+        <form method="post">
+          <label>
+            Quantity
+            <input type="number" name="quantity" min="1" max="99" value="1" />
+          </label>
+          <button type="submit">Add to cart</button>
+        </form>
+      ) : (
+        <p><a href="/login">Sign in</a> to add this to your cart.</p>
+      )}
+    </section>
+  </div>
+  <p><a href="/">Back to the shop</a></p>
+</Layout>

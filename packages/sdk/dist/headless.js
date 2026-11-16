@@ -5,7 +5,7 @@ import {
 } from "./chunks/index-n603vnp4.js";
 import {
   createAuth2
-} from "./chunks/index-36jw3e0r.js";
+} from "./chunks/index-knjdaz0z.js";
 import {
   fieldLabel2,
   formFields2,
@@ -29,8 +29,9 @@ import {
   uploadFile2,
   createUpload2,
   signedFileUrl2,
-  clientFileUrl2
-} from "./chunks/index-a5bzk4nd.js";
+  clientFileUrl2,
+  siteFileUrl2
+} from "./chunks/index-csqk23qj.js";
 export {
   acceptsType2 as acceptsType,
   applyChange2 as applyChange,
@@ -54,6 +55,7 @@ export {
   loadBrandingTheme2 as loadBrandingTheme,
   pageInfo2 as pageInfo,
   signedFileUrl2 as signedFileUrl,
+  siteFileUrl2 as siteFileUrl,
   themeFromBrandingCss2 as themeFromBrandingCss,
   uploadFile2 as uploadFile,
   validateField2 as validateField,

@@ -1,0 +1,11 @@
+---
+import Layout from "../layouts/Base.astro";
+import Sections from "../components/Sections.astro";
+import { api } from "../lib/bakorin.ts";
+
+// Sections are public in app.yaml. Edit them in the Bakorin admin at /admin on the API.
+const { data: sections } = await api(Astro).entity("sections").list({ filter: { page: "home" }, sort: "position", limit: 50 });
+---
+<Layout title="Home">
+  <Sections sections={sections} emptyText="No sections for the home page yet. Add some in the Bakorin admin, or run bun seed.ts for example content." />
+</Layout>

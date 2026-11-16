@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { api } from "../lib/bakorin.ts";
+import { site } from "../lib/site.ts";
 
 export async function verifyEmailAction(formData: FormData): Promise<string | void> {
   try {
@@ -23,6 +24,6 @@ export async function acceptInviteAction(formData: FormData): Promise<string | v
   } catch (error) {
     return error instanceof Error ? error.message : "Could not accept the invite";
   }
-  redirect("/app");
+  redirect(site.home);
 }
 

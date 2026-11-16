@@ -26,6 +26,8 @@ export interface FieldSchema {
     defaultValue?: unknown;
     /** Shortest accepted value. Passwords default to 8 (the server's rule); sign in forms set 0. */
     minLength?: number;
+    /** Show a text field as a multi line text area (bodies, descriptions). A display hint only. */
+    multiline?: boolean;
 }
 export interface EntitySchema {
     name: string;

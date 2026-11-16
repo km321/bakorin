@@ -92,6 +92,57 @@ jobs:
             /tmp/bakorin-e2e-*.png
           if-no-files-found: ignore
 
+  templates:
+    name: templates e2e (${{ matrix.template }}, ${{ matrix.frontend }}, ${{ matrix.dialect }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        template: [blank, auth-only, blog, marketing, saas, store]
+        frontend: [astro, next]
+        dialect: [sqlite]
+        include:
+          # Postgres for the templates with the most server logic, one frontend each.
+          - { template: blog, frontend: next, dialect: postgres }
+          - { template: marketing, frontend: astro, dialect: postgres }
+          - { template: saas, frontend: astro, dialect: postgres }
+          - { template: store, frontend: next, dialect: postgres }
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: bakorin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/bakorin
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+      - run: bun install --frozen-lockfile
+      - name: Install Chromium
+        run: bunx playwright install --with-deps chromium
+      - name: Scaffold, seed, build, and drive the template
+        run: bun scripts/e2e-templates/run.ts --template ${{ matrix.template }} --frontend ${{ matrix.frontend }} --dialect ${{ matrix.dialect }} --screenshots template-shots
+      - name: Keep screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: template-${{ matrix.template }}-${{ matrix.frontend }}-${{ matrix.dialect }}
+          path: |
+            template-shots
+            /tmp/bakorin-tpl-*.png
+          if-no-files-found: ignore
+
   security:
     name: dependency audit and secret scan
     runs-on: ubuntu-latest

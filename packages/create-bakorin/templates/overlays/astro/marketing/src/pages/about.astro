@@ -1,0 +1,10 @@
+---
+import Layout from "../layouts/Base.astro";
+import Sections from "../components/Sections.astro";
+import { api } from "../lib/bakorin.ts";
+
+const { data: sections } = await api(Astro).entity("sections").list({ filter: { page: "about" }, sort: "position", limit: 50 });
+---
+<Layout title="About">
+  <Sections sections={sections} emptyText="No sections for the about page yet. Add some in the Bakorin admin, or run bun seed.ts for example content." />
+</Layout>

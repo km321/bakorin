@@ -1,11 +1,11 @@
 import { createNextClient, loadBrandingTheme, rightmostForwardedFor } from "@bakorin/sdk/next";
+import { siteFileUrl } from "@bakorin/sdk/headless";
 import { cookies, headers } from "next/headers";
 import type { BakorinEntities } from "./bakorin.gen.ts";
 
 // Types and bakorinSchema come from app.yaml. After you change the schema, run:
 //   bunx bakorin typegen -o web/lib/bakorin.gen.ts   (from the project folder)
 export { bakorinSchema as schema } from "./bakorin.gen.ts";
-export type Task = BakorinEntities["tasks"];
 export type User = BakorinEntities["users"];
 
 export function bakorinUrl(): string {
@@ -39,3 +39,28 @@ export async function brandingTheme(): Promise<string> {
   }
   return theme.css;
 }
+
+/** A signed file link from the API, as a path on this site (through /api/bakorin). */
+export function fileUrl(link: string | undefined | null): string | undefined {
+  return siteFileUrl(link, { baseUrl: bakorinUrl() });
+}
+
+/** True when the user has one of the roles. */
+export function hasRole(user: { role?: unknown } | null | undefined, roles: string[]): boolean {
+  return Boolean(user && roles.includes(String(user.role)));
+}
+
+/** A record read with expand: the related rows and file details Bakorin attached. */
+type Expanded = { $expand?: Record<string, Record<string, unknown> | undefined> };
+
+/** The site path of an expanded file field (read the record with expand: "cover"). */
+export function imageOf(row: object, field: string): string | undefined {
+  const file = (row as Expanded).$expand?.[field];
+  return typeof file?.url === "string" ? fileUrl(file.url) : undefined;
+}
+
+/** A related record pulled in with expand, for example the category of a post. */
+export function relatedOf<T = Record<string, unknown>>(row: object, field: string): T | undefined {
+  return (row as Expanded).$expand?.[field] as T | undefined;
+}
+

@@ -1,0 +1,46 @@
+---
+import Layout from "../../../layouts/Base.astro";
+import RecordForm from "@bakorin/sdk/astro/RecordForm.astro";
+import DataTable from "@bakorin/sdk/astro/DataTable.astro";
+import { handleRecordForm } from "@bakorin/sdk/astro";
+import { formFields } from "@bakorin/sdk/headless";
+import { api, bakorinUrl, hasRole, schema } from "../../../lib/bakorin.ts";
+import { MANAGERS, PROJECT_FIELDS } from "../../../lib/team.ts";
+
+const user = Astro.locals.user!;
+const result = await handleRecordForm(Astro, {
+  baseUrl: bakorinUrl(),
+  entity: "projects",
+  fields: formFields(schema.entities.projects, { include: PROJECT_FIELDS }),
+  redirectTo: "/app/projects",
+});
+if (result.response) return result.response;
+// app.yaml lets managers and admins delete projects; everyone else does not get the button.
+const canDelete = hasRole(user, MANAGERS);
+---
+<Layout title="Projects">
+  <div class="split">
+    <section class="card">
+      <h1>Projects</h1>
+      <p class="lede">Everyone on the team sees every project. Changes show up live.</p>
+      <DataTable
+        client={api(Astro)}
+        entity="projects"
+        schema={schema}
+        columns={["name", "status", "dueOn", "updatedAt"]}
+        rowLink={{ field: "name", href: "/app/projects/:id" }}
+        deletable={canDelete}
+        live
+        sort="-updatedAt"
+        limit={15}
+        caption="Projects"
+        hideCaption
+        emptyText="No projects yet. Add the first one."
+      />
+    </section>
+    <section class="card">
+      <h2>New project</h2>
+      <RecordForm entity="projects" schema={schema} include={PROJECT_FIELDS} multiline={["notes"]} labels={{ dueOn: "Due date" }} submitLabel="Add project" redirectTo="/app/projects" result={result} />
+    </section>
+  </div>
+</Layout>

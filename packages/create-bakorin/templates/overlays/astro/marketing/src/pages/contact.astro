@@ -1,0 +1,32 @@
+---
+import Layout from "../layouts/Base.astro";
+import RecordForm from "@bakorin/sdk/astro/RecordForm.astro";
+import { handleRecordForm } from "@bakorin/sdk/astro";
+import { formFields } from "@bakorin/sdk/headless";
+import { bakorinUrl, schema } from "../lib/bakorin.ts";
+
+const FIELDS = ["name", "email", "company", "message"];
+const THANKS = "Thanks for your message. We will get back to you soon.";
+
+// Anyone can send the form (leads: create: public in app.yaml), five times per
+// ten minutes per visitor. Only admins can read what was sent.
+const result = await handleRecordForm(Astro, { baseUrl: bakorinUrl(), entity: "leads", fields: formFields(schema.entities.leads, { include: FIELDS }) });
+if (result.response) return result.response;
+if (result.message) result.message = THANKS;
+---
+<Layout title="Contact">
+  <section class="card">
+    <h1>Contact us</h1>
+    <p class="lede">Tell us a little about what you need. We read every message.</p>
+    <RecordForm
+      entity="leads"
+      schema={schema}
+      include={FIELDS}
+      multiline={["message"]}
+      labels={{ name: "Your name", email: "Email", company: "Company (optional)" }}
+      submitLabel="Send message"
+      successMessage={THANKS}
+      result={result}
+    />
+  </section>
+</Layout>

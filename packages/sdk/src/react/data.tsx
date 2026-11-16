@@ -28,6 +28,8 @@ export interface DataTableProps<T extends Row = Row> extends UseCollectionOption
   hideCaption?: boolean;
   /** Boolean fields shown as checkboxes that save on change. */
   toggle?: string[];
+  /** Makes one column a link to each row's page, for example { field: "name", href: "/app/projects/:id" }. */
+  rowLink?: { field: string; href: string };
   /** Adds a Delete button to each row. */
   deletable?: boolean;
   /** Asked before deleting. Set to null to skip. */
@@ -159,6 +161,8 @@ function DataTableView<T extends Row>(props: DataTableProps<T> & { collection: C
                         aria-label={`${column.label ?? fieldLabel(column.field)}: ${rowName(row, entitySchema)}`}
                         onChange={(event) => void collection.update(id, { [column.field]: event.currentTarget.checked } as Partial<T>).catch(() => undefined)}
                       />
+                    ) : props.rowLink?.field === column.field && !pending ? (
+                      <a href={props.rowLink.href.replace(":id", encodeURIComponent(id))}>{formatValue(column.meta, field(row, column.field))}</a>
                     ) : (
                       formatValue(column.meta, field(row, column.field))
                     )}

@@ -1,0 +1,93 @@
+app:
+  name: {{APP_NAME}}
+  version: "0.1.0"
+
+runtime:
+  dialect: sqlite
+  host: 0.0.0.0
+  port: 4371
+  sqlite:
+    path: ./data/app.db
+  files:
+    driver: local
+    path: ./data/uploads
+    maxBytes: 10485760
+    allowedMimeTypes: [image/png, image/jpeg, image/webp, image/gif, application/pdf, text/plain]
+    signedUrlTtlSeconds: 900
+  jwt:
+    accessTtlSeconds: 900
+    refreshTtlSeconds: 2592000
+  backups:
+    interval: 24h
+    retain: 14
+    destination: ./data/backups
+  hooks: ./hooks.ts
+  cors:
+    origins: ["http://localhost:4321", "http://localhost:3000"]
+
+auth:
+  entity: users
+  identity: email
+  password: password
+  role: role
+  adminRole: admin
+  requireVerifiedEmail: false
+  # open: anyone can sign up. invite: admins invite people. closed: no new accounts.
+  # A marketing site only needs accounts for the team, so admins invite people.
+  signup: invite
+
+entities:
+  users:
+    auth: true
+    label: User
+    plural: Users
+    display: name
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      name: { type: text, required: true }
+      role: { type: enum, values: [user, admin], default: user, writable: admin }
+    policies:
+      read: [owner(id), admin]
+      create: admin
+      update: owner(id)
+      delete: admin
+
+  # Content blocks for the public pages. Admins edit them here or in /admin.
+  sections:
+    label: Section
+    plural: Sections
+    display: heading
+    fields:
+      page: { type: enum, values: [home, about], default: home, description: "Which page shows this section." }
+      position: { type: integer, default: 0, description: "Lower numbers show first." }
+      heading: { type: text, required: true }
+      body: { type: text, required: true }
+      ctaLabel: { type: text, description: "Optional button text." }
+      ctaHref: { type: text, description: "Optional button link, for example /contact." }
+    indexes:
+      - [page, position]
+    policies:
+      read: public
+      create: admin
+      update: admin
+      delete: admin
+
+  # Contact form submissions. Anyone can send one; only admins can read them.
+  leads:
+    label: Lead
+    plural: Leads
+    display: name
+    fields:
+      name: { type: text, required: true }
+      email: { type: email, required: true }
+      company: { type: text }
+      message: { type: text, required: true }
+      status: { type: enum, values: [new, contacted, closed], default: new, writable: admin }
+    policies:
+      read: admin
+      create: public
+      update: admin
+      delete: admin
+    rateLimit:
+      create: { limit: 5, window: 10m }

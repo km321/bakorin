@@ -1,0 +1,31 @@
+---
+import Layout from "../../layouts/Base.astro";
+import { api } from "../../lib/bakorin.ts";
+import { readableDate } from "../../lib/blog.ts";
+
+const client = api(Astro);
+const { data } = await client.entity("categories").list({ filter: { slug: String(Astro.params.slug) }, limit: 1 });
+const category = data[0];
+if (!category) {
+  return new Response("Not found", { status: 404 });
+}
+const { data: posts } = await client.entity("posts").list({ filter: { categoryId: category.id }, sort: "-publishedOn", limit: 50 });
+---
+<Layout title={category.name}>
+  <section class="card">
+    <h1>{category.name}</h1>
+    {posts.length === 0 ? (
+      <p class="empty">No posts in this category yet.</p>
+    ) : (
+      <ul class="list">
+        {posts.map((post) => (
+          <li>
+            <a href={`/posts/${post.slug}`}>{post.title}</a>
+            <time class="meta" datetime={post.publishedOn}>{readableDate(post.publishedOn)}</time>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+  <p><a href="/">Back to all posts</a></p>
+</Layout>

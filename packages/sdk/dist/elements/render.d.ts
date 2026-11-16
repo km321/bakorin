@@ -13,6 +13,8 @@ export interface RenderFieldOptions {
         value: string;
         label: string;
     }[];
+    /** File fields: accepted types for the picker. */
+    accept?: string;
 }
 export declare function renderField(field: FieldSchema, options: RenderFieldOptions): string;
 export declare function renderAlert(message: string | null | undefined, tone?: "error" | "success"): string;
@@ -34,6 +36,10 @@ export interface RenderFormOptions {
         value: string;
         label: string;
     }[]>;
+    /** Text fields to show as multi line text areas. */
+    multiline?: readonly string[];
+    /** File fields: accepted types for the picker, for example "image/*". */
+    accept?: Record<string, string>;
     /** Extra HTML after the button (links). Trusted: pass only your own markup. */
     footer?: string;
     /** Hidden inputs, for example _action or id. */
@@ -72,6 +78,11 @@ export interface TableConfig {
     emptyText: string;
     /** For links that work without JavaScript: ?page= and ?sort= on this path. */
     path?: string;
+    /** Makes one column a link to the row's page. ":id" in href becomes the row id. */
+    rowLink?: {
+        field: string;
+        href: string;
+    };
 }
 export declare function tableConfig(entity: string, schema: EntitySchema | undefined, options?: {
     columns?: (string | {
@@ -86,6 +97,10 @@ export declare function tableConfig(entity: string, schema: EntitySchema | undef
     confirmDelete?: string | null;
     emptyText?: string;
     path?: string;
+    rowLink?: {
+        field: string;
+        href: string;
+    };
 }): TableConfig;
 type TableState = Pick<CollectionState<Record<string, unknown>>, "items" | "total" | "limit" | "offset" | "sort" | "error" | "loading">;
 export declare function renderTableBody(config: TableConfig, state: TableState): string;

@@ -11,7 +11,7 @@ interface Props {
   entity: string;
   schema: { entities: Record<string, any> };
   /** The record to edit. Leave out to create one. */
-  record?: Record<string, unknown> & { id?: unknown };
+  record?: object;
   include?: string[];
   exclude?: string[];
   isAdmin?: boolean;
@@ -20,7 +20,7 @@ interface Props {
   hints?: Record<string, string>;
   /** Choices for relation fields. A server client loads up to 100 related records when you pass client instead. */
   relationOptions?: Record<string, { value: string; label: string }[]>;
-  client?: { entity(name: string): { list(query?: any): Promise<{ data: Record<string, unknown>[] }> } };
+  client?: { entity(name: string): { list(query?: any): Promise<{ data: object[] }> } };
   /** From handleRecordForm. */
   result?: { errors?: Record<string, string>; error?: string; message?: string; values?: Record<string, unknown> };
   /** Go here after a save with JavaScript. */
@@ -28,10 +28,15 @@ interface Props {
   successMessage?: string;
   basePath?: string;
   id?: string;
+  /** Text fields to show as multi line text areas. */
+  multiline?: string[];
+  /** File fields: accepted types for the picker, for example { cover: "image/*" }. */
+  accept?: Record<string, string>;
 }
 
-const { entity, schema, record, include, exclude, isAdmin, labels, hints, client, result = {}, redirectTo, successMessage, basePath } = Astro.props;
+const { entity, schema, include, exclude, isAdmin, labels, hints, client, result = {}, redirectTo, successMessage, basePath } = Astro.props;
 const entitySchema = schema.entities[entity];
+const record = Astro.props.record as (Record<string, unknown> & { id?: unknown }) | undefined;
 const fields = entitySchema ? formFields(entitySchema, { mode: record ? "update" : "create", include, exclude, isAdmin }) : [];
 const relationOptions = { ...(Astro.props.relationOptions ?? {}) };
 if (client) {
@@ -40,7 +45,7 @@ if (client) {
       const display = schema.entities[field.relation.to]?.display ?? "id";
       try {
         const rows = await client.entity(field.relation.to).list({ limit: 100, sort: display });
-        relationOptions[field.name] = rows.data.map((row) => ({ value: String(row.id), label: String(row[display] ?? row.id) }));
+        relationOptions[field.name] = (rows.data as Record<string, unknown>[]).map((row) => ({ value: String(row.id), label: String(row[display] ?? row.id) }));
       } catch {
         // leave the field as a plain id input
       }
@@ -61,6 +66,8 @@ const html = renderForm({
   hints,
   relationOptions,
   hidden: { _bakorin_form: entity },
+  multiline: Astro.props.multiline,
+  accept: Astro.props.accept,
 });
 ---
 

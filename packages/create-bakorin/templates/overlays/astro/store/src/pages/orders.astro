@@ -1,0 +1,33 @@
+---
+import Layout from "../layouts/Base.astro";
+import { api } from "../lib/bakorin.ts";
+import { money, orderNumber, STATUS_LABELS } from "../lib/store.ts";
+
+// Orders are private to their owner (and admins) in app.yaml.
+const { data: orders } = await api(Astro).entity("orders").list({ sort: "-createdAt", limit: 50 });
+---
+<Layout title="Orders">
+  <section class="card">
+    <h1>Your orders</h1>
+    {orders.length === 0 ? (
+      <p class="empty">No orders yet.</p>
+    ) : (
+      <table class="rows">
+        <caption class="bk-visually-hidden">Your orders</caption>
+        <thead>
+          <tr><th scope="col">Order</th><th scope="col">Placed</th><th scope="col">Status</th><th scope="col">Total</th></tr>
+        </thead>
+        <tbody>
+          {orders.map((order) => (
+            <tr>
+              <td><a href={`/checkout/${order.id}`}>{orderNumber(order.id)}</a></td>
+              <td>{new Date(order.createdAt).toLocaleDateString("en-US")}</td>
+              <td>{STATUS_LABELS[order.status] ?? order.status}</td>
+              <td>{money(order.totalCents)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    )}
+  </section>
+</Layout>

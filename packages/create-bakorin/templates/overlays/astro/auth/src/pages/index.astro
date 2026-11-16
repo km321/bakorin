@@ -1,0 +1,22 @@
+---
+import Layout from "../layouts/Base.astro";
+
+// src/middleware.ts loads the user on every page that has a session cookie.
+const user = Astro.locals.user;
+---
+<Layout title="Home">
+  <section class="card">
+    <h1>Accounts, ready to build on</h1>
+    <p class="lede">This starter has sign up, sign in, password reset, invites, and a protected account page. Add entities to app.yaml and pages here as you go.</p>
+    <div class="actions">
+      {user ? (
+        <a class="button" href="/app">Go to your account</a>
+      ) : (
+        <>
+          <a class="button" href="/signup">Create an account</a>
+          <a class="button secondary" href="/login">Sign in</a>
+        </>
+      )}
+    </div>
+  </section>
+</Layout>

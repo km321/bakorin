@@ -8,7 +8,7 @@ import { jsonForScript, renderTable, tableConfig } from "../dist/astro-render.js
 
 interface Props {
   /** A server client, for example api(Astro) from src/lib/bakorin.ts. */
-  client: { entity(name: string): { list(query?: any): Promise<{ data: Record<string, unknown>[]; meta: { total: number; limit: number; offset: number } }> } };
+  client: { entity(name: string): { list(query?: any): Promise<{ data: object[]; meta: { total: number; limit: number; offset: number } }> } };
   entity: string;
   schema?: { entities: Record<string, any> };
   columns?: (string | { field: string; label?: string; sortable?: boolean })[];
@@ -23,6 +23,8 @@ interface Props {
   confirmDelete?: string | null;
   live?: boolean;
   emptyText?: string;
+  /** Makes one column a link to each row's page, for example { field: "name", href: "/app/projects/:id" }. */
+  rowLink?: { field: string; href: string };
   basePath?: string;
   id?: string;
 }
@@ -34,7 +36,7 @@ const config = tableConfig(entity, schema?.entities[entity], { ...Astro.props, p
 let initial = { data: [] as Record<string, unknown>[], meta: { total: 0, limit, offset: page * limit } };
 let error: string | null = null;
 try {
-  initial = await client.entity(entity).list({ limit, offset: page * limit, sort: sort ?? undefined, filter: filter as never });
+  initial = (await client.entity(entity).list({ limit, offset: page * limit, sort: sort ?? undefined, filter: filter as never })) as typeof initial;
 } catch (caught) {
   error = caught instanceof Error ? caught.message : String(caught);
 }

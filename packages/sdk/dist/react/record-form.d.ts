@@ -15,6 +15,10 @@ export interface RecordFormProps<R> extends UseRecordFormOptions<R> {
         label: string;
     }[]>;
     className?: string;
+    /** Text fields to show as multi line text areas. */
+    multiline?: readonly string[];
+    /** File fields: accepted types for the picker, for example { cover: "image/*" }. */
+    accept?: Record<string, string>;
     /** Use a collection's create and update so lists change at once. */
     collection?: {
         create: (body: never) => Promise<unknown>;

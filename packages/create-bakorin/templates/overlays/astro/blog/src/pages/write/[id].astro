@@ -1,0 +1,87 @@
+---
+import Layout from "../../layouts/Base.astro";
+import RecordForm from "@bakorin/sdk/astro/RecordForm.astro";
+import { handleRecordForm } from "@bakorin/sdk/astro";
+import { formFields } from "@bakorin/sdk/headless";
+import { api, bakorinUrl, hasRole, schema } from "../../lib/bakorin.ts";
+import { DRAFT_FIELDS, today } from "../../lib/blog.ts";
+
+const user = Astro.locals.user!;
+if (!hasRole(user, ["admin"])) {
+  return new Response("Only admins can write posts.", { status: 403 });
+}
+
+const client = api(Astro);
+const id = String(Astro.params.id);
+const draft = await client.entity("drafts").get(id).catch(() => null);
+if (!draft) {
+  return new Response("Not found", { status: 404 });
+}
+
+let error = "";
+if (Astro.request.method === "POST") {
+  // Read a copy: handleRecordForm below reads the body for the edit form.
+  const action = String((await Astro.request.clone().formData()).get("_action") ?? "");
+  if (action === "publish") {
+    try {
+      // Publishing copies the draft into posts (public) and removes the draft.
+      await client.entity("posts").create({
+        title: draft.title,
+        slug: draft.slug,
+        excerpt: draft.excerpt,
+        body: draft.body,
+        cover: draft.cover,
+        coverAlt: draft.coverAlt,
+        categoryId: draft.categoryId,
+        publishedOn: today(),
+        authorId: user.id,
+      });
+      await client.entity("drafts").delete(id);
+      return Astro.redirect(`/posts/${draft.slug}`, 303);
+    } catch (err) {
+      error = err instanceof Error ? err.message : "Could not publish the draft";
+    }
+  } else if (action === "delete") {
+    await client.entity("drafts").delete(id);
+    return Astro.redirect("/write", 303);
+  }
+}
+
+const fields = formFields(schema.entities.drafts, { include: DRAFT_FIELDS, mode: "update", isAdmin: true });
+const result = await handleRecordForm(Astro, { baseUrl: bakorinUrl(), entity: "drafts", fields, id, initial: draft, redirectTo: `/write/${id}` });
+if (result.response) return result.response;
+---
+<Layout title={`Edit ${draft.title}`}>
+  <section class="card">
+    <h1>Edit draft</h1>
+    <RecordForm
+      entity="drafts"
+      schema={schema}
+      record={draft}
+      include={DRAFT_FIELDS}
+      isAdmin
+      client={client}
+      multiline={["body"]}
+      accept={{ cover: "image/*" }}
+      labels={{ coverAlt: "Cover description", categoryId: "Category" }}
+      submitLabel="Save draft"
+      result={result}
+    />
+  </section>
+  <section class="card">
+    <h2>Publish</h2>
+    <p class="lede">Publishing makes the post public at /posts/{draft.slug} and removes this draft. Save your changes first.</p>
+    {error ? <div class="error" role="alert">{error}</div> : null}
+    <div class="actions">
+      <form method="post" class="inline-form">
+        <input type="hidden" name="_action" value="publish" />
+        <button type="submit">Publish</button>
+      </form>
+      <form method="post" class="inline-form">
+        <input type="hidden" name="_action" value="delete" />
+        <button type="submit" class="secondary">Delete draft</button>
+      </form>
+    </div>
+  </section>
+  <p><a href="/write">Back to drafts</a></p>
+</Layout>

@@ -1,0 +1,87 @@
+---
+import Layout from "../layouts/Base.astro";
+import { api, relatedOf } from "../lib/bakorin.ts";
+import { money, type Product } from "../lib/store.ts";
+
+// requireAuth (src/middleware.ts) protects /cart. Cart rows are private to their owner in app.yaml.
+const client = api(Astro);
+let error = "";
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const action = String(form.get("_action") ?? "");
+  const id = String(form.get("id") ?? "");
+  try {
+    if (action === "update") {
+      const quantity = Math.max(0, Math.min(99, Number(form.get("quantity") ?? 1) || 0));
+      if (quantity === 0) await client.entity("cartItems").delete(id);
+      else await client.entity("cartItems").update(id, { quantity });
+    } else if (action === "remove") {
+      await client.entity("cartItems").delete(id);
+    } else if (action === "checkout") {
+      // hooks.ts copies the cart into the order with the current prices, then empties the cart.
+      const order = await client.entity("orders").create({});
+      return Astro.redirect(`/checkout/${order.id}`, 303);
+    }
+    return Astro.redirect("/cart", 303);
+  } catch (err) {
+    error = err instanceof Error ? err.message : "Could not update the cart";
+  }
+}
+
+const { data: items } = await client.entity("cartItems").list({ expand: "productId", sort: "createdAt", limit: 100 });
+const rows = items.map((item) => {
+  const product = relatedOf<Product>(item, "productId");
+  const unit = product?.priceCents ?? null;
+  return { item, product, unit, line: unit === null ? null : unit * (item.quantity ?? 1) };
+});
+const unpriced = rows.some((row) => row.unit === null);
+const total = rows.reduce((sum, row) => sum + (row.line ?? 0), 0);
+---
+<Layout title="Cart">
+  <section class="card">
+    <h1>Your cart</h1>
+    {error ? <div class="error" role="alert">{error}</div> : null}
+    {rows.length === 0 ? (
+      <p class="empty">Your cart is empty. <a href="/">Browse the shop</a>.</p>
+    ) : (
+      <>
+        <table class="rows">
+          <caption class="bk-visually-hidden">Items in your cart</caption>
+          <thead>
+            <tr><th scope="col">Product</th><th scope="col">Price</th><th scope="col">Quantity</th><th scope="col">Total</th><th scope="col"><span class="bk-visually-hidden">Remove</span></th></tr>
+          </thead>
+          <tbody>
+            {rows.map(({ item, product, unit, line }) => (
+              <tr>
+                <td>{product ? <a href={`/products/${product.slug}`}>{product.name}</a> : "Removed product"}</td>
+                <td>{money(unit)}</td>
+                <td>
+                  <form method="post" class="inline-form">
+                    <input type="hidden" name="_action" value="update" />
+                    <input type="hidden" name="id" value={item.id} />
+                    <input type="number" name="quantity" min="0" max="99" value={item.quantity ?? 1} aria-label={`Quantity of ${product?.name ?? "item"}`} />
+                    <button type="submit" class="secondary">Update</button>
+                  </form>
+                </td>
+                <td>{line === null ? "None" : money(line)}</td>
+                <td>
+                  <form method="post" class="inline-form">
+                    <input type="hidden" name="_action" value="remove" />
+                    <input type="hidden" name="id" value={item.id} />
+                    <button type="submit" class="secondary" aria-label={`Remove ${product?.name ?? "item"}`}>Remove</button>
+                  </form>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p><strong>Total: {money(total)}</strong></p>
+        {unpriced && <p class="notice">Some items have no price yet, so they are not in the total. An admin can set prices on the Manage page.</p>}
+        <form method="post">
+          <input type="hidden" name="_action" value="checkout" />
+          <button type="submit">Place order</button>
+        </form>
+      </>
+    )}
+  </section>
+</Layout>

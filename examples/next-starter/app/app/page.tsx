@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { FileUpload, Gate, LiveList } from "@bakorin/sdk/react";
 import { requireUser } from "@bakorin/sdk/next";
-import { api, type Task, type User } from "../../lib/bakorin.ts";
+import { api, type User } from "../../lib/bakorin.ts";
+import type { Tasks as Task } from "../../lib/bakorin.gen.ts";
 
 export default async function DashboardPage() {
   const client = await api();

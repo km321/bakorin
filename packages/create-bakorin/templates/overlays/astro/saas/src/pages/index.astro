@@ -1,0 +1,17 @@
+---
+import Layout from "../layouts/Base.astro";
+
+if (Astro.locals.user) {
+  return Astro.redirect("/app");
+}
+---
+<Layout title="Welcome">
+  <section class="card">
+    <h1>Your team's workspace</h1>
+    <p class="lede">Track projects, post quick updates, and see changes from your team as they happen.</p>
+    <div class="actions">
+      <a class="button" href="/login">Sign in</a>
+      <a class="button secondary" href="/signup">Create an account</a>
+    </div>
+  </section>
+</Layout>

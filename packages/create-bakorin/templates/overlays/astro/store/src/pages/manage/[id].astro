@@ -1,0 +1,39 @@
+---
+import Layout from "../../layouts/Base.astro";
+import RecordForm from "@bakorin/sdk/astro/RecordForm.astro";
+import { handleRecordForm } from "@bakorin/sdk/astro";
+import { formFields } from "@bakorin/sdk/headless";
+import { api, bakorinUrl, hasRole, schema } from "../../lib/bakorin.ts";
+import { PRODUCT_FIELDS } from "../../lib/store.ts";
+
+const user = Astro.locals.user!;
+if (!hasRole(user, ["admin"])) {
+  return new Response("Only admins can manage products.", { status: 403 });
+}
+const id = String(Astro.params.id);
+const product = await api(Astro).entity("products").get(id).catch(() => null);
+if (!product) {
+  return new Response("Not found", { status: 404 });
+}
+const fields = formFields(schema.entities.products, { include: PRODUCT_FIELDS, mode: "update", isAdmin: true });
+const result = await handleRecordForm(Astro, { baseUrl: bakorinUrl(), entity: "products", fields, id, initial: product, redirectTo: "/manage" });
+if (result.response) return result.response;
+---
+<Layout title={`Edit ${product.name}`}>
+  <section class="card">
+    <h1>Edit {product.name}</h1>
+    <RecordForm
+      entity="products"
+      schema={schema}
+      record={product}
+      include={PRODUCT_FIELDS}
+      isAdmin
+      multiline={["description"]}
+      accept={{ image: "image/*" }}
+      labels={{ priceCents: "Price in cents", imageAlt: "Photo description" }}
+      redirectTo="/manage"
+      result={result}
+    />
+  </section>
+  <p><a href="/manage">Back to products</a></p>
+</Layout>

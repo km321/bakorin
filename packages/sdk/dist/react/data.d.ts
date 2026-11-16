@@ -20,6 +20,11 @@ export interface DataTableProps<T extends Row = Row> extends UseCollectionOption
     hideCaption?: boolean;
     /** Boolean fields shown as checkboxes that save on change. */
     toggle?: string[];
+    /** Makes one column a link to each row's page, for example { field: "name", href: "/app/projects/:id" }. */
+    rowLink?: {
+        field: string;
+        href: string;
+    };
     /** Adds a Delete button to each row. */
     deletable?: boolean;
     /** Asked before deleting. Set to null to skip. */

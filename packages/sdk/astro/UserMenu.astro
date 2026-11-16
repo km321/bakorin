@@ -4,7 +4,7 @@
  * no JavaScript. Reads Astro.locals.user (set by requireAuth) unless you pass user.
  */
 interface Props {
-  user?: Record<string, unknown> | null;
+  user?: object | null;
   links?: { href: string; label: string }[];
   signInHref?: string;
   /** Where to land after signing out. Default /. */

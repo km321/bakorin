@@ -1,0 +1,89 @@
+app:
+  name: {{APP_NAME}}
+  version: "0.1.0"
+
+runtime:
+  dialect: sqlite
+  host: 0.0.0.0
+  port: 4371
+  sqlite:
+    path: ./data/app.db
+  files:
+    driver: local
+    path: ./data/uploads
+    maxBytes: 10485760
+    allowedMimeTypes: [image/png, image/jpeg, image/webp, image/gif, application/pdf, text/plain]
+    signedUrlTtlSeconds: 900
+  jwt:
+    accessTtlSeconds: 900
+    refreshTtlSeconds: 2592000
+  backups:
+    interval: 24h
+    retain: 14
+    destination: ./data/backups
+  hooks: ./hooks.ts
+  cors:
+    origins: ["http://localhost:4321", "http://localhost:3000"]
+
+auth:
+  entity: users
+  identity: email
+  password: password
+  role: role
+  adminRole: admin
+  requireVerifiedEmail: false
+  # open: anyone can sign up. invite: admins invite people. closed: no new accounts.
+  signup: open
+
+entities:
+  users:
+    auth: true
+    label: User
+    plural: Users
+    display: name
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      name: { type: text, required: true }
+      role: { type: enum, values: [member, manager, admin], default: member, writable: admin }
+    policies:
+      read: [owner(id), admin]
+      create: admin
+      update: owner(id)
+      delete: admin
+
+  # Team work. Everyone signed in sees every project; the owner and managers can edit.
+  projects:
+    label: Project
+    plural: Projects
+    display: name
+    realtime: true
+    fields:
+      name: { type: text, required: true }
+      status: { type: enum, values: [planned, active, paused, done], default: planned }
+      dueOn: { type: date }
+      notes: { type: text }
+      ownerId: { type: relation, to: users, required: true }
+    indexes:
+      - [status]
+    policies:
+      read: authenticated
+      create: authenticated
+      update: [owner(ownerId), role(manager), admin]
+      delete: [role(manager), admin]
+
+  # Short status updates, shown live on the dashboard.
+  updates:
+    label: Update
+    plural: Updates
+    display: message
+    realtime: true
+    fields:
+      message: { type: text, required: true }
+      projectId: { type: relation, to: projects, onDelete: cascade }
+      authorId: { type: relation, to: users, required: true }
+    policies:
+      read: authenticated
+      create: authenticated
+      update: owner(authorId)
+      delete: [owner(authorId), role(manager), admin]

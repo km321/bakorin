@@ -4,7 +4,7 @@
  * It hides UI; Bakorin's policies protect the data and requireAuth protects pages.
  */
 interface Props {
-  user?: Record<string, unknown> | null;
+  user?: object | null;
   roles?: string[];
 }
 const user = (Astro.props.user === undefined ? Astro.locals.user : Astro.props.user) as { role?: unknown } | null | undefined;

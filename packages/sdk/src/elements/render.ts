@@ -38,6 +38,8 @@ export interface RenderFieldOptions {
   hint?: string;
   autocomplete?: string;
   options?: { value: string; label: string }[];
+  /** File fields: accepted types for the picker. */
+  accept?: string;
 }
 
 export function renderField(field: FieldSchema, options: RenderFieldOptions): string {
@@ -61,8 +63,12 @@ export function renderField(field: FieldSchema, options: RenderFieldOptions): st
     }${choices
       .map((choice) => `<option${attr("value", choice.value)}${attr("selected", selected.has(choice.value))}>${escapeHtml(choice.label)}</option>`)
       .join("")}</select>`;
+  } else if (field.multiline && field.type === "text") {
+    control = `<textarea${common} class="bk-input bk-textarea" rows="6"${attr("required", field.required && field.defaultValue === undefined)}>${escapeHtml(
+      inputValue(field, options.value),
+    )}</textarea>`;
   } else if (field.type === "file") {
-    control = renderDropzone({ idPrefix: base, inputId, describedBy, name: field.name, value: options.value });
+    control = renderDropzone({ idPrefix: base, inputId, describedBy, name: field.name, value: options.value, accept: options.accept });
   } else {
     const autocomplete = options.autocomplete ?? (field.type === "password" ? "new-password" : field.type === "email" ? "email" : undefined);
     control = `<input${common} class="bk-input"${attr("type", INPUT_TYPES[field.type] ?? "text")}${attr(
@@ -102,6 +108,10 @@ export interface RenderFormOptions {
   hints?: Record<string, string>;
   autocomplete?: Record<string, string>;
   relationOptions?: Record<string, { value: string; label: string }[]>;
+  /** Text fields to show as multi line text areas. */
+  multiline?: readonly string[];
+  /** File fields: accepted types for the picker, for example "image/*". */
+  accept?: Record<string, string>;
   /** Extra HTML after the button (links). Trusted: pass only your own markup. */
   footer?: string;
   /** Hidden inputs, for example _action or id. */
@@ -111,14 +121,16 @@ export interface RenderFormOptions {
 export function renderForm(options: RenderFormOptions): string {
   const fields = options.fields
     .map((field) =>
-      renderField(field, {
+      renderField(options.multiline?.includes(field.name) ? { ...field, multiline: true } : field, {
         idPrefix: options.idPrefix,
-        value: options.values?.[field.name],
+        // A create form starts from the schema defaults.
+        value: options.values ? options.values[field.name] : field.defaultValue,
         error: options.errors?.[field.name],
         label: options.labels?.[field.name],
         hint: options.hints?.[field.name] ?? (field.type === "password" && field.minLength !== 0 ? `At least ${field.minLength ?? 8} characters.` : undefined),
         autocomplete: options.autocomplete?.[field.name],
         options: options.relationOptions?.[field.name],
+        accept: options.accept?.[field.name],
       }),
     )
     .join("");
@@ -182,6 +194,8 @@ export interface TableConfig {
   emptyText: string;
   /** For links that work without JavaScript: ?page= and ?sort= on this path. */
   path?: string;
+  /** Makes one column a link to the row's page. ":id" in href becomes the row id. */
+  rowLink?: { field: string; href: string };
 }
 
 export function tableConfig(
@@ -196,6 +210,7 @@ export function tableConfig(
     confirmDelete?: string | null;
     emptyText?: string;
     path?: string;
+    rowLink?: { field: string; href: string };
   } = {},
 ): TableConfig {
   const columns = options.columns
@@ -218,6 +233,7 @@ export function tableConfig(
     confirmDelete: options.confirmDelete === undefined ? "Delete this row?" : options.confirmDelete,
     emptyText: options.emptyText ?? "Nothing here yet.",
     path: options.path,
+    rowLink: options.rowLink,
   };
 }
 
@@ -248,7 +264,9 @@ export function renderTableBody(config: TableConfig, state: TableState): string 
                 "disabled",
                 pending,
               )} aria-label="${escapeHtml(`${column.label}: ${name}`)}">`
-            : escapeHtml(formatValue(column.meta, row[column.field]));
+            : config.rowLink?.field === column.field && !pending
+              ? `<a href="${escapeHtml(config.rowLink.href.replace(":id", encodeURIComponent(id)))}">${escapeHtml(formatValue(column.meta, row[column.field]))}</a>`
+              : escapeHtml(formatValue(column.meta, row[column.field]));
           return `<td data-label="${escapeHtml(column.label)}">${content}</td>`;
         })
         .join("");

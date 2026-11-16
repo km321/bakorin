@@ -17,6 +17,10 @@ export interface RecordFormProps<R> extends UseRecordFormOptions<R> {
   /** Choices for relation fields, by field name. Without them the form loads up to 100 related records. */
   relationOptions?: Record<string, { value: string; label: string }[]>;
   className?: string;
+  /** Text fields to show as multi line text areas. */
+  multiline?: readonly string[];
+  /** File fields: accepted types for the picker, for example { cover: "image/*" }. */
+  accept?: Record<string, string>;
   /** Use a collection's create and update so lists change at once. */
   collection?: {
     create: (body: never) => Promise<unknown>;
@@ -55,6 +59,8 @@ export function RecordForm<R = Record<string, unknown>>(props: RecordFormProps<R
       // Clear the form unless the person already started typing the next record.
       if (resetOnCreate && !props.record && JSON.stringify(form.store.get().values) === sent.current) {
         form.reset();
+        // Keep the success message after clearing; it goes away when they start typing.
+        form.store.set((state) => ({ ...state, submitted: true }));
       }
       props.onSuccess?.(record);
     },
@@ -76,7 +82,7 @@ export function RecordForm<R = Record<string, unknown>>(props: RecordFormProps<R
       <FormAlert message={form.formError} />
       {form.fields.map((field) => {
         const shared = {
-          field,
+          field: props.multiline?.includes(field.name) ? { ...field, multiline: true } : field,
           value: form.values[field.name],
           error: form.errors[field.name],
           label: labels?.[field.name],
@@ -90,7 +96,7 @@ export function RecordForm<R = Record<string, unknown>>(props: RecordFormProps<R
           return (
             <Field key={field.name} {...shared}>
               {({ inputId, describedBy }) => (
-                <FileUpload inputId={inputId} describedBy={describedBy} onUploaded={(file) => form.setValue(field.name, file.id)} />
+                <FileUpload inputId={inputId} describedBy={describedBy} accept={props.accept?.[field.name]} onUploaded={(file) => form.setValue(field.name, file.id)} />
               )}
             </Field>
           );

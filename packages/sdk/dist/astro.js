@@ -19,13 +19,13 @@ import {
 } from "./chunks/index-n603vnp4.js";
 import {
   signInFields2
-} from "./chunks/index-wge7dvfw.js";
+} from "./chunks/index-3frn3qj3.js";
 import {
   coerceValue2,
   validateRecord2,
   changedFields2,
   fieldErrorsFrom2
-} from "./chunks/index-a5bzk4nd.js";
+} from "./chunks/index-csqk23qj.js";
 // src/astro.ts
 var DEFAULT_PROXY_PREFIX = "/api/bakorin";
 function createAstroClient(options) {

@@ -1,0 +1,31 @@
+---
+import Layout from "../layouts/Base.astro";
+import { api, imageOf } from "../lib/bakorin.ts";
+import { money, type Product } from "../lib/store.ts";
+
+// Products are public in app.yaml, so this works signed out too.
+const { data: products } = await api(Astro).entity("products").list({ filter: { active: true }, sort: "name", limit: 48, expand: "image" });
+---
+<Layout title="Shop">
+  <section class="section">
+    <h1>Shop</h1>
+    {products.length === 0 ? (
+      <p class="empty">No products yet. Admins can add them on the Manage page, or run bun seed.ts for example products.</p>
+    ) : (
+      <ul class="grid">
+        {products.map((product: Product) => {
+          const image = imageOf(product, "image");
+          return (
+            <li class="tile">
+              {image ? <img class="media" src={image} alt={product.imageAlt ?? ""} loading="lazy" /> : <div class="media media-placeholder" aria-hidden="true">No photo</div>}
+              <div class="tile-body">
+                <h2><a href={`/products/${product.slug}`}>{product.name}</a></h2>
+                <p class="meta">{money(product.priceCents)}</p>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </section>
+</Layout>

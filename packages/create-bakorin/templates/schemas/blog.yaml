@@ -1,0 +1,109 @@
+app:
+  name: {{APP_NAME}}
+  version: "0.1.0"
+
+runtime:
+  dialect: sqlite
+  host: 0.0.0.0
+  port: 4371
+  sqlite:
+    path: ./data/app.db
+  files:
+    driver: local
+    path: ./data/uploads
+    maxBytes: 10485760
+    allowedMimeTypes: [image/png, image/jpeg, image/webp, image/gif, application/pdf, text/plain]
+    signedUrlTtlSeconds: 900
+  jwt:
+    accessTtlSeconds: 900
+    refreshTtlSeconds: 2592000
+  backups:
+    interval: 24h
+    retain: 14
+    destination: ./data/backups
+  hooks: ./hooks.ts
+  cors:
+    origins: ["http://localhost:4321", "http://localhost:3000"]
+
+auth:
+  entity: users
+  identity: email
+  password: password
+  role: role
+  adminRole: admin
+  requireVerifiedEmail: false
+  # open: anyone can sign up. invite: admins invite people. closed: no new accounts.
+  signup: invite
+
+entities:
+  users:
+    auth: true
+    label: User
+    plural: Users
+    display: name
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      name: { type: text, required: true }
+      role: { type: enum, values: [user, admin], default: user, writable: admin }
+    policies:
+      read: [owner(id), admin]
+      create: admin
+      update: owner(id)
+      delete: admin
+
+  # Public topics for posts. Admins manage them.
+  categories:
+    label: Category
+    plural: Categories
+    display: name
+    fields:
+      name: { type: text, required: true }
+      slug: { type: text, required: true, unique: true, description: "Used in the address, for example news." }
+    policies:
+      read: public
+      create: admin
+      update: admin
+      delete: admin
+
+  # Published posts. Anyone can read them, so only published writing lives here.
+  posts:
+    label: Post
+    plural: Posts
+    display: title
+    fields:
+      title: { type: text, required: true }
+      slug: { type: text, required: true, unique: true, description: "Used in the address, for example my-first-post." }
+      excerpt: { type: text, description: "One or two sentences for lists and previews." }
+      body: { type: text, required: true }
+      cover: { type: file, description: "Cover image." }
+      coverAlt: { type: text, description: "Describe the cover image for people who cannot see it." }
+      categoryId: { type: relation, to: categories, onDelete: set_null }
+      publishedOn: { type: date, required: true }
+      authorId: { type: relation, to: users, onDelete: set_null, writable: admin }
+    indexes:
+      - [publishedOn]
+    policies:
+      read: public
+      create: admin
+      update: admin
+      delete: admin
+
+  # Work in progress. Only admins can read drafts; publishing copies a draft into posts.
+  drafts:
+    label: Draft
+    plural: Drafts
+    display: title
+    fields:
+      title: { type: text, required: true }
+      slug: { type: text, required: true, description: "Used in the address once published, for example my-first-post." }
+      excerpt: { type: text, description: "One or two sentences for lists and previews." }
+      body: { type: text, required: true }
+      cover: { type: file, description: "Cover image." }
+      coverAlt: { type: text, description: "Describe the cover image for people who cannot see it." }
+      categoryId: { type: relation, to: categories, onDelete: set_null }
+    policies:
+      read: admin
+      create: admin
+      update: admin
+      delete: admin

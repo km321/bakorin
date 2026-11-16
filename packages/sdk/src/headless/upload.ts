@@ -184,3 +184,17 @@ export async function signedFileUrl(client: BakorinClient, fileId: string): Prom
 export function clientFileUrl(client: BakorinClient, signedPath: string): string {
   return signedPath.startsWith("/api/v1") ? client.apiUrl(signedPath.slice("/api/v1".length)) : signedPath;
 }
+
+/**
+ * Server side: turns a signed file link from a server client (http://bakorin:4371/api/v1/files/...)
+ * into a path on your own site (/api/bakorin/files/...), so visitors load it through the
+ * pass through route and never need to reach Bakorin directly. Other links come back unchanged.
+ */
+export function siteFileUrl(link: string | undefined | null, options: { baseUrl: string; basePath?: string }): string | undefined {
+  if (!link) return undefined;
+  const basePath = (options.basePath ?? "/api/bakorin").replace(/\/+$/, "");
+  const absolute = `${options.baseUrl.replace(/\/+$/, "")}/api/v1/files/`;
+  if (link.startsWith(absolute)) return `${basePath}/files/${link.slice(absolute.length)}`;
+  if (link.startsWith("/api/v1/files/")) return `${basePath}${link.slice("/api/v1".length)}`;
+  return link;
+}

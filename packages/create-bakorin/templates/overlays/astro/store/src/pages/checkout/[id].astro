@@ -1,0 +1,46 @@
+---
+import Layout from "../../layouts/Base.astro";
+import { api } from "../../lib/bakorin.ts";
+import { money, orderLines, orderNumber, STATUS_LABELS } from "../../lib/store.ts";
+
+const order = await api(Astro).entity("orders").get(String(Astro.params.id)).catch(() => null);
+if (!order) {
+  return new Response("Not found", { status: 404 });
+}
+const lines = orderLines(order);
+// hooks.ts fills lines and totalCents right after the order is saved.
+const ready = order.totalCents !== undefined && order.totalCents !== null;
+---
+<Layout title={`Order ${orderNumber(order.id)}`}>
+  <section class="card">
+    <h1>Order {orderNumber(order.id)}</h1>
+    <p class="meta">{STATUS_LABELS[order.status] ?? order.status}</p>
+    {ready ? (
+      <>
+        <table class="rows">
+          <caption class="bk-visually-hidden">Items in this order</caption>
+          <thead>
+            <tr><th scope="col">Product</th><th scope="col">Quantity</th><th scope="col">Price</th></tr>
+          </thead>
+          <tbody>
+            {lines.map((line) => (
+              <tr><td>{line.name}</td><td>{line.quantity}</td><td>{money(line.unitCents)}</td></tr>
+            ))}
+          </tbody>
+        </table>
+        <p><strong>Total: {money(order.totalCents)}</strong></p>
+      </>
+    ) : (
+      <p class="notice" role="status">Adding up your order. <a href={Astro.url.pathname}>Refresh</a> in a moment.</p>
+    )}
+  </section>
+
+  <section class="card" aria-labelledby="payment-heading">
+    <h2 id="payment-heading">Payment</h2>
+    <div class="notice">
+      <p><strong>Payments are not connected yet.</strong> This is a placeholder. No card is charged and the order stays waiting for payment.</p>
+      <p>To take payments, connect a provider here: create a checkout session for this order on the server, and have the provider's webhook mark the order paid. Only the server should set the status and amount.</p>
+    </div>
+  </section>
+  <p><a href="/orders">See all your orders</a></p>
+</Layout>

@@ -41,6 +41,7 @@ export default defineConfig({
           items: [
             { label: "Introduction", slug: "docs" },
             { label: "Getting started", slug: "docs/getting-started" },
+            { label: "Templates", slug: "docs/templates" },
             { label: "Project structure", slug: "docs/project-structure" },
           ],
         },

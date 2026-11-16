@@ -1,0 +1,82 @@
+---
+import Layout from "../../layouts/Base.astro";
+import RecordForm from "@bakorin/sdk/astro/RecordForm.astro";
+import { handleRecordForm } from "@bakorin/sdk/astro";
+import { formFields } from "@bakorin/sdk/headless";
+import { api, bakorinUrl, hasRole, schema } from "../../lib/bakorin.ts";
+import { DRAFT_FIELDS, readableDate } from "../../lib/blog.ts";
+
+// requireAuth (src/middleware.ts) makes sure someone is signed in. Writing is for admins;
+// app.yaml enforces the same rule on the API, this just shows a clear page.
+const user = Astro.locals.user!;
+if (!hasRole(user, ["admin"])) {
+  return new Response("Only admins can write posts.", { status: 403 });
+}
+
+// Without JavaScript the form posts here. With it, the form saves through /api/bakorin.
+const result = await handleRecordForm(Astro, {
+  baseUrl: bakorinUrl(),
+  entity: "drafts",
+  fields: formFields(schema.entities.drafts, { include: DRAFT_FIELDS, isAdmin: true }),
+  redirectTo: "/write",
+});
+if (result.response) return result.response;
+
+const client = api(Astro);
+const [{ data: drafts }, { data: posts }] = await Promise.all([
+  client.entity("drafts").list({ sort: "-updatedAt", limit: 50 }),
+  client.entity("posts").list({ sort: "-publishedOn", limit: 20 }),
+]);
+---
+<Layout title="Write">
+  <section class="card">
+    <h1>New draft</h1>
+    <p class="lede">Drafts are private to admins. Open a draft to edit it and publish it.</p>
+    <RecordForm
+      entity="drafts"
+      schema={schema}
+      include={DRAFT_FIELDS}
+      isAdmin
+      client={client}
+      multiline={["body"]}
+      accept={{ cover: "image/*" }}
+      labels={{ coverAlt: "Cover description", categoryId: "Category" }}
+      submitLabel="Save draft"
+      redirectTo="/write"
+      result={result}
+    />
+  </section>
+
+  <section class="card">
+    <h2>Drafts</h2>
+    {drafts.length === 0 ? (
+      <p class="empty">No drafts.</p>
+    ) : (
+      <ul class="list">
+        {drafts.map((draft) => (
+          <li>
+            <a href={`/write/${draft.id}`}>{draft.title}</a>
+            <span class="meta">Edited {new Date(draft.updatedAt).toLocaleDateString("en-US")}</span>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+
+  <section class="card">
+    <h2>Published</h2>
+    <p class="lede">Edit published posts in the Bakorin admin at /admin on the API.</p>
+    {posts.length === 0 ? (
+      <p class="empty">Nothing published yet.</p>
+    ) : (
+      <ul class="list">
+        {posts.map((post) => (
+          <li>
+            <a href={`/posts/${post.slug}`}>{post.title}</a>
+            <time class="meta" datetime={post.publishedOn}>{readableDate(post.publishedOn)}</time>
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
+</Layout>

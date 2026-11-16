@@ -1,0 +1,27 @@
+---
+import Layout from "../../layouts/Base.astro";
+import { api, imageOf, relatedOf } from "../../lib/bakorin.ts";
+import { paragraphs, readableDate, type Category } from "../../lib/blog.ts";
+
+const { data } = await api(Astro).entity("posts").list({ filter: { slug: String(Astro.params.slug) }, limit: 1, expand: "cover,categoryId" });
+const post = data[0];
+if (!post) {
+  return new Response("Not found", { status: 404 });
+}
+const cover = imageOf(post, "cover");
+const category = relatedOf<Category>(post, "categoryId");
+---
+<Layout title={post.title}>
+  <article class="card">
+    <h1>{post.title}</h1>
+    <p class="meta">
+      <time datetime={post.publishedOn}>{readableDate(post.publishedOn)}</time>
+      {category ? <Fragment> · <a href={`/categories/${category.slug}`}>{category.name}</a></Fragment> : null}
+    </p>
+    {cover ? <img class="media" src={cover} alt={post.coverAlt ?? ""} /> : null}
+    <div class="prose">
+      {paragraphs(post.body).map((text) => <p>{text}</p>)}
+    </div>
+  </article>
+  <p><a href="/">Back to all posts</a></p>
+</Layout>

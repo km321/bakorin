@@ -6,7 +6,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 type Frontend = "astro" | "next" | "none";
-type Schema = "blank" | "auth" | "todo";
+type Schema = "blank" | "auth" | "todo" | "blog" | "marketing" | "saas" | "store";
 type Mail = "log" | "resend" | "smtp";
 type SdkSource = "local" | "npm";
 
@@ -33,14 +33,19 @@ Scaffold a Bakorin backend and an optional Astro or Next.js starter.
 
 Usage:
   create-bakorin my-app
-  create-bakorin my-app --frontend astro --schema todo --yes
-  bun run create my-app --frontend astro --schema todo --yes
+  create-bakorin my-app --frontend astro --template blog --yes
+  bun run create my-app --frontend next --template store --yes
 
 Options:
   --name <name>           Project name (defaults to the first argument)
   --dir <path>            Output directory (defaults to the project name)
   --frontend, --fw        astro | next | none (default: astro)
-  --schema, --starter     blank | auth-only | todo (default: todo)
+  --template, --schema    blog | marketing | saas | store | todo | auth-only | blank
+                          (default: todo)
+                          blog: posts, categories, drafts, cover images
+                          marketing: page sections and a contact form
+                          saas: team projects, live updates, roles
+                          store: products, cart, orders, checkout placeholder
   --mail, --email         log | resend | smtp (default: log)
   --sdk                   local | npm
                           local: file: path to this checkout's packages/sdk
@@ -76,6 +81,18 @@ function parseSchema(value: string | undefined): Schema | undefined {
   }
   if (value === "todo" || value === "leads" || value === "todo/leads") {
     return "todo";
+  }
+  if (value === "blog") {
+    return "blog";
+  }
+  if (value === "marketing" || value === "site" || value === "marketing-site") {
+    return "marketing";
+  }
+  if (value === "saas" || value === "internal" || value === "internal-tool" || value === "app") {
+    return "saas";
+  }
+  if (value === "store" || value === "shop" || value === "ecommerce" || value === "ecom") {
+    return "store";
   }
   return undefined;
 }
@@ -277,29 +294,29 @@ async function writeTemplated(src: string, dest: string, name: string): Promise<
   await writeFile(dest, text);
 }
 
-async function resolveFrontendTemplate(kind: "astro" | "next"): Promise<string> {
-  const packaged = join(TEMPLATES, kind);
-  try {
-    await readdir(packaged);
-    return packaged;
-  } catch {
-    return resolve(ROOT, "../../../examples", `${kind}-starter`);
-  }
+function schemaFile(schema: Schema): string {
+  return `${schema}.yaml`;
 }
 
-function schemaFile(schema: Schema): string {
-  switch (schema) {
-    case "blank":
-      return "blank.yaml";
-    case "auth":
-      return "auth.yaml";
-    case "todo":
-      return "todo.yaml";
-    default: {
-      const _never: never = schema;
-      return _never;
-    }
-  }
+/** Pages for a template. blank has the same users entity as auth-only, so it shares its pages. */
+function overlayName(schema: Schema): string {
+  return schema === "blank" ? "auth" : schema;
+}
+
+/** Where the generated types go in each front end. */
+function typesPath(frontend: "astro" | "next"): string {
+  return frontend === "astro" ? join("src", "lib", "bakorin.gen.ts") : join("lib", "bakorin.gen.ts");
+}
+
+/**
+ * The web app for a template: the shared base (layout, auth pages, pass through
+ * route), then the template's own pages on top, then types for its schema.
+ */
+export async function writeFrontend(frontend: "astro" | "next", schema: Schema, webDir: string): Promise<void> {
+  await copyDir(join(TEMPLATES, frontend), webDir);
+  await copyDir(join(TEMPLATES, "overlays", frontend, overlayName(schema)), webDir);
+  await mkdir(dirname(join(webDir, typesPath(frontend))), { recursive: true });
+  await cp(join(TEMPLATES, "gen", `${schema}.gen.ts`), join(webDir, typesPath(frontend)));
 }
 
 async function pathExists(path: string): Promise<boolean> {
@@ -401,6 +418,68 @@ Use a png logo if your emails matter; many email clients do not show svg.
 Backups include this folder. See docs/branding in the Bakorin docs.
 `;
 
+/** The pages each template ships, for the web README. */
+const TEMPLATE_PAGES: Record<Schema, [string, string][]> = {
+  blank: [["/", "Landing page"], ["/app", "Your account (signed in)"]],
+  auth: [["/", "Landing page"], ["/app", "Your account (signed in)"]],
+  todo: [["/app", "Dashboard with a live task list"], ["/app/tasks", "Create, finish, and delete tasks"]],
+  blog: [
+    ["/", "Published posts with cover images"],
+    ["/posts/:slug", "One post"],
+    ["/categories/:slug", "Posts in a category"],
+    ["/write", "Admins: new draft, drafts, published posts"],
+    ["/write/:id", "Admins: edit, publish, or delete a draft"],
+  ],
+  marketing: [
+    ["/", "Home page sections"],
+    ["/about", "About page sections"],
+    ["/contact", "Contact form (saved as a lead)"],
+    ["/app/leads", "Admins: the leads"],
+  ],
+  saas: [
+    ["/app", "Dashboard: project counts, live team updates"],
+    ["/app/projects", "Projects table and form (live)"],
+    ["/app/projects/:id", "Edit a project"],
+    ["/app/team", "Admins: everyone and their role"],
+  ],
+  store: [
+    ["/", "Products"],
+    ["/products/:slug", "One product, add to cart"],
+    ["/cart", "Cart and Place order"],
+    ["/checkout/:id", "Order summary and the payment placeholder"],
+    ["/orders", "Your orders"],
+    ["/manage", "Admins: add and edit products"],
+  ],
+};
+
+function webReadme(appName: string, options: Options): string {
+  const pages = TEMPLATE_PAGES[options.schema].map(([path, what]) => `| \`${path}\` | ${what} |`).join("\n");
+  const typesFile = options.frontend === "next" ? "lib/bakorin.gen.ts" : "src/lib/bakorin.gen.ts";
+  return `# ${appName} web
+
+\`\`\`bash
+cd web
+npm install
+npm run dev
+\`\`\`
+
+\`BAKORIN_URL\` defaults to http://127.0.0.1:4371.
+
+## Pages (${options.schema} template)
+
+| Path | What it does |
+| --- | --- |
+${pages}
+
+Sign in, sign up, password reset, and invite pages are included. Site name and links are in \`${options.frontend === "next" ? "lib" : "src/lib"}/site.ts\`.
+
+Types and \`bakorinSchema\` in \`${typesFile}\` come from \`app.yaml\`. After you change the schema, run \`bunx bakorin typegen -o web/${typesFile}\` from the project folder.
+`;
+}
+
+/** Templates that ship a seed.ts with example data. */
+const SEEDED = new Set<Schema>(["blog", "marketing", "saas", "store"]);
+
 function projectReadme(appName: string, options: Options, sdk: SdkSource): string {
   const apiStart =
     sdk === "local"
@@ -429,6 +508,14 @@ Bakorin backend generated by create-bakorin.
 
 3. Open http://127.0.0.1:4371/admin/ and create your first admin (email + password, min 8 characters).
 ${
+  SEEDED.has(options.schema)
+    ? `
+   Optional: load example data for the ${options.schema} template. Put the admin's email and
+   password in \`BAKORIN_ADMIN_EMAIL\` and \`BAKORIN_ADMIN_PASSWORD\` in \`.env\`, then run
+   \`bun seed.ts\` while the API is up. Every example record says it is example data.
+`
+    : ""
+}${
   options.frontend === "none"
     ? ""
     : `
@@ -466,7 +553,13 @@ export async function run(options: Options): Promise<void> {
   }
 
   await writeTemplated(join(TEMPLATES, "schemas", schemaFile(options.schema)), join(dest, "app.yaml"), appName);
-  await cp(join(TEMPLATES, "hooks.ts"), join(dest, "hooks.ts"));
+  const templateHooks = join(TEMPLATES, "hooks", `${options.schema}.ts`);
+  await cp((await pathExists(templateHooks)) ? templateHooks : join(TEMPLATES, "hooks.ts"), join(dest, "hooks.ts"));
+  const seed = join(TEMPLATES, "seeds", `${options.schema}.ts`);
+  if (await pathExists(seed)) {
+    // Example data for the template, clearly labeled. See the comment at the top of seed.ts.
+    await cp(seed, join(dest, "seed.ts"));
+  }
   await writeFile(join(dest, ".env.example"), envExample(appName, options.mail));
   await cp(join(TEMPLATES, "gitignore"), join(dest, ".gitignore"));
   const gitignore = await readFile(join(dest, ".gitignore"), "utf8");
@@ -491,28 +584,18 @@ export async function run(options: Options): Promise<void> {
   }
 
   if (options.frontend !== "none") {
-    const from = await resolveFrontendTemplate(options.frontend);
     const webDir = join(dest, "web");
-    await copyDir(from, webDir);
+    await writeFrontend(options.frontend, options.schema, webDir);
     await rewriteSdkDependency(webDir, sdk, checkoutSdk);
-    await writeFile(
-      join(webDir, "README.md"),
-      `# ${appName} web
-
-\`\`\`bash
-cd web
-npm install
-npm run dev
-\`\`\`
-
-\`BAKORIN_URL\` defaults to http://127.0.0.1:4371.
-`,
-    );
+    await writeFile(join(webDir, "README.md"), webReadme(appName, options));
   }
 
   console.log(`Created ${dest}`);
   console.log(`Schema: ${options.schema}   Frontend: ${options.frontend}   Mail: ${options.mail}   SDK: ${sdk}`);
   console.log("Next: copy .env.example to .env, then start Bakorin with bun run dev -- --dir <folder>");
+  if (SEEDED.has(options.schema)) {
+    console.log("Example data: with the API running and the admin login in .env, run bun seed.ts in the project folder.");
+  }
   console.log("Optional: white label the admin with a branding section in app.yaml (see branding/README.md).");
 }
 
@@ -526,7 +609,7 @@ async function main(): Promise<void> {
   const force = hasFlag("--force");
   let name = arg("--name") ?? positional ?? "";
   let frontend = parseFrontend(arg("--frontend") ?? arg("--fw"));
-  let schema = parseSchema(arg("--schema") ?? arg("--starter"));
+  let schema = parseSchema(arg("--template") ?? arg("--schema") ?? arg("--starter"));
   let mail = parseMail(arg("--mail") ?? arg("--email") ?? arg("--email-provider"));
   let sdk = parseSdk(arg("--sdk"));
   if (!yes) {
@@ -538,7 +621,7 @@ async function main(): Promise<void> {
       frontend = parseFrontend(raw) ?? "astro";
     }
     if (!schema) {
-      const raw = await prompt("Starter schema (blank | auth-only | todo)", "todo");
+      const raw = await prompt("Template (blog | marketing | saas | store | todo | auth-only | blank)", "todo");
       schema = parseSchema(raw) ?? "todo";
     }
     if (!mail) {

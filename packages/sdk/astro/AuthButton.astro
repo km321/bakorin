@@ -1,7 +1,7 @@
 ---
 /** "Sign in" when signed out, "Sign out" when signed in. Reads Astro.locals.user unless you pass user. */
 interface Props {
-  user?: Record<string, unknown> | null;
+  user?: object | null;
   signInHref?: string;
   afterSignOut?: string;
   prefix?: string;

@@ -1,0 +1,26 @@
+---
+import Layout from "../../layouts/Base.astro";
+import DataTable from "@bakorin/sdk/astro/DataTable.astro";
+import { api, hasRole, schema } from "../../lib/bakorin.ts";
+
+const user = Astro.locals.user!;
+if (!hasRole(user, ["admin"])) {
+  return new Response("Only admins can see the team list.", { status: 403 });
+}
+---
+<Layout title="Team">
+  <section class="card">
+    <h1>Team</h1>
+    <p class="lede">Everyone with an account. Change roles (member, manager, admin) or invite people in the Bakorin admin at /admin on the API.</p>
+    <DataTable
+      client={api(Astro)}
+      entity="users"
+      schema={schema}
+      columns={["name", "email", "role", "createdAt"]}
+      sort="name"
+      limit={25}
+      caption="Team members"
+      hideCaption
+    />
+  </section>
+</Layout>

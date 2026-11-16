@@ -141,10 +141,11 @@ label:not([class*="bk-"]) {
 
 input[type="email"]:not(.bk-input),
 input[type="password"]:not(.bk-input),
-input[type="text"]:not(.bk-input) {
+input[type="text"]:not(.bk-input),
+input[type="number"]:not(.bk-input) {
   width: 100%;
   padding: 10px 12px;
-  border: 1px solid var(--line);
+  border: 1px solid #8c8276;
   border-radius: 8px;
   font: inherit;
   background: #fff;
@@ -222,4 +223,159 @@ button.secondary:not([class*="bk-"]),
 .list li button {
   padding: 4px 12px;
   font-size: 0.85rem;
+}
+
+/* Wider pages for grids and tables. */
+.wrap.wide,
+.site-header.wide,
+.site-footer.wide {
+  width: min(1080px, calc(100% - 32px));
+}
+
+nav a[aria-current="page"] {
+  font-weight: 700;
+}
+
+/* Marks content that seed.ts created, so nobody mistakes it for real data. */
+.example-badge {
+  display: inline-block;
+  margin: 0 0 8px;
+  padding: 2px 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 24px;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.tile-body {
+  padding: 16px;
+  display: grid;
+  gap: 6px;
+}
+
+.tile h2,
+.tile h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.tile a {
+  color: var(--ink);
+}
+
+.media {
+  display: block;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  object-fit: cover;
+  background: var(--bg);
+}
+
+.media-placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.meta {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.prose {
+  white-space: pre-line;
+}
+
+.prose p {
+  margin: 0 0 16px;
+}
+
+.split {
+  display: grid;
+  gap: 24px;
+}
+
+@media (min-width: 800px) {
+  .split {
+    grid-template-columns: 2fr 1fr;
+    align-items: start;
+  }
+}
+
+.inline-form {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+}
+
+.inline-form input[type="number"] {
+  width: 5rem;
+  padding: 6px 8px;
+  border: 1px solid #8c8276;
+  border-radius: 8px;
+  font: inherit;
+}
+
+.rows {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.rows th,
+.rows td {
+  text-align: left;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.notice {
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--accent);
+  background: #fff;
+  padding: 16px;
+  border-radius: 8px;
+  margin: 0 0 24px;
+}
+
+.section + .section {
+  margin-top: 24px;
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin: 0 0 24px;
+}
+
+.facts dt {
+  font-weight: 600;
+}
+
+.facts dd {
+  margin: 0;
 }

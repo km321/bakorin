@@ -1,0 +1,37 @@
+---
+import Layout from "../../../layouts/Base.astro";
+import RecordForm from "@bakorin/sdk/astro/RecordForm.astro";
+import { handleRecordForm } from "@bakorin/sdk/astro";
+import { formFields } from "@bakorin/sdk/headless";
+import { api, bakorinUrl, hasRole, schema } from "../../../lib/bakorin.ts";
+import { MANAGERS, PROJECT_FIELDS } from "../../../lib/team.ts";
+
+const user = Astro.locals.user!;
+const id = String(Astro.params.id);
+const project = await api(Astro).entity("projects").get(id).catch(() => null);
+if (!project) {
+  return new Response("Not found", { status: 404 });
+}
+// The API decides; this only explains up front when the form will not save.
+const canEdit = project.ownerId === user.id || hasRole(user, MANAGERS);
+const fields = formFields(schema.entities.projects, { include: PROJECT_FIELDS, mode: "update" });
+const result = await handleRecordForm(Astro, { baseUrl: bakorinUrl(), entity: "projects", fields, id, initial: project, redirectTo: "/app/projects" });
+if (result.response) return result.response;
+---
+<Layout title={project.name}>
+  <section class="card">
+    <h1>{project.name}</h1>
+    {!canEdit && <p class="notice">Only the project's owner, a manager, or an admin can save changes here.</p>}
+    <RecordForm
+      entity="projects"
+      schema={schema}
+      record={project}
+      include={PROJECT_FIELDS}
+      multiline={["notes"]}
+      labels={{ dueOn: "Due date" }}
+      redirectTo="/app/projects"
+      result={result}
+    />
+  </section>
+  <p><a href="/app/projects">Back to projects</a></p>
+</Layout>

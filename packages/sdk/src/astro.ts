@@ -214,7 +214,7 @@ export function defaultAuthFields(mode: "sign-in" | "sign-up" | "forgot" | "rese
  */
 export async function handleRecordForm<R = Record<string, unknown>>(
   context: FormContext,
-  options: { baseUrl: string; entity: string; fields: readonly FieldSchema[]; id?: string; initial?: FormValues; redirectTo?: string; proxySecret?: string },
+  options: { baseUrl: string; entity: string; fields: readonly FieldSchema[]; id?: string; initial?: object; redirectTo?: string; proxySecret?: string },
 ): Promise<FormResult<R>> {
   if (context.request.method !== "POST") {
     return {};
@@ -231,7 +231,7 @@ export async function handleRecordForm<R = Record<string, unknown>>(
   }
   const api = astroClient(context, options.baseUrl, options.proxySecret).entity(options.entity);
   try {
-    const body = mode === "update" ? changedFields(options.initial ?? {}, values) : Object.fromEntries(Object.entries(values).filter(([, v]) => v !== null));
+    const body = mode === "update" ? changedFields((options.initial ?? {}) as FormValues, values) : Object.fromEntries(Object.entries(values).filter(([, v]) => v !== null));
     const result = (mode === "update" ? await api.update(options.id!, body) : await api.create(body)) as R;
     return { result, message: "Saved", response: options.redirectTo ? context.redirect(options.redirectTo, 303) : undefined };
   } catch (error) {

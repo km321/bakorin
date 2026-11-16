@@ -1,0 +1,57 @@
+---
+import Layout from "../../layouts/Base.astro";
+import RecordForm from "@bakorin/sdk/astro/RecordForm.astro";
+import DataTable from "@bakorin/sdk/astro/DataTable.astro";
+import { handleRecordForm } from "@bakorin/sdk/astro";
+import { formFields } from "@bakorin/sdk/headless";
+import { api, bakorinUrl, hasRole, schema } from "../../lib/bakorin.ts";
+import { PRODUCT_FIELDS } from "../../lib/store.ts";
+
+const user = Astro.locals.user!;
+if (!hasRole(user, ["admin"])) {
+  return new Response("Only admins can manage products.", { status: 403 });
+}
+const result = await handleRecordForm(Astro, {
+  baseUrl: bakorinUrl(),
+  entity: "products",
+  fields: formFields(schema.entities.products, { include: PRODUCT_FIELDS, isAdmin: true }),
+  redirectTo: "/manage",
+});
+if (result.response) return result.response;
+---
+<Layout title="Manage products">
+  <div class="split">
+    <section class="card">
+      <h1>Products</h1>
+      <p class="lede">Untick Active to hide a product from the shop. Open a product to edit it.</p>
+      <DataTable
+        client={api(Astro)}
+        entity="products"
+        schema={schema}
+        columns={["name", "priceCents", "active", "updatedAt"]}
+        rowLink={{ field: "name", href: "/manage/:id" }}
+        toggle={["active"]}
+        deletable
+        sort="name"
+        limit={20}
+        caption="Products"
+        hideCaption
+      />
+    </section>
+    <section class="card">
+      <h2>New product</h2>
+      <RecordForm
+        entity="products"
+        schema={schema}
+        include={PRODUCT_FIELDS}
+        isAdmin
+        multiline={["description"]}
+        accept={{ image: "image/*" }}
+        labels={{ priceCents: "Price in cents", imageAlt: "Photo description" }}
+        submitLabel="Add product"
+        redirectTo="/manage"
+        result={result}
+      />
+    </section>
+  </div>
+</Layout>

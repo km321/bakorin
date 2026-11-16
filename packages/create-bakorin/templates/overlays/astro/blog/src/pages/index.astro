@@ -1,0 +1,47 @@
+---
+import Layout from "../layouts/Base.astro";
+import { api, imageOf, relatedOf } from "../lib/bakorin.ts";
+import { readableDate, type Category, type Post } from "../lib/blog.ts";
+
+// Posts and categories are public in app.yaml, so this works signed out too.
+const client = api(Astro);
+const [{ data: posts }, { data: categories }] = await Promise.all([
+  client.entity("posts").list({ sort: "-publishedOn", limit: 24, expand: "cover,categoryId" }),
+  client.entity("categories").list({ sort: "name", limit: 50 }),
+]);
+---
+<Layout title="Posts" wide>
+  <section class="section">
+    <h1>Posts</h1>
+    {categories.length > 0 && (
+      <nav aria-label="Categories" class="actions">
+        {categories.map((category) => <a href={`/categories/${category.slug}`}>{category.name}</a>)}
+      </nav>
+    )}
+  </section>
+  <section class="section">
+    {posts.length === 0 ? (
+      <p class="empty">No posts yet. Admins can write one on the Write page, or run bun seed.ts for example posts.</p>
+    ) : (
+      <ul class="grid">
+        {posts.map((post: Post) => {
+          const cover = imageOf(post, "cover");
+          const category = relatedOf(post, "categoryId") as Category | undefined;
+          return (
+            <li class="tile">
+              {cover ? <img class="media" src={cover} alt={post.coverAlt ?? ""} loading="lazy" /> : null}
+              <div class="tile-body">
+                <h2><a href={`/posts/${post.slug}`}>{post.title}</a></h2>
+                <p class="meta">
+                  <time datetime={post.publishedOn}>{readableDate(post.publishedOn)}</time>
+                  {category ? ` · ${category.name}` : null}
+                </p>
+                {post.excerpt ? <p>{post.excerpt}</p> : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    )}
+  </section>
+</Layout>

@@ -1,0 +1,29 @@
+---
+import Layout from "../../layouts/Base.astro";
+import DataTable from "@bakorin/sdk/astro/DataTable.astro";
+import { api, hasRole, schema } from "../../lib/bakorin.ts";
+
+// requireAuth (src/middleware.ts) checks the session; leads are admin only in app.yaml.
+const user = Astro.locals.user!;
+if (!hasRole(user, ["admin"])) {
+  return new Response("Only admins can see leads.", { status: 403 });
+}
+---
+<Layout title="Leads" wide>
+  <section class="card">
+    <h1>Leads</h1>
+    <p class="lede">Messages from the contact form, newest first. Change a lead's status in the Bakorin admin.</p>
+    <DataTable
+      client={api(Astro)}
+      entity="leads"
+      schema={schema}
+      columns={["name", "email", "company", "message", "status", "createdAt"]}
+      deletable
+      sort="-createdAt"
+      limit={20}
+      caption="Leads"
+      hideCaption
+      emptyText="No messages yet."
+    />
+  </section>
+</Layout>

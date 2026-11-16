@@ -32,11 +32,11 @@ Packages are not on npm yet, so the supported path today is a checkout of the re
 
 <Steps>
 
-1. Install dependencies and scaffold a project with the Astro starter and the `todo` schema:
+1. Install dependencies and scaffold a project with the Astro starter and the `todo` template. To start from a blog, marketing site, internal tool, or store instead, see [Templates](/docs/templates/).
 
    ```bash
    bun install
-   bun run create my-app --frontend astro --schema todo --yes
+   bun run create my-app --frontend astro --template todo --yes
    cp my-app/.env.example my-app/.env
    ```
 
@@ -73,7 +73,7 @@ Packages are not on npm yet, so the supported path today is a checkout of the re
 | Flag | Values | Default |
 |---|---|---|
 | `--frontend`, `--fw` | `astro`, `next`, `none` | `astro` |
-| `--schema`, `--starter` | `blank`, `auth-only`, `todo` | `todo` |
+| `--template`, `--schema`, `--starter` | `blog`, `marketing`, `saas`, `store`, `todo`, `auth-only`, `blank` | `todo` |
 | `--mail`, `--email` | `log`, `resend`, `smtp` | `log` |
 | `--sdk` | `local`, `npm` | |
 | `--name` | project name | first argument |
@@ -82,7 +82,7 @@ Packages are not on npm yet, so the supported path today is a checkout of the re
 | `--yes`, `-y` | skip prompts | |
 | `--help`, `-h` | print help and exit | |
 
-Schemas: `blank` and `auth-only` give you users only. `todo` adds a private `tasks` list, which is what the starters use.
+Templates: `blank` and `auth-only` give you users and account pages only. `todo` adds a private `tasks` list, which is what the example starters use. `blog`, `marketing`, `saas`, and `store` are fuller starting points with their own schema, pages, and example data. See [Templates](/docs/templates/).
 
 `--mail resend` writes `MAIL_DRIVER=resend` and an empty `RESEND_API_KEY=` placeholder. Never commit a real key. See [Email](/docs/email/).
 
@@ -100,7 +100,7 @@ bun ../../packages/server/src/cli.ts dev
 Once the npm packages are published, the same flow will look like this:
 
 ```bash
-npx create-bakorin my-app --frontend astro --schema todo --yes
+npx create-bakorin my-app --frontend astro --template todo --yes
 cd my-app
 cp .env.example .env
 bunx bakorin dev

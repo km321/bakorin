@@ -49,3 +49,12 @@ export declare function createUpload(options?: Omit<UploadOptions, "onProgress" 
 export declare function signedFileUrl(client: BakorinClient, fileId: string): Promise<string>;
 /** Rewrites a signed /api/v1/files/... path from the server onto the client's base. */
 export declare function clientFileUrl(client: BakorinClient, signedPath: string): string;
+/**
+ * Server side: turns a signed file link from a server client (http://bakorin:4371/api/v1/files/...)
+ * into a path on your own site (/api/bakorin/files/...), so visitors load it through the
+ * pass through route and never need to reach Bakorin directly. Other links come back unchanged.
+ */
+export declare function siteFileUrl(link: string | undefined | null, options: {
+    baseUrl: string;
+    basePath?: string;
+}): string | undefined;

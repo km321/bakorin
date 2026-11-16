@@ -116,6 +116,12 @@ select.bk-input[multiple] {
   min-height: 6rem;
 }
 
+.bk-textarea {
+  min-height: 8rem;
+  resize: vertical;
+  line-height: 1.5;
+}
+
 .bk-checkbox {
   width: 1.25rem;
   height: 1.25rem;

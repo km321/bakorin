@@ -1,0 +1,22 @@
+---
+import Layout from "../../layouts/Base.astro";
+import Gate from "@bakorin/sdk/astro/Gate.astro";
+
+// src/middleware.ts already checked the session, so Astro.locals.user is set here.
+const user = Astro.locals.user!;
+---
+<Layout title="Account">
+  <section class="card">
+    <h1>Hello, {user.name}</h1>
+    <p class="lede">This page is protected by requireAuth in src/middleware.ts.</p>
+    <dl class="facts">
+      <dt>Email</dt>
+      <dd>{user.email}</dd>
+      <dt>Role</dt>
+      <dd>{user.role}</dd>
+    </dl>
+    <Gate user={user} roles={["admin"]}>
+      <p class="banner">You are an admin. Open the Bakorin admin at /admin on the API.</p>
+    </Gate>
+  </section>
+</Layout>

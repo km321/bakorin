@@ -5,7 +5,7 @@ import {
 } from "./chunks/index-03nmywvj.js";
 import {
   createAuth2
-} from "./chunks/index-36jw3e0r.js";
+} from "./chunks/index-knjdaz0z.js";
 import {
   fieldLabel2,
   formFields2,
@@ -18,7 +18,7 @@ import {
   createCollection2,
   formatBytes2,
   createUpload2
-} from "./chunks/index-a5bzk4nd.js";
+} from "./chunks/index-csqk23qj.js";
 
 // src/react/context.tsx
 import { createContext, useContext, useMemo } from "react";
@@ -203,6 +203,15 @@ function Field({ field, value, error, label, hint, onChange, options, autoComple
           children: choice.label
         }, choice.value))
       ]
+    });
+  } else if (field.multiline && field.type === "text") {
+    control = /* @__PURE__ */ jsx2("textarea", {
+      ...common,
+      className: "bk-input bk-textarea",
+      rows: 6,
+      required: field.required && field.defaultValue === undefined,
+      value: inputValue2(field, value),
+      onChange: (event) => onChange(event.currentTarget.value)
     });
   } else {
     control = /* @__PURE__ */ jsx2("input", {
@@ -842,6 +851,9 @@ function DataTableView(props) {
                         onChange: (event) => void collection.update(id, { [column.field]: event.currentTarget.checked }).catch(() => {
                           return;
                         })
+                      }) : props.rowLink?.field === column.field && !pending ? /* @__PURE__ */ jsx4("a", {
+                        href: props.rowLink.href.replace(":id", encodeURIComponent(id)),
+                        children: formatValue2(column.meta, field(row, column.field))
                       }) : formatValue2(column.meta, field(row, column.field))
                     }, column.field)),
                     (props.deletable || props.actions) && /* @__PURE__ */ jsxs3("td", {
@@ -1072,6 +1084,7 @@ function RecordForm(props) {
     onSuccess: (record) => {
       if (resetOnCreate && !props.record && JSON.stringify(form.store.get().values) === sent.current) {
         form.reset();
+        form.store.set((state) => ({ ...state, submitted: true }));
       }
       props.onSuccess?.(record);
     }
@@ -1097,7 +1110,7 @@ function RecordForm(props) {
       }),
       form.fields.map((field) => {
         const shared = {
-          field,
+          field: props.multiline?.includes(field.name) ? { ...field, multiline: true } : field,
           value: form.values[field.name],
           error: form.errors[field.name],
           label: labels?.[field.name],
@@ -1116,6 +1129,7 @@ function RecordForm(props) {
             children: ({ inputId, describedBy }) => /* @__PURE__ */ jsx6(FileUpload, {
               inputId,
               describedBy,
+              accept: props.accept?.[field.name],
               onUploaded: (file) => form.setValue(field.name, file.id)
             })
           }, field.name);

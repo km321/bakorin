@@ -167,7 +167,7 @@ export declare function handleRecordForm<R = Record<string, unknown>>(context: F
     entity: string;
     fields: readonly FieldSchema[];
     id?: string;
-    initial?: FormValues;
+    initial?: object;
     redirectTo?: string;
     proxySecret?: string;
 }): Promise<FormResult<R>>;

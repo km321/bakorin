@@ -1,0 +1,106 @@
+app:
+  name: {{APP_NAME}}
+  version: "0.1.0"
+
+runtime:
+  dialect: sqlite
+  host: 0.0.0.0
+  port: 4371
+  sqlite:
+    path: ./data/app.db
+  files:
+    driver: local
+    path: ./data/uploads
+    maxBytes: 10485760
+    allowedMimeTypes: [image/png, image/jpeg, image/webp, image/gif, application/pdf, text/plain]
+    signedUrlTtlSeconds: 900
+  jwt:
+    accessTtlSeconds: 900
+    refreshTtlSeconds: 2592000
+  backups:
+    interval: 24h
+    retain: 14
+    destination: ./data/backups
+  hooks: ./hooks.ts
+  cors:
+    origins: ["http://localhost:4321", "http://localhost:3000"]
+
+auth:
+  entity: users
+  identity: email
+  password: password
+  role: role
+  adminRole: admin
+  requireVerifiedEmail: false
+  # open: anyone can sign up. invite: admins invite people. closed: no new accounts.
+  signup: open
+
+entities:
+  users:
+    auth: true
+    label: User
+    plural: Users
+    display: name
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      name: { type: text, required: true }
+      role: { type: enum, values: [user, admin], default: user, writable: admin }
+    policies:
+      read: [owner(id), admin]
+      create: admin
+      update: owner(id)
+      delete: admin
+
+  # The catalog. Anyone can browse; admins manage products.
+  products:
+    label: Product
+    plural: Products
+    display: name
+    fields:
+      name: { type: text, required: true }
+      slug: { type: text, required: true, unique: true, description: "Used in the address, for example canvas-tote." }
+      description: { type: text }
+      priceCents: { type: integer, description: "Price in cents, for example 1250 for 12.50. Leave empty until you set a price." }
+      image: { type: file, description: "Product photo." }
+      imageAlt: { type: text, description: "Describe the photo for people who cannot see it." }
+      active: { type: boolean, default: true, description: "Shown in the store." }
+    policies:
+      read: public
+      create: admin
+      update: admin
+      delete: admin
+
+  # Each signed in shopper's cart.
+  cartItems:
+    label: Cart item
+    plural: Cart items
+    display: id
+    fields:
+      productId: { type: relation, to: products, required: true, onDelete: cascade }
+      quantity: { type: integer, default: 1 }
+      ownerId: { type: relation, to: users, required: true, onDelete: cascade }
+    indexes:
+      - [ownerId, productId]
+    policies:
+      read: [owner(ownerId), admin]
+      create: authenticated
+      update: owner(ownerId)
+      delete: owner(ownerId)
+
+  # Orders. hooks.ts fills in the lines and total from the cart; shoppers cannot set them.
+  # status stays pending_payment until a payment provider marks it paid (not built yet).
+  orders:
+    label: Order
+    plural: Orders
+    display: id
+    fields:
+      status: { type: enum, values: [pending_payment, paid, cancelled], default: pending_payment, writable: admin }
+      lines: { type: text, writable: none, description: "The cart at checkout, as JSON. Set by hooks.ts." }
+      totalCents: { type: integer, writable: none, description: "Set by hooks.ts from product prices." }
+      ownerId: { type: relation, to: users, required: true }
+    policies:
+      read: [owner(ownerId), admin]
+      create: authenticated
+      update: admin
+      delete: admin

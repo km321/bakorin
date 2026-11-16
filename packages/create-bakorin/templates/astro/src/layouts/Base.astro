@@ -3,13 +3,21 @@ import "@bakorin/sdk/styles.css";
 import "../styles/app.css";
 import UserMenu from "@bakorin/sdk/astro/UserMenu.astro";
 import { brandingTheme } from "../lib/bakorin.ts";
+import { site } from "../lib/site.ts";
+import { visibleLinks } from "../lib/site-config.ts";
 
 interface Props {
   title: string;
+  /** Use the wide layout for this page even when the site default is narrow. */
+  wide?: boolean;
 }
 
 const { title } = Astro.props;
+const wide = Astro.props.wide ?? site.wide ?? false;
 const user = Astro.locals.user;
+const path = Astro.url.pathname;
+const links = [...site.nav, ...(user ? visibleLinks(site.userNav, user) : [])];
+const current = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`));
 const theme = await brandingTheme();
 ---
 <!doctype html>
@@ -17,30 +25,26 @@ const theme = await brandingTheme();
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{title} · Bakorin</title>
+    <title>{title} · {site.name}</title>
     {theme && <style set:html={theme} />}
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
-    <header class="site-header">
-      <a class="brand" href={user ? "/app" : "/"}>Bakorin</a>
+    <header class={`site-header${wide ? " wide" : ""}`}>
+      <a class="brand" href="/">{site.name}</a>
       <nav aria-label="Main">
-        {user ? (
-          <>
-            <a href="/app">Dashboard</a>
-            <a href="/app/tasks">Tasks</a>
-          </>
-        ) : (
-          <a href="/signup">Create account</a>
-        )}
-        <UserMenu user={user} links={[{ href: "/app", label: "Dashboard" }]} />
+        {links.map((link) => (
+          <a href={link.href} aria-current={current(link.href) ? "page" : undefined}>{link.label}</a>
+        ))}
+        {!user && site.signup !== false && <a href="/signup">Create account</a>}
+        <UserMenu user={user} links={visibleLinks(site.menu, user)} />
       </nav>
     </header>
-    <main class="wrap" id="main">
+    <main class={`wrap${wide ? " wide" : ""}`} id="main">
       <slot />
     </main>
-    <footer class="site-footer">
-      <span>Self-hosted backend for your site.</span>
+    <footer class={`site-footer${wide ? " wide" : ""}`}>
+      <span>{site.footer}</span>
     </footer>
   </body>
 </html>

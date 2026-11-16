@@ -75,6 +75,17 @@ export function Field({ field, value, error, label, hint, onChange, options, aut
         ))}
       </select>
     );
+  } else if (field.multiline && field.type === "text") {
+    control = (
+      <textarea
+        {...common}
+        className="bk-input bk-textarea"
+        rows={6}
+        required={field.required && field.defaultValue === undefined}
+        value={inputValue(field, value)}
+        onChange={(event) => onChange(event.currentTarget.value)}
+      />
+    );
   } else {
     control = (
       <input

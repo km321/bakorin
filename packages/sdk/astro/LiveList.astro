@@ -3,7 +3,7 @@
 import { jsonForScript, renderListItems, renderLiveStatus } from "../dist/astro-render.js";
 
 interface Props {
-  client: { entity(name: string): { list(query?: any): Promise<{ data: Record<string, unknown>[]; meta: { total: number; limit: number; offset: number } }> } };
+  client: { entity(name: string): { list(query?: any): Promise<{ data: object[]; meta: { total: number; limit: number; offset: number } }> } };
   entity: string;
   schema?: { entities: Record<string, any> };
   /** Field to show. Default: the entity's display field. */
@@ -20,7 +20,7 @@ const display = Astro.props.display ?? schema?.entities[entity]?.display ?? "id"
 const label = Astro.props.label ?? entity.charAt(0).toUpperCase() + entity.slice(1);
 let initial: { data: Record<string, unknown>[]; meta: { total: number; limit: number; offset: number } } | null = null;
 try {
-  initial = await client.entity(entity).list({ limit, sort });
+  initial = (await client.entity(entity).list({ limit, sort })) as typeof initial;
 } catch {
   initial = null;
 }

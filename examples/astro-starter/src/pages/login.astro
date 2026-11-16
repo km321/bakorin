@@ -1,17 +1,18 @@
 ---
 import Layout from "../layouts/Base.astro";
+import { site } from "../lib/site.ts";
 import SignInForm from "@bakorin/sdk/astro/SignInForm.astro";
 import { handleAuthForm } from "@bakorin/sdk/astro";
 import { bakorinUrl } from "../lib/bakorin.ts";
 
 // Without JavaScript the form posts here; with it, the form signs in through /api/bakorin.
-const result = await handleAuthForm(Astro, { baseUrl: bakorinUrl(), mode: "sign-in", redirectTo: "/app" });
+const result = await handleAuthForm(Astro, { baseUrl: bakorinUrl(), mode: "sign-in", redirectTo: site.home });
 if (result.response) return result.response;
 ---
 <Layout title="Sign in">
   <section class="card">
     <h1>Sign in</h1>
     <p class="lede">Welcome back. Use the email you signed up with.</p>
-    <SignInForm redirectTo="/app" forgotPasswordHref="/forgot-password" signUpHref="/signup" result={result} />
+    <SignInForm redirectTo={site.home} forgotPasswordHref="/forgot-password" signUpHref={site.signup === false ? undefined : "/signup"} result={result} />
   </section>
 </Layout>
