@@ -6,6 +6,7 @@ import { writeAudit, type AuditEntry } from "../audit/log.ts";
 import { enqueueWebhook, matchingHooks } from "../webhooks/dispatcher.ts";
 import { enqueueRuleMail } from "../mail/outbox.ts";
 import { matchingRules } from "../mail/rules.ts";
+import { appendRealtime } from "../realtime/log.ts";
 
 /** The audit row a change needs: admin writes and role changes. Null otherwise. */
 export function auditEntryFor(ast: SchemaAST, event: ChangeEvent, meta: ChangeMeta = {}): AuditEntry | null {
@@ -52,12 +53,13 @@ export async function recordChange(trx: BakorinDb, ctx: AppContext, event: Chang
   if (audit) {
     await writeAudit(trx, audit);
   }
+  await appendRealtime(trx, ast, event);
 }
 
 /**
  * Runs a write and its outbox rows in one transaction, then announces the change
  * on the bus after commit. `work` must use only the transaction it is given.
- * after* hooks (and later realtime) hang off the bus, never off the write.
+ * after* hooks and realtime fan out hang off the bus, never off the write.
  */
 export async function commitChange<T>(
   ctx: AppContext,

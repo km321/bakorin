@@ -6,6 +6,8 @@ export interface AccessClaims {
   ent: string;
   /** Issued at in milliseconds. Set on verified tokens (from `iat_ms`, or `iat` for older tokens). */
   issuedAtMs?: number;
+  /** Expiry in milliseconds, set on verified tokens. Realtime streams close at this time. */
+  expiresAtMs?: number;
 }
 
 export async function signAccessToken(
@@ -36,10 +38,16 @@ export async function verifyAccessToken(
       if (!payload.sub || typeof payload.role !== "string" || typeof payload.ent !== "string") {
         throw new Error("invalid token");
       }
-      return { sub: payload.sub, role: payload.role, ent: payload.ent, issuedAtMs: typeof payload.iat_ms === "number" ? payload.iat_ms : typeof payload.iat === "number" ? payload.iat * 1000 : undefined };
+      return { sub: payload.sub, role: payload.role, ent: payload.ent, issuedAtMs: typeof payload.iat_ms === "number" ? payload.iat_ms : typeof payload.iat === "number" ? payload.iat * 1000 : undefined, expiresAtMs: typeof payload.exp === "number" ? payload.exp * 1000 : undefined };
     } catch (error) {
       lastError = error;
     }
   }
   throw lastError instanceof Error ? lastError : new Error("invalid token");
+}
+
+/** A short, non reversible id for an access token, so streams can be matched to a logout. */
+export async function accessTokenHash(token: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(token));
+  return Buffer.from(digest).toString("base64url").slice(0, 32);
 }

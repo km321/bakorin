@@ -27,7 +27,11 @@ import {
   type PolicyAST,
   type RateLimitAST,
   type AlertsRuntimeAST,
+  type McpRuntimeAST,
+  type RealtimeRuntimeAST,
   type RuntimeAST,
+  MCP_DEFAULTS,
+  REALTIME_DEFAULTS,
   type SchemaAST,
 } from "./ast.ts";
 
@@ -377,7 +381,64 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
     mailRetainDays: parseMailRetainDays(runtime.mail?.retainDays, env),
     alerts: parseAlerts(runtime.alerts, env),
     trustProxy: parseTrustProxy(runtime.trustProxy, env),
+    realtime: parseRealtime(runtime.realtime, env, dialect),
+    mcp: parseMcp(runtime.mcp, env),
   };
+}
+
+type RawRealtimeRuntime = NonNullable<NonNullable<AppYaml["runtime"]>["realtime"]>;
+
+function envInt(env: Record<string, string | undefined>, name: string, min: number, max: number): number | undefined {
+  const raw = (env[name] ?? "").trim();
+  if (!raw) {
+    return undefined;
+  }
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw new SchemaError(`${name} must be a whole number from ${min} to ${max}`);
+  }
+  return value;
+}
+
+/** runtime.realtime, with BAKORIN_REALTIME_* env overrides. */
+function parseRealtime(
+  raw: RawRealtimeRuntime | undefined,
+  env: Record<string, string | undefined>,
+  dialect: string,
+): RealtimeRuntimeAST {
+  const brokerEnv = (env.BAKORIN_REALTIME_BROKER ?? "").trim().toLowerCase();
+  if (brokerEnv && brokerEnv !== "auto" && brokerEnv !== "memory" && brokerEnv !== "postgres") {
+    throw new SchemaError(`BAKORIN_REALTIME_BROKER must be auto, memory, or postgres, not ${JSON.stringify(env.BAKORIN_REALTIME_BROKER)}`);
+  }
+  const broker = (brokerEnv || raw?.broker || REALTIME_DEFAULTS.broker) as RealtimeRuntimeAST["broker"];
+  if (broker === "postgres" && dialect !== "postgres") {
+    throw new SchemaError("runtime.realtime.broker postgres needs runtime.dialect postgres");
+  }
+  return {
+    broker,
+    maxConnections:
+      envInt(env, "BAKORIN_REALTIME_MAX_CONNECTIONS", 1, 1_000_000) ?? raw?.maxConnections ?? REALTIME_DEFAULTS.maxConnections,
+    maxPerUser: envInt(env, "BAKORIN_REALTIME_MAX_PER_USER", 1, 10_000) ?? raw?.maxPerUser ?? REALTIME_DEFAULTS.maxPerUser,
+    heartbeatSeconds: raw?.heartbeatSeconds ?? REALTIME_DEFAULTS.heartbeatSeconds,
+    replayEvents: raw?.replayEvents ?? REALTIME_DEFAULTS.replayEvents,
+    retainMinutes: raw?.retainMinutes ?? REALTIME_DEFAULTS.retainMinutes,
+    maxBufferKb: raw?.maxBufferKb ?? REALTIME_DEFAULTS.maxBufferKb,
+  };
+}
+
+/** runtime.mcp (true, or { enabled, sampleLimit }). BAKORIN_MCP=true or false wins. */
+function parseMcp(raw: NonNullable<AppYaml["runtime"]>["mcp"], env: Record<string, string | undefined>): McpRuntimeAST {
+  const fromYaml = typeof raw === "boolean" ? { enabled: raw } : (raw ?? {});
+  const flag = (env.BAKORIN_MCP ?? "").trim().toLowerCase();
+  let enabled = fromYaml.enabled ?? MCP_DEFAULTS.enabled;
+  if (flag === "true" || flag === "1") {
+    enabled = true;
+  } else if (flag === "false" || flag === "0") {
+    enabled = false;
+  } else if (flag) {
+    throw new SchemaError(`BAKORIN_MCP must be true or false, not ${JSON.stringify(env.BAKORIN_MCP)}`);
+  }
+  return { enabled, sampleLimit: fromYaml.sampleLimit ?? MCP_DEFAULTS.sampleLimit };
 }
 
 /**
@@ -385,7 +446,7 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
  * true for one hop, or a list of proxy CIDRs. The env var wins so a host can set it.
  */
 /** API prefixes Bakorin mounts under /api/v1. An entity with one of these names would be shadowed. */
-export const RESERVED_ENTITY_NAMES = ["auth", "audit", "backups", "docs", "files", "mail", "status", "webhooks", "_meta"] as const;
+export const RESERVED_ENTITY_NAMES = ["auth", "audit", "backups", "docs", "files", "mail", "realtime", "status", "webhooks", "_meta"] as const;
 
 function assertEntityRouteFree(name: string): void {
   if ((RESERVED_ENTITY_NAMES as readonly string[]).includes(name.toLowerCase())) {
@@ -889,6 +950,8 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
       deprecated: false,
       ...(raw.renameFrom ? { renameFrom: raw.renameFrom } : {}),
       ...(raw.rateLimit ? { rateLimit: compileEntityRateLimit(raw.rateLimit) } : {}),
+      ...(raw.realtime === true || raw.realtime === "full" ? { realtime: "full" as const } : {}),
+      ...(raw.realtime === "ids" ? { realtime: "ids" as const } : {}),
     };
   });
 
@@ -985,6 +1048,8 @@ export function deserializeAst(raw: string): SchemaAST {
   if (!parsed.runtime.apiDocs) {
     parsed.runtime.apiDocs = "admin";
   }
+  parsed.runtime.realtime = { ...REALTIME_DEFAULTS, ...(parsed.runtime.realtime ?? {}) };
+  parsed.runtime.mcp = { ...MCP_DEFAULTS, ...(parsed.runtime.mcp ?? {}) };
   if (!parsed.runtime.appUrl) {
     parsed.runtime.appUrl = `http://127.0.0.1:${parsed.runtime.port}`;
   }

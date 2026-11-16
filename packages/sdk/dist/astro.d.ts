@@ -1,4 +1,6 @@
 import { type ClientOptions } from "./index.ts";
+import { type ProxyOptions } from "./proxy.ts";
+export { createProxyHandler, isSameSiteRequest, type ProxyOptions } from "./proxy.ts";
 /**
  * Astro helper. Pass Astro.cookies from a page, endpoint, or middleware.
  */
@@ -10,20 +12,18 @@ export declare function createAstroClient<S extends Record<string, Record<string
         set: (name: string, value: string, opts?: object) => void;
     };
 }): {
-    signup(body: Record<string, unknown>): Promise<{
-        user: S[string];
-        accessToken?: string;
-        refreshToken?: string;
-        expiresIn?: number;
-        needsVerification?: boolean;
-    }>;
+    subscribe<K extends keyof S & string>(entity: K, handler: (change: import("./index.ts").RealtimeChange<S[K]>) => void, subscribeOptions?: import("./index.ts").SubscribeOptions): () => void;
+    closeRealtime(): void;
+    signup(body: Record<string, unknown>): Promise<import("./index.ts").SignupResult>;
     login(body: Record<string, unknown>): Promise<{
         user: S[string];
         accessToken: string;
         refreshToken: string;
         expiresIn: number;
     }>;
-    logout(refreshToken?: string): Promise<void>;
+    logout(refreshToken?: string, logoutOptions?: {
+        all?: boolean;
+    }): Promise<void>;
     me(): Promise<S[string]>;
     forgotPassword(body: {
         email: string;
@@ -74,3 +74,16 @@ export declare function createAstroClient<S extends Record<string, Record<string
         delete(id: string): Promise<void>;
     };
 };
+/**
+ * A ready made pass through route for browser code. Create
+ * src/pages/api/bakorin/[...path].ts with:
+ *
+ *   import { createAstroProxy } from "@bakorin/sdk/astro";
+ *   export const prerender = false;
+ *   export const ALL = createAstroProxy({ baseUrl: import.meta.env.BAKORIN_URL });
+ *
+ * Then use createBrowserClient() from "@bakorin/sdk/browser" in client scripts.
+ */
+export declare function createAstroProxy(options: ProxyOptions): ({ request }: {
+    request: Request;
+}) => Promise<Response>;

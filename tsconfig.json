@@ -30,6 +30,9 @@
       ],
       "@bakorin/sdk": [
         "./packages/sdk/src/index.ts"
+      ],
+      "@bakorin/sdk/*": [
+        "./packages/sdk/src/*.ts"
       ]
     },
     "allowImportingTsExtensions": true,

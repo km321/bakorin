@@ -39,6 +39,10 @@ import { createStatusRoutes, metricsExtras, readiness } from "./monitor/status.t
 import { startAlertWorker } from "./monitor/alerts.ts";
 import { serverVersion } from "./version.ts";
 import { createBrandingRoutes, logBrandingWarnings, validateBrandingFiles } from "./branding/assets.ts";
+import { createRealtimeHub } from "./realtime/hub.ts";
+import { createMemoryBroker, createPostgresBroker } from "./realtime/broker.ts";
+import { createRealtimeRoutes } from "./realtime/routes.ts";
+import { createMcpRoutes, MCP_TOKEN_MIN_LENGTH } from "./mcp/server.ts";
 
 export interface RuntimeHandles {
   app: Hono;
@@ -136,6 +140,38 @@ export async function createRuntime(options: {
     },
   });
   const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir, mailer, mail, monitor, requireSetupToken };
+  const usePostgresBroker =
+    ast.runtime.realtime.broker === "postgres" || (ast.runtime.realtime.broker === "auto" && ast.runtime.dialect === "postgres");
+  // The broker opens its LISTEN connection lazily, when the hub starts.
+  let broker: ReturnType<typeof createMemoryBroker> | null = null;
+  const realtime = createRealtimeHub({
+    ast: () => context.ast,
+    db: opened.db,
+    bus,
+    brokerName: usePostgresBroker ? "postgres" : "memory",
+    maxBufferBytes: ast.runtime.realtime.maxBufferKb * 1024,
+    get broker() {
+      broker ??= usePostgresBroker ? createPostgresBroker({ url: ast.runtime.postgresUrl ?? "", db: opened.db }) : createMemoryBroker();
+      return broker;
+    },
+    onError: (error) => {
+      console.error("[bakorin] realtime error", error);
+      monitor.captureError(error, { source: "realtime" });
+    },
+  });
+  context.realtime = realtime;
+  const mcpToken = env.BAKORIN_MCP_TOKEN?.trim();
+  if (mcpToken && mcpToken.length < MCP_TOKEN_MIN_LENGTH) {
+    console.warn(`[bakorin] BAKORIN_MCP_TOKEN is shorter than ${MCP_TOKEN_MIN_LENGTH} characters and is ignored`);
+  } else if (mcpToken) {
+    context.mcpToken = mcpToken;
+  }
+  if (ast.runtime.mcp.enabled) {
+    console.log(`[bakorin] MCP dev server on at /mcp (read only, admin token required)${isDevMode(env) ? "" : ". It is on in production: turn it off unless you need it"}`);
+  }
+  if (ast.entities.some((entity) => entity.realtime)) {
+    await realtime.start();
+  }
   subscribeAfterHooks(() => context.hooks, opened.db, (handler) => bus.subscribe(handler), mail);
   const workers = options.workers !== false;
   const noop = () => {};
@@ -218,6 +254,8 @@ export async function createRuntime(options: {
   app.route("/api/v1/audit", createAuditRoutes());
   app.route("/api/v1/webhooks", createWebhookRoutes());
   app.route("/api/v1/mail", createMailRoutes());
+  app.route("/api/v1/realtime", createRealtimeRoutes());
+  app.route("/mcp", createMcpRoutes());
   app.route("/api/v1", createMetaRoutes());
   app.route("/api/v1", createCrudRouter());
   app.route("/branding", createBrandingRoutes());
@@ -241,6 +279,9 @@ export async function createRuntime(options: {
       logBrandingWarnings(next.branding);
       await migrateToSchema(context.db, next, migrationOptions(next, context.db, context.files, projectDir, env));
       context.ast = next;
+      if (next.entities.some((entity) => entity.realtime)) {
+        await realtime.start();
+      }
       const previousRoutes = context.hooks.routes;
       context.hooks = await loadHooks(projectDir, next.runtime.hooksPath, { fresh: true });
       if (context.hooks.routes && String(context.hooks.routes) !== String(previousRoutes)) {
@@ -249,6 +290,7 @@ export async function createRuntime(options: {
       console.log(`[bakorin] reloaded schema for ${next.appName}`);
     },
     async close() {
+      await realtime.close();
       stopBackups();
       stopWebhooks();
       stopMail();
@@ -301,7 +343,7 @@ function corsOptions(origins: string[]) {
       ? "*"
       : (origin: string) => (origins.includes(origin) ? origin : ""),
     credentials: true,
-    allowHeaders: ["Authorization", "Content-Type", "X-Requested-With", "X-Bakorin-Verify"],
+    allowHeaders: ["Authorization", "Content-Type", "X-Requested-With", "X-Bakorin-Verify", "Last-Event-ID"],
     allowMethods: ["GET", "HEAD", "PUT", "POST", "DELETE", "PATCH", "OPTIONS"],
     maxAge: 86400,
   };

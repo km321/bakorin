@@ -81,7 +81,56 @@ export interface EntityAST {
   renameFrom?: string;
   /** Optional per action request limits (app.yaml rateLimit:). */
   rateLimit?: Partial<Record<ActionName, RateLimitAST>>;
+  /**
+   * Realtime change events over server sent events (app.yaml realtime:). Off when
+   * unset. full: events carry the record as the reader may see it. ids: events
+   * carry only the id and operation, for heavy tables; clients refetch.
+   */
+  realtime?: RealtimeMode;
 }
+
+export type RealtimeMode = "full" | "ids";
+
+/**
+ * memory: one process (SQLite, or a single Postgres instance).
+ * postgres: fan out across instances with LISTEN/NOTIFY.
+ * auto: postgres on Postgres, memory on SQLite.
+ */
+export type RealtimeBrokerName = "auto" | "memory" | "postgres";
+
+export interface RealtimeRuntimeAST {
+  broker: RealtimeBrokerName;
+  /** Open streams allowed on one instance. */
+  maxConnections: number;
+  /** Open streams per signed in user (or per IP when signed out) on one instance. */
+  maxPerUser: number;
+  heartbeatSeconds: number;
+  /** Recent events kept in memory for Last-Event-ID resume. */
+  replayEvents: number;
+  /** How long change rows stay in the database log for resume after a longer gap. */
+  retainMinutes: number;
+  /** Data queued for one client before it is dropped as too slow, in KiB. */
+  maxBufferKb: number;
+}
+
+/** The read only MCP dev server at /mcp. Off unless runtime.mcp or BAKORIN_MCP turns it on. */
+export interface McpRuntimeAST {
+  enabled: boolean;
+  /** Most rows the sample_records tool returns. */
+  sampleLimit: number;
+}
+
+export const REALTIME_DEFAULTS: RealtimeRuntimeAST = {
+  broker: "auto",
+  maxConnections: 10_000,
+  maxPerUser: 20,
+  heartbeatSeconds: 15,
+  replayEvents: 1000,
+  retainMinutes: 10,
+  maxBufferKb: 1024,
+};
+
+export const MCP_DEFAULTS: McpRuntimeAST = { enabled: false, sampleLimit: 5 };
 
 export const WEBHOOK_DEFAULT_MAX_ATTEMPTS = 10;
 export const WEBHOOK_DEFAULT_TIMEOUT_MS = 10_000;
@@ -179,6 +228,8 @@ export interface RuntimeAST {
   alerts: AlertsRuntimeAST;
   /** How to find the client IP behind proxies. See TrustProxyAST. */
   trustProxy: TrustProxyAST;
+  realtime: RealtimeRuntimeAST;
+  mcp: McpRuntimeAST;
 }
 
 /**

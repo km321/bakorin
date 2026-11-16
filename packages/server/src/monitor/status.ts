@@ -259,6 +259,27 @@ export async function collectStatus(ctx: AppContext, monitor: Monitor) {
     },
     logging: monitor.logMode,
     metrics: monitor.metricsEnabled,
+    realtime: realtimeStatus(ctx),
+    mcp: { enabled: ctx.ast.runtime.mcp.enabled, tokenConfigured: Boolean(ctx.mcpToken) },
+  };
+}
+
+function realtimeStatus(ctx: AppContext) {
+  const entities = ctx.ast.entities.filter((entity) => entity.realtime).map((entity) => ({ name: entity.name, mode: entity.realtime! }));
+  const stats = ctx.realtime?.stats();
+  return {
+    enabled: entities.length > 0,
+    entities,
+    broker: stats?.broker ?? "memory",
+    brokerHealthy: stats?.brokerHealthy ?? false,
+    connections: stats?.connections ?? 0,
+    connectionsByEntity: stats?.connectionsByEntity ?? {},
+    users: stats?.users ?? 0,
+    maxConnections: ctx.ast.runtime.realtime.maxConnections,
+    eventsTotal: stats?.eventsTotal ?? 0,
+    deliveriesTotal: stats?.deliveriesTotal ?? 0,
+    droppedSlowTotal: stats?.droppedSlowTotal ?? 0,
+    lastEventId: stats?.cursor ?? 0,
   };
 }
 
@@ -303,6 +324,35 @@ export async function metricsExtras(ctx: AppContext, monitor: Monitor): Promise<
   );
   if (size !== null) {
     lines.push("# HELP bakorin_db_size_bytes Database size.", "# TYPE bakorin_db_size_bytes gauge", `bakorin_db_size_bytes ${size}`);
+  }
+  const realtime = ctx.realtime?.stats();
+  if (realtime) {
+    lines.push(
+      "# HELP bakorin_realtime_connections Open realtime streams on this instance.",
+      "# TYPE bakorin_realtime_connections gauge",
+      `bakorin_realtime_connections ${realtime.connections}`,
+      "# HELP bakorin_realtime_users Distinct users (or signed out IPs) with an open stream.",
+      "# TYPE bakorin_realtime_users gauge",
+      `bakorin_realtime_users ${realtime.users}`,
+      "# HELP bakorin_realtime_events_total Changes read from the realtime log.",
+      "# TYPE bakorin_realtime_events_total counter",
+      `bakorin_realtime_events_total ${realtime.eventsTotal}`,
+      "# HELP bakorin_realtime_deliveries_total Events written to client streams.",
+      "# TYPE bakorin_realtime_deliveries_total counter",
+      `bakorin_realtime_deliveries_total ${realtime.deliveriesTotal}`,
+      "# HELP bakorin_realtime_frames_built_total Event frames serialized (shared across subscribers with the same policy context).",
+      "# TYPE bakorin_realtime_frames_built_total counter",
+      `bakorin_realtime_frames_built_total ${realtime.framesBuiltTotal}`,
+      "# HELP bakorin_realtime_dropped_slow_total Streams dropped because the client could not keep up.",
+      "# TYPE bakorin_realtime_dropped_slow_total counter",
+      `bakorin_realtime_dropped_slow_total ${realtime.droppedSlowTotal}`,
+      "# HELP bakorin_realtime_rejected_total Stream requests refused, by reason.",
+      "# TYPE bakorin_realtime_rejected_total counter",
+      ...Object.entries(realtime.rejectedTotal).map(([reason, count]) => `bakorin_realtime_rejected_total{reason="${reason}"} ${count}`),
+      "# HELP bakorin_realtime_broker_up 1 when the realtime broker is connected.",
+      "# TYPE bakorin_realtime_broker_up gauge",
+      `bakorin_realtime_broker_up{broker="${realtime.broker}"} ${realtime.started ? (realtime.brokerHealthy ? 1 : 0) : 0}`,
+    );
   }
   lines.push(
     "# HELP bakorin_last_backup_timestamp_seconds Unix time of the last successful backup, 0 if none.",

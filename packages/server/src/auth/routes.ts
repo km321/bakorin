@@ -2,8 +2,8 @@ import { Hono, type Context } from "hono";
 import { clientIp } from "../http/client-ip.ts";
 import { encodeValue } from "../db/types.ts";
 import { hashPassword, verifyPassword } from "./password.ts";
-import { signAccessToken, verifyAccessToken } from "./jwt.ts";
-import { issueRefreshToken, revokeAllForUser, revokeToken, rotateRefreshToken } from "./refresh.ts";
+import { accessTokenHash, signAccessToken, verifyAccessToken } from "./jwt.ts";
+import { issueRefreshToken, notifySessionsChanged, revokeAllForUser, revokeToken, rotateRefreshToken } from "./refresh.ts";
 import { rateLimit } from "./rate-limit.ts";
 import { runVerifyHook } from "../hooks/verify.ts";
 import { clearLockout, getLockout, lockoutKey, recordFailedLogin } from "./lockout.ts";
@@ -375,6 +375,12 @@ export function createAuthRoutes(): Hono {
     }
     if (body.refreshToken) {
       await revokeToken(ctx.db, body.refreshToken);
+    }
+    // Close realtime streams opened with this device's access token.
+    const actor = c.get("actor");
+    const header = c.req.header("authorization");
+    if (actor && header?.startsWith("Bearer ")) {
+      notifySessionsChanged({ userId: actor.id, tokenHash: await accessTokenHash(header.slice(7)) });
     }
     return c.json({ data: { ok: true } });
   });

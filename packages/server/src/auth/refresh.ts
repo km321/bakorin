@@ -166,6 +166,32 @@ export async function revokeToken(db: BakorinDb, presented: string): Promise<voi
  * Signs a user out everywhere: revokes every refresh token and rejects access
  * tokens issued before now (checked per request in app.ts).
  */
+/** userId: recheck every stream of this user. tokenHash: close streams opened with this access token (logout). */
+export type SessionChange = { userId: string; tokenHash?: string };
+type SessionListener = (change: SessionChange) => void;
+const sessionListeners = new Set<SessionListener>();
+
+/**
+ * Called whenever a user's sessions may have changed (logout, logout everywhere,
+ * password reset, role change). Realtime uses it to recheck that user's open streams.
+ */
+export function onSessionsChanged(listener: SessionListener): () => void {
+  sessionListeners.add(listener);
+  return () => {
+    sessionListeners.delete(listener);
+  };
+}
+
+export function notifySessionsChanged(change: SessionChange): void {
+  for (const listener of sessionListeners) {
+    try {
+      listener(change);
+    } catch (error) {
+      console.error("[bakorin] session listener failed", error);
+    }
+  }
+}
+
 export async function revokeAllForUser(db: BakorinDb, userId: string): Promise<void> {
   await db.updateTable(REFRESH_TABLE).set({ revoked_at: new Date().toISOString() }).where("user_id", "=", userId).execute();
   const notBefore = Date.now();
@@ -174,6 +200,7 @@ export async function revokeAllForUser(db: BakorinDb, userId: string): Promise<v
     .values({ user_id: userId, not_before: notBefore })
     .onConflict((oc) => oc.column("user_id").doUpdateSet({ not_before: notBefore }))
     .execute();
+  notifySessionsChanged({ userId });
 }
 
 /** Milliseconds since epoch before which this user's access tokens are rejected, or 0. */

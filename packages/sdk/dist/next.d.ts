@@ -1,4 +1,6 @@
 import { type ClientOptions } from "./index.ts";
+import { type ProxyOptions } from "./proxy.ts";
+export { createProxyHandler, isSameSiteRequest, type ProxyOptions } from "./proxy.ts";
 /**
  * Next.js helper. Pass cookie read/write from Route Handlers or Server Actions.
  * This package does not depend on next.
@@ -11,20 +13,18 @@ export declare function createNextClient<S extends Record<string, Record<string,
         set?: (name: string, value: string, opts?: object) => void;
     };
 }): {
-    signup(body: Record<string, unknown>): Promise<{
-        user: S[string];
-        accessToken?: string;
-        refreshToken?: string;
-        expiresIn?: number;
-        needsVerification?: boolean;
-    }>;
+    subscribe<K extends keyof S & string>(entity: K, handler: (change: import("./index.ts").RealtimeChange<S[K]>) => void, subscribeOptions?: import("./index.ts").SubscribeOptions): () => void;
+    closeRealtime(): void;
+    signup(body: Record<string, unknown>): Promise<import("./index.ts").SignupResult>;
     login(body: Record<string, unknown>): Promise<{
         user: S[string];
         accessToken: string;
         refreshToken: string;
         expiresIn: number;
     }>;
-    logout(refreshToken?: string): Promise<void>;
+    logout(refreshToken?: string, logoutOptions?: {
+        all?: boolean;
+    }): Promise<void>;
     me(): Promise<S[string]>;
     forgotPassword(body: {
         email: string;
@@ -74,4 +74,20 @@ export declare function createNextClient<S extends Record<string, Record<string,
         update(id: string, body: Partial<S[K]>): Promise<S[K]>;
         delete(id: string): Promise<void>;
     };
+};
+/**
+ * A ready made pass through route for client components. Create
+ * app/api/bakorin/[...path]/route.ts with:
+ *
+ *   import { createNextProxy } from "@bakorin/sdk/next";
+ *   export const dynamic = "force-dynamic";
+ *   export const { GET, POST, PATCH, PUT, DELETE } = createNextProxy({ baseUrl: process.env.BAKORIN_URL! });
+ */
+export declare function createNextProxy(options: ProxyOptions): {
+    GET: (request: Request) => Promise<Response>;
+    POST: (request: Request) => Promise<Response>;
+    PATCH: (request: Request) => Promise<Response>;
+    PUT: (request: Request) => Promise<Response>;
+    DELETE: (request: Request) => Promise<Response>;
+    HEAD: (request: Request) => Promise<Response>;
 };

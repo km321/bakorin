@@ -25,6 +25,18 @@
       "import": "./dist/next.js",
       "bun": "./src/next.ts",
       "default": "./dist/next.js"
+    },
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js",
+      "bun": "./src/browser.ts",
+      "default": "./dist/browser.js"
+    },
+    "./proxy": {
+      "types": "./dist/proxy.d.ts",
+      "import": "./dist/proxy.js",
+      "bun": "./src/proxy.ts",
+      "default": "./dist/proxy.js"
     }
   },
   "files": [
@@ -34,7 +46,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "bun build src/index.ts src/astro.ts src/next.ts --outdir dist --format esm --target node && bunx tsc -p tsconfig.json --emitDeclarationOnly --declaration --allowImportingTsExtensions",
+    "build": "bun build src/index.ts src/astro.ts src/next.ts src/browser.ts src/proxy.ts --outdir dist --format esm --target node && bunx tsc -p tsconfig.json --emitDeclarationOnly --declaration --allowImportingTsExtensions",
     "prepublishOnly": "bun run build"
   },
   "publishConfig": {

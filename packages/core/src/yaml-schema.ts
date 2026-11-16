@@ -93,6 +93,7 @@ const entityObject = z
       .strict()
       .optional(),
     rateLimit: entityRateLimit.optional(),
+    realtime: z.union([z.boolean(), z.enum(["full", "ids"])]).optional(),
   })
   .strict();
 
@@ -254,6 +255,29 @@ export const appYamlSchema = z
           .optional(),
         hooks: z.string().optional(),
         apiDocs: z.enum(["public", "admin"]).optional(),
+        realtime: z
+          .object({
+            broker: z.enum(["auto", "memory", "postgres"]).optional(),
+            maxConnections: z.number().int().min(1).max(1_000_000).optional(),
+            maxPerUser: z.number().int().min(1).max(10_000).optional(),
+            heartbeatSeconds: z.number().int().min(1).max(300).optional(),
+            replayEvents: z.number().int().min(0).max(100_000).optional(),
+            retainMinutes: z.number().int().min(1).max(10_080).optional(),
+            maxBufferKb: z.number().int().min(1).max(65_536).optional(),
+          })
+          .strict()
+          .optional(),
+        mcp: z
+          .union([
+            z.boolean(),
+            z
+              .object({
+                enabled: z.boolean().optional(),
+                sampleLimit: z.number().int().min(1).max(50).optional(),
+              })
+              .strict(),
+          ])
+          .optional(),
         trustProxy: z.union([z.boolean(), z.number().int().min(0).max(10), z.array(z.string().min(1)).min(1)]).optional(),
         webhooks: z
           .object({

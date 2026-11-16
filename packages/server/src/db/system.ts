@@ -14,6 +14,8 @@ export const AUDIT_TABLE = "_bakorin_audit";
 export const WEBHOOK_OUTBOX_TABLE = "_bakorin_webhook_outbox";
 export const MAIL_OUTBOX_TABLE = "_bakorin_mail_outbox";
 export const TOKEN_CUTOFF_TABLE = "_bakorin_token_cutoffs";
+/** Short lived log of changes on realtime entities: ids for resume, and the fan out source. */
+export const REALTIME_TABLE = "_bakorin_realtime";
 
 export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): Promise<void> {
   const text = "text";
@@ -143,6 +145,20 @@ export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): P
   await sql
     .raw(`create index if not exists _bakorin_audit_at_idx on ${AUDIT_TABLE} (at)`)
     .execute(db);
+  const seq = dialect === "postgres" ? "bigserial primary key" : "integer primary key autoincrement";
+  await sql
+    .raw(
+      `create table if not exists ${REALTIME_TABLE} (
+        seq ${seq},
+        entity ${text} not null,
+        op ${text} not null,
+        record_id ${text} not null,
+        data ${text} not null,
+        at ${int} not null
+      )`,
+    )
+    .execute(db);
+  await sql.raw(`create index if not exists _bakorin_realtime_at_idx on ${REALTIME_TABLE} (at)`).execute(db);
   await sql
     .raw(
       `create table if not exists ${WEBHOOK_OUTBOX_TABLE} (

@@ -219,6 +219,8 @@ async function serve(mode: "dev" | "start"): Promise<void> {
     console.log(`[bakorin] ${signal}: finishing in-flight requests, then stopping`);
     const force = setTimeout(() => process.exit(0), 15_000);
     try {
+      // Realtime streams never finish on their own: tell them to reconnect elsewhere first.
+      await runtime.context.realtime?.drain();
       void server.stop();
       const deadline = Date.now() + 10_000;
       while (server.pendingRequests > 0 && Date.now() < deadline) {
