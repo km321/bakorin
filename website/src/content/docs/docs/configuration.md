@@ -46,6 +46,8 @@ Only trust a proxy that overwrites or appends to `X-Forwarded-For`. If clients c
 | `BAKORIN_ADMIN_PASSWORD` | At least 8 characters. Ignored once an admin exists |
 | `BAKORIN_ADMIN_NAME` | Defaults to `Admin` |
 
+Without these, `bakorin start` prints a one time setup token to the log that the **Create your first admin** form asks for. See [First admin](/docs/auth/#first-admin).
+
 ## Mail
 
 | Variable | Notes |

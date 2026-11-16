@@ -2,7 +2,7 @@ import { afterEach, describe, expect, spyOn, test } from "bun:test";
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { compileAppYaml, serializeAst } from "@bakorin/core";
-import { createRuntime, type RuntimeHandles } from "@bakorin/server";
+import { createRuntime, issueSetupTokenIfNeeded, type RuntimeHandles } from "@bakorin/server";
 import { MAIL_OUTBOX_TABLE, metaSet, WEBHOOK_OUTBOX_TABLE } from "../packages/server/src/db/system.ts";
 import { checkAlerts } from "../packages/server/src/monitor/alerts.ts";
 import { parseSentryDsn, scrubMessage } from "../packages/server/src/monitor/monitor.ts";
@@ -38,9 +38,11 @@ async function start(options: { env?: Record<string, string>; yaml?: string; hoo
 }
 
 async function adminToken(runtime: RuntimeHandles & { dir: string }): Promise<string> {
+  // These runtimes boot in production mode, so the first admin needs a setup token.
+  const setupToken = await issueSetupTokenIfNeeded(runtime.ast, runtime.context.db, () => undefined);
   const first = await client(runtime).fetch("/api/v1/auth/first-admin", {
     method: "POST",
-    body: JSON.stringify({ email: "ada@studio.test", password: "password123", name: "Ada" }),
+    body: JSON.stringify({ email: "ada@studio.test", password: "password123", name: "Ada", setupToken }),
   });
   expect(first.status).toBe(201);
   return ((await first.json()) as { data: { accessToken: string } }).data.accessToken;

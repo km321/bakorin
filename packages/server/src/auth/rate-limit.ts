@@ -35,3 +35,34 @@ export async function rateLimit(db: BakorinDb, key: string, limit: number, windo
 export function resetRateLimit(): void {
   // Limits live in the database. A new boot() uses a fresh file, so this is a no-op for tests.
 }
+
+export interface RateRule {
+  limit: number;
+  windowSeconds: number;
+  per: "ip" | "user";
+}
+
+/**
+ * Apply an app.yaml rateLimit rule. Keyed per client IP, or per signed in user
+ * when `per: user` (signed out callers fall back to their IP).
+ */
+export async function checkRateRule(
+  db: BakorinDb,
+  scope: string,
+  rule: RateRule | undefined,
+  ip: string,
+  actorId: string | null,
+): Promise<boolean> {
+  if (!rule) {
+    return true;
+  }
+  const who = rule.per === "user" && actorId ? `user:${actorId}` : `ip:${ip}`;
+  return rateLimit(db, `${scope}:${who}`, rule.limit, rule.windowSeconds * 1000);
+}
+
+export function rateLimitedResponse(rule: RateRule, message: string): Response {
+  return Response.json(
+    { error: { code: "rate_limited", message } },
+    { status: 429, headers: { "retry-after": String(rule.windowSeconds) } },
+  );
+}

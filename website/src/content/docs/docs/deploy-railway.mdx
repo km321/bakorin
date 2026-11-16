@@ -41,7 +41,7 @@ SQLite on the volume is the default. Postgres is optional: set `runtime.dialect:
 
 4. Optional: attach a bucket and set `S3_ADDRESSING_STYLE=path`. Railway buckets deny virtual hosted requests, and Bun's S3 client returns Access Denied without path style.
 
-5. Optional first admin: set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD` (at least 8 characters). Bakorin creates that admin only while no admin exists. You can also use **Create your first admin** at `/admin/`.
+5. Optional first admin: set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD` (at least 8 characters). Bakorin creates that admin only while no admin exists. Without them, open `/admin/` and use **Create your first admin** with the setup token printed in the deploy logs.
 
 6. Deploy and confirm `GET /health` returns `{ "ok": true }`.
 

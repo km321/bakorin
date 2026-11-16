@@ -24,6 +24,8 @@ export interface AppContext {
   mail: MailApi;
   /** Request logs, recent errors and counters for /metrics and the Status page. */
   monitor: Monitor;
+  /** Production: /auth/first-admin needs the setup token printed to the log at boot. */
+  requireSetupToken?: boolean;
 }
 
 declare module "hono" {

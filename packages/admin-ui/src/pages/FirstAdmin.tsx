@@ -5,10 +5,13 @@ import { Brand } from "../components/Brand.tsx";
 
 interface Props {
   onCreated: () => void;
+  /** Production: ask for the one time setup token printed to the server log. */
+  setupTokenRequired?: boolean;
 }
 
-export function FirstAdmin({ onCreated }: Props) {
+export function FirstAdmin({ onCreated, setupTokenRequired = false }: Props) {
   const [email, setEmail] = useState("");
+  const [setupToken, setSetupToken] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -19,12 +22,17 @@ export function FirstAdmin({ onCreated }: Props) {
     const data = new FormData(form);
     const identity = String(data.get("email") ?? email).trim();
     const secret = String(data.get("password") ?? password);
+    const token = String(data.get("setupToken") ?? setupToken).trim();
     if (secret.length < 8) {
       setError("Password must be at least 8 characters.");
       return;
     }
+    if (setupTokenRequired && !token) {
+      setError("Enter the setup token from the server log.");
+      return;
+    }
     try {
-      await createFirstAdmin(identity, secret);
+      await createFirstAdmin(identity, secret, setupTokenRequired ? token : undefined);
       onCreated();
     } catch (err) {
       setError(err instanceof Error ? err.message : "could not create admin");
@@ -38,6 +46,25 @@ export function FirstAdmin({ onCreated }: Props) {
         <h1>Create your first admin</h1>
         <p class="muted">No admin exists yet. This form is available only until the first admin is created.</p>
         {error ? <div class="banner">{error}</div> : null}
+        {setupTokenRequired ? (
+          <div class="field">
+            <label>
+              Setup token <span class="req">*</span>
+            </label>
+            <p class="field-hint">
+              Printed in the server log when it started (look for "setup token"). Each restart prints a new one.
+            </p>
+            <input
+              name="setupToken"
+              type="text"
+              value={setupToken}
+              required
+              autoComplete="off"
+              spellcheck={false}
+              onInput={(event) => setSetupToken((event.target as HTMLInputElement).value)}
+            />
+          </div>
+        ) : null}
         <div class="field">
           <label>
             Email <span class="req">*</span>

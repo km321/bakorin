@@ -52,6 +52,28 @@ await ctx.mail.send({
 
 Sends are never inline: they get retries, backoff, and a row in the admin delivery log. See [Email](/docs/email/#sending-from-hooks).
 
+## Captcha and bot checks
+
+`verify` runs before signup and before every signed out create (public forms). Return `true` to let the request through, or `false` or `{ ok: false, message }` to refuse it with 403 `verification_failed`. If the hook throws, the request is refused and the error shows up on the Status page, so a provider outage does not let bots in.
+
+The front end sends the captcha token in the `X-Bakorin-Verify` header. The hook gets `action` (`signup` or `create`), `entity`, `token`, `ip`, and the request `headers`. Cloudflare Turnstile looks like this:
+
+```ts title="hooks.ts"
+const hooks: BakorinHooks = {
+  async verify({ token, ip }) {
+    if (!token) return { ok: false, message: "Complete the captcha first." };
+    const res = await fetch("https://challenges.cloudflare.com/turnstile/v0/siteverify", {
+      method: "POST",
+      body: new URLSearchParams({ secret: process.env.TURNSTILE_SECRET_KEY ?? "", response: token, remoteip: ip }),
+    });
+    const result = (await res.json()) as { success: boolean };
+    return result.success;
+  },
+};
+```
+
+hCaptcha and reCAPTCHA work the same way with their own verify URL. To check only some entities, look at `entity` and return `true` for the rest. Signed in creates skip the hook; use [rate limits](/docs/app-yaml/#rate-limits) for those.
+
 ## Custom routes
 
 `routes(app)` receives the Hono app. Add any route you need.

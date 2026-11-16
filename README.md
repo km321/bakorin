@@ -291,7 +291,7 @@ Mount a volume at `/data` (or whatever you set as `BAKORIN_DATA_DIR`). To run a 
 4. Set `S3_ADDRESSING_STYLE=path`. Railway buckets deny virtual-hosted requests; Bun's S3Client returns Access Denied unless path-style is used.
 5. Set the variables below. Railway sets `PORT`. Railway mounts the volume at `/data`; the image does not declare a Docker `VOLUME`. Set `CORS_ORIGINS` to your admin or front-end origin. Production refuses CORS `*`.
 6. Health check path: `/health`.
-7. Optional first-boot admin: set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD`. Bakorin creates that admin only while no admin exists. Later restarts skip it. You can also create the first admin at `/admin/`.
+7. Optional first-boot admin: set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD`. Bakorin creates that admin only while no admin exists. Later restarts skip it. Without them, `/admin/` asks for the one time setup token printed in the deploy logs.
 
 Railway volume snapshots are a second copy, not a substitute for `bakorin backup` / scheduled S3 backups.
 

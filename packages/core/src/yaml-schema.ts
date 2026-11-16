@@ -49,6 +49,30 @@ const fieldObject = z
 
 const fieldValue = z.union([fieldType, fieldObject]);
 
+/** A window like 30s, 10m, 1h, 1d, or a number of seconds. */
+export const RATE_WINDOW_PATTERN = /^([1-9][0-9]{0,5})(s|m|h|d)$/;
+
+const rateLimitRule = z
+  .object({
+    limit: z.number().int().min(1).max(1_000_000),
+    window: z.union([
+      z.string().regex(RATE_WINDOW_PATTERN, "must be a window like 30s, 10m, 1h, or 1d"),
+      z.number().int().min(1).max(7 * 24 * 60 * 60),
+    ]),
+    per: z.enum(["ip", "user"]).optional(),
+  })
+  .strict();
+
+const entityRateLimit = z
+  .object({
+    read: rateLimitRule.optional(),
+    create: rateLimitRule.optional(),
+    update: rateLimitRule.optional(),
+    delete: rateLimitRule.optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, { message: "add at least one of read, create, update, or delete" });
+
 const entityObject = z
   .object({
     label: z.string().optional(),
@@ -68,6 +92,7 @@ const entityObject = z
       })
       .strict()
       .optional(),
+    rateLimit: entityRateLimit.optional(),
   })
   .strict();
 
@@ -199,6 +224,7 @@ export const appYamlSchema = z
             maxBytes: z.number().int().positive().optional(),
             allowedMimeTypes: z.array(z.string().min(1)).optional(),
             signedUrlTtlSeconds: z.number().int().positive().optional(),
+            rateLimit: rateLimitRule.optional(),
           })
           .strict()
           .optional(),

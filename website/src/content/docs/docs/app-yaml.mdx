@@ -122,6 +122,7 @@ Optional white label for the admin, `/docs`, and system emails. Leave it out to 
 | `files.maxBytes` | `10485760` | 10 MiB upload limit |
 | `files.allowedMimeTypes` | png, jpeg, webp, gif, pdf, plain text | `["*"]` allows any type |
 | `files.signedUrlTtlSeconds` | `900` | Signed download URL lifetime |
+| `files.rateLimit` | | Upload limit, for example `{ limit: 30, window: 1h, per: user }`. See [Rate limits](#rate-limits) |
 | `backups.interval` | | For example `24h` or `7d`. Turns on scheduled backups |
 | `backups.retain` | `14` | Snapshots to keep |
 | `backups.destination` | `./data/backups` | Folder or `s3://bucket/prefix` |
@@ -163,6 +164,7 @@ Each key under `entities` is an entity name. Names must start with a letter or u
 | `fields` | Map of field name to a type or a field object |
 | `indexes` | List of field names or arrays of field names |
 | `policies` | `read`, `create`, `update`, `delete`. See [Permissions](/docs/permissions/) |
+| `rateLimit` | Optional request limits per action. See [Rate limits](#rate-limits) |
 
 Every entity gets three system fields you cannot redefine: `id`, `createdAt`, and `updatedAt`.
 
@@ -210,6 +212,27 @@ Relation fields store the related row's `id`, are indexed automatically, and bec
 <Aside type="tip" title="Many to many">
 There is no built in many to many type. Model it with a join entity that has two relations.
 </Aside>
+
+### Rate limits
+
+`rateLimit` caps requests per action. Limits are counted in the database, so they hold across restarts and instances.
+
+```yaml
+leads:
+  policies:
+    create: public
+  rateLimit:
+    create: { limit: 5, window: 10m }            # per client IP
+    update: { limit: 60, window: 1m, per: user }
+```
+
+| Key | Notes |
+|---|---|
+| `limit` | Requests allowed per window (1 to 1000000) |
+| `window` | `30s`, `10m`, `1h`, `1d`, or a number of seconds. 7 days at most |
+| `per` | `ip` (default) counts per client IP. `user` counts per signed in user and falls back to the IP when signed out |
+
+Over the limit, the API answers 429 with `{"error":{"code":"rate_limited"}}` and a `Retry-After` header set to the window length. Behind a proxy, set `TRUST_PROXY` so each visitor has their own IP (see [Client IP and proxies](/docs/configuration/#client-ip-and-proxies)). `runtime.files.rateLimit` takes the same `limit`, `window`, and `per` keys for uploads. To stop bots on public forms, pair a limit with a [verify hook](/docs/hooks/#captcha-and-bot-checks).
 
 ### Indexes
 

@@ -2,7 +2,7 @@ import { hashToken, newToken } from "./refresh.ts";
 import type { BakorinDb } from "../db/dialects.ts";
 import { AUTH_TOKENS_TABLE } from "../db/system.ts";
 
-export type AuthTokenPurpose = "reset" | "verify" | "invite";
+export type AuthTokenPurpose = "reset" | "verify" | "invite" | "setup";
 
 export interface AuthTokenRow {
   id: string;
@@ -61,11 +61,16 @@ export async function consumeAuthToken(
   if (new Date(String(row.expires_at)).getTime() < Date.now()) {
     return null;
   }
-  await db
+  // Conditional update: under a race only one caller flips used_at, so a token works once.
+  const claimed = await db
     .updateTable(AUTH_TOKENS_TABLE)
     .set({ used_at: new Date().toISOString() })
     .where("id", "=", String(row.id))
-    .execute();
+    .where("used_at", "is", null)
+    .executeTakeFirst();
+  if (Number(claimed.numUpdatedRows ?? 0) !== 1) {
+    return null;
+  }
   let payload: Record<string, unknown> | null = null;
   if (typeof row.payload === "string" && row.payload.length > 0) {
     try {
@@ -86,4 +91,28 @@ export async function consumeAuthToken(
 export function accountLink(appUrl: string, path: string, token: string): string {
   const base = appUrl.replace(/\/+$/, "");
   return `${base}${path}?token=${encodeURIComponent(token)}`;
+}
+
+/** True when an unused, unexpired token with this purpose matches. Does not consume it. */
+export async function authTokenValid(db: BakorinDb, presented: string, purpose: AuthTokenPurpose): Promise<boolean> {
+  if (!presented) {
+    return false;
+  }
+  const row = await db
+    .selectFrom(AUTH_TOKENS_TABLE)
+    .select(["used_at", "expires_at"])
+    .where("token_hash", "=", hashToken(presented))
+    .where("purpose", "=", purpose)
+    .executeTakeFirst();
+  return Boolean(row && !row.used_at && new Date(String(row.expires_at)).getTime() >= Date.now());
+}
+
+/** Mark every unused token with this purpose as used (for example after the first admin exists). */
+export async function retireAuthTokens(db: BakorinDb, purpose: AuthTokenPurpose): Promise<void> {
+  await db
+    .updateTable(AUTH_TOKENS_TABLE)
+    .set({ used_at: new Date().toISOString() })
+    .where("purpose", "=", purpose)
+    .where("used_at", "is", null)
+    .execute();
 }

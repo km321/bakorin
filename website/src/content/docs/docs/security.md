@@ -14,6 +14,8 @@ description: What Bakorin does to keep a client backend safe by default.
 - Request bodies are capped: 1 MiB for JSON, and `files.maxBytes` plus framing for uploads. Larger bodies get 413.
 - Uploaded HTML, SVG, and other active types download as sandboxed attachments. Declared image and PDF types must match their bytes.
 - A client can only point a relation at a record it can read.
+- In production the first admin needs the env seed or a one time setup token from the server log.
+- Entities can set `rateLimit` per action, uploads can set `runtime.files.rateLimit`, and a `verify` hook can require a captcha on signup and public creates.
 - Signup follows `auth.signup` (`open`, `invite`, or `closed`). Apps whose users `create` policy is not public are invite only unless they opt in.
 - Ordinary users never see another user's email, role, or verification status. Those fields are private to the user and admins, and the default users read policy is `[owner(id), admin]`.
 - Webhook, mail rule, and audit rows are written in the same database transaction as the record change, so a change is never saved without them, and a failed outbox write rolls the change back.

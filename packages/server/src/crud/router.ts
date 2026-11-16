@@ -6,6 +6,8 @@ import { hashPassword } from "../auth/password.ts";
 import { revokeAllForUser } from "../auth/refresh.ts";
 import { commitChange } from "../events/record.ts";
 import { clientIp } from "../http/client-ip.ts";
+import { checkRateRule, rateLimitedResponse } from "../auth/rate-limit.ts";
+import { runVerifyHook } from "../hooks/verify.ts";
 import type { ChangeMeta } from "../bus.ts";
 import type { Context } from "hono";
 import { decideAccess, ownedByFields } from "./policies-sql.ts";
@@ -71,6 +73,22 @@ async function assertRelationTargets(
     }
   }
   return null;
+}
+
+/** Per entity rateLimit from app.yaml. Null when the request may continue. */
+async function entityRateLimit(
+  c: Context,
+  entity: EntityAST,
+  action: "read" | "create" | "update" | "delete",
+  actor: Actor | null,
+): Promise<Response | null> {
+  const rule = entity.rateLimit?.[action];
+  if (!rule) {
+    return null;
+  }
+  const ctx = c.get("app");
+  const allowed = await checkRateRule(ctx.db, `crud:${entity.name}:${action}`, rule, clientIp(c), actor?.id ?? null);
+  return allowed ? null : rateLimitedResponse(rule, `too many ${action} requests for ${entity.name}`);
 }
 
 function entityOr404(ast: SchemaAST, name: string): EntityAST | null {
@@ -150,6 +168,10 @@ export function createCrudRouter(): Hono {
     if (!decision.allow) {
       return jsonError(decision.status === 401 ? "unauthenticated" : "forbidden", "not allowed", decision.status);
     }
+    const limited = await entityRateLimit(c, entity, "read", actor);
+    if (limited) {
+      return limited;
+    }
     const privateAllowed = Boolean(actor && actor.role === ctx.ast.auth.adminRole);
     const query = parseListQuery(entity, new URL(c.req.url).searchParams, { privateAllowed });
     let qb = ctx.db.selectFrom(entity.name).selectAll();
@@ -195,6 +217,10 @@ export function createCrudRouter(): Hono {
     if (!decision.allow) {
       return jsonError(decision.status === 401 ? "unauthenticated" : "forbidden", "not allowed", decision.status);
     }
+    const limited = await entityRateLimit(c, entity, "read", actor);
+    if (limited) {
+      return limited;
+    }
     let qb = ctx.db.selectFrom(entity.name).selectAll().where("id", "=", c.req.param("id"));
     qb = applyAccess(qb as never, decision) as typeof qb;
     const row = await qb.executeTakeFirst();
@@ -235,6 +261,16 @@ export function createCrudRouter(): Hono {
     const decision = decideAccess(ctx.ast, entity, "create", actor);
     if (!decision.allow) {
       return jsonError(decision.status === 401 ? "unauthenticated" : "forbidden", "not allowed", decision.status);
+    }
+    const limited = await entityRateLimit(c, entity, "create", actor);
+    if (limited) {
+      return limited;
+    }
+    if (!actor) {
+      const refused = await runVerifyHook(c, "create", entity.name);
+      if (refused) {
+        return refused;
+      }
     }
     const forced = ownedByFields(entity, ctx.ast.auth.entity);
     let raw: Record<string, unknown>;
@@ -290,6 +326,10 @@ export function createCrudRouter(): Hono {
     const decision = decideAccess(ctx.ast, entity, "update", actor);
     if (!decision.allow) {
       return jsonError(decision.status === 401 ? "unauthenticated" : "forbidden", "not allowed", decision.status);
+    }
+    const limited = await entityRateLimit(c, entity, "update", actor);
+    if (limited) {
+      return limited;
     }
     let qb = ctx.db.selectFrom(entity.name).selectAll().where("id", "=", c.req.param("id"));
     qb = applyAccess(qb as never, decision) as typeof qb;
@@ -358,6 +398,10 @@ export function createCrudRouter(): Hono {
     const decision = decideAccess(ctx.ast, entity, "delete", actor);
     if (!decision.allow) {
       return jsonError(decision.status === 401 ? "unauthenticated" : "forbidden", "not allowed", decision.status);
+    }
+    const limited = await entityRateLimit(c, entity, "delete", actor);
+    if (limited) {
+      return limited;
     }
     let qb = ctx.db.selectFrom(entity.name).selectAll().where("id", "=", c.req.param("id"));
     qb = applyAccess(qb as never, decision) as typeof qb;

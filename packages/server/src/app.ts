@@ -2,7 +2,7 @@ import { join, resolve } from "node:path";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { sql } from "kysely";
-import { compileAppYaml, SchemaError, type SchemaAST } from "@bakorin/core";
+import { compileAppYaml, isDevMode, SchemaError, type SchemaAST } from "@bakorin/core";
 import { createChangeBus } from "./bus.ts";
 import { openPostgres, openSqlite, type BakorinDb } from "./db/dialects.ts";
 import { migrateToSchema, type MigrateOptions } from "./db/migrator.ts";
@@ -12,7 +12,7 @@ import { bodyLimit } from "hono/body-limit";
 import { tokenCutoff } from "./auth/refresh.ts";
 import { createAccountRoutes } from "./auth/account.ts";
 import { createMailer, mailFrom } from "./mail/create.ts";
-import { seedAdminOrLog } from "./auth/seed.ts";
+import { issueSetupTokenIfNeeded, seedAdminOrLog } from "./auth/seed.ts";
 import { createCrudRouter } from "./crud/router.ts";
 import { createFileRoutes } from "./files/routes.ts";
 import { createLocalFileStore, createS3FileStore, type FileStore } from "./files/store.ts";
@@ -109,6 +109,12 @@ export async function createRuntime(options: {
     throw error;
   }
   await seedAdminOrLog(ast, opened.db, env);
+  // Dev mode keeps the open first admin form. Production requires the env seed or a
+  // one time setup token printed to the log.
+  const requireSetupToken = !isDevMode(env);
+  if (requireSetupToken) {
+    await issueSetupTokenIfNeeded(ast, opened.db);
+  }
   let hooks = await loadHooks(projectDir, ast.runtime.hooksPath);
   const mailer = createMailer(env, mailFrom(env, ast.appName));
   const mail = createMailApi(opened.db, () => context.ast, projectDir);
@@ -128,7 +134,7 @@ export async function createRuntime(options: {
       monitor.captureError(error, { requestId: meta.requestId, source: "hook" });
     },
   });
-  const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir, mailer, mail, monitor };
+  const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir, mailer, mail, monitor, requireSetupToken };
   subscribeAfterHooks(() => context.hooks, opened.db, (handler) => bus.subscribe(handler), mail);
   const workers = options.workers !== false;
   const noop = () => {};
@@ -284,7 +290,7 @@ function corsOptions(origins: string[]) {
       ? "*"
       : (origin: string) => (origins.includes(origin) ? origin : ""),
     credentials: true,
-    allowHeaders: ["Authorization", "Content-Type", "X-Requested-With"],
+    allowHeaders: ["Authorization", "Content-Type", "X-Requested-With", "X-Bakorin-Verify"],
     allowMethods: ["GET", "HEAD", "PUT", "POST", "DELETE", "PATCH", "OPTIONS"],
     maxAge: 86400,
   };

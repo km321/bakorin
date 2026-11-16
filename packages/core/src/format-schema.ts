@@ -162,5 +162,5 @@ function receivedType(input: unknown): string {
 }
 
 function hintEntityKeys(): string {
-  return ". Valid keys are label, plural, display, description, auth, renameFrom, fields, indexes, policies.";
+  return ". Valid keys are label, plural, display, description, auth, renameFrom, fields, indexes, policies, rateLimit.";
 }

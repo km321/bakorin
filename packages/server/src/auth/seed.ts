@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import type { BakorinDb } from "../db/dialects.ts";
 import { encodeValue } from "../db/types.ts";
 import { hashPassword } from "./password.ts";
+import { issueAuthToken } from "./tokens.ts";
 
 function readEnv(env: Record<string, string | undefined>, name: string): string | undefined {
   const value = env[name];
@@ -177,4 +178,27 @@ export async function seedAdminOrLog(
     console.error(`[bakorin] admin seeding failed: ${message}`);
     console.error("[bakorin] fix BAKORIN_ADMIN_EMAIL / BAKORIN_ADMIN_PASSWORD, or create the first admin at /admin/");
   }
+}
+
+export const SETUP_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+
+/**
+ * Production only: when no admin exists after env seeding, issue a one time setup
+ * token and print it to the server log. /auth/first-admin then requires it, so the
+ * first visitor to a fresh deploy cannot claim the admin account.
+ */
+export async function issueSetupTokenIfNeeded(
+  ast: SchemaAST,
+  db: BakorinDb,
+  log: (line: string) => void = (line) => console.log(line),
+): Promise<string | null> {
+  if (await hasAdmin(ast, db)) {
+    return null;
+  }
+  const token = await issueAuthToken(db, { email: "", purpose: "setup", ttlSeconds: SETUP_TOKEN_TTL_SECONDS });
+  const url = `${ast.runtime.appUrl.replace(/\/+$/, "")}/admin/`;
+  log(`[bakorin] No admin exists yet. Open ${url} and enter this one time setup token to create the first admin:`);
+  log(`[bakorin] setup token: ${token}`);
+  log("[bakorin] It expires in 24 hours and each restart prints a new one. Or set BAKORIN_ADMIN_EMAIL and BAKORIN_ADMIN_PASSWORD.");
+  return token;
 }

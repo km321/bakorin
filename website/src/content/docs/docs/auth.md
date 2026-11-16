@@ -69,11 +69,19 @@ The Astro and Next.js starters include these pages. These emails go through the 
 
 ## Lockout and rate limits
 
-Login, signup, forgot password, and resend verification are rate limited per client IP in the database, so limits survive restarts and are shared across instances. The client IP is the socket address unless you trust a proxy with `TRUST_PROXY` (see [Configuration](/docs/configuration/#client-ip-and-proxies)). A client sent `X-Forwarded-For` header is ignored by default, so rotating it does not get around the limits. After 5 failed logins for a known identity, Bakorin locks that account with exponential backoff capped at 60 minutes. Unknown emails return 401. Signup still answers 409 for an email that already has an account, and a locked account answers differently from an unknown one, so do not rely on Bakorin to hide which emails have accounts.
+Login, signup, forgot password, and resend verification are rate limited per client IP in the database (add your own limits to any entity with [rateLimit](/docs/app-yaml/#rate-limits), and a captcha with the [verify hook](/docs/hooks/#captcha-and-bot-checks)), so limits survive restarts and are shared across instances. The client IP is the socket address unless you trust a proxy with `TRUST_PROXY` (see [Configuration](/docs/configuration/#client-ip-and-proxies)). A client sent `X-Forwarded-For` header is ignored by default, so rotating it does not get around the limits. After 5 failed logins for a known identity, Bakorin locks that account with exponential backoff capped at 60 minutes. Unknown emails return 401. Signup still answers 409 for an email that already has an account, and a locked account answers differently from an unknown one, so do not rely on Bakorin to hide which emails have accounts.
 
 ## First admin
 
-On a fresh project, `/admin/` shows **Create your first admin**. The form is race safe and disappears once an admin exists. You can also set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD` (at least 8 characters) before the first start.
+With `bakorin dev`, `/admin/` shows **Create your first admin** to anyone who opens it, so local setup stays one step.
+
+With `bakorin start` (production), the form also asks for a one time setup token, so the first visitor to a fresh deploy cannot claim the admin account. While no admin exists, each boot prints a new token to the server log:
+
+```text
+[bakorin] setup token: 3q2-7Yt...
+```
+
+Copy it from the log (on Railway, the deploy logs) into the form. A token works for 24 hours and stops working once an admin exists. To skip the token, set `BAKORIN_ADMIN_EMAIL` and `BAKORIN_ADMIN_PASSWORD` (at least 8 characters) before the first start and Bakorin creates that admin at boot. Scripts can send the token as `setupToken` in the `POST /api/v1/auth/first-admin` body.
 
 ## JWT secret
 

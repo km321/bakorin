@@ -18,6 +18,7 @@ type Gate = "loading" | "checking" | "first-admin" | "login" | "app" | "admins-o
 function Root() {
   const [gate, setGate] = useState<Gate>(hasToken() ? "checking" : "loading");
   const [identity, setIdentity] = useState<string | null>(null);
+  const [setupTokenRequired, setSetupTokenRequired] = useState(false);
 
   useEffect(() => {
     applyTheme(readStoredThemeMode());
@@ -26,7 +27,10 @@ function Root() {
 
   const toLoginOrSetup = useCallback(() => {
     void getSetup()
-      .then((setup) => setGate(setup.firstAdmin ? "first-admin" : "login"))
+      .then((setup) => {
+        setSetupTokenRequired(setup.setupTokenRequired === true);
+        setGate(setup.firstAdmin ? "first-admin" : "login");
+      })
       .catch(() => setGate("login"));
   }, []);
 
@@ -75,7 +79,7 @@ function Root() {
       );
       break;
     case "first-admin":
-      screen = <FirstAdmin onCreated={() => setGate("checking")} />;
+      screen = <FirstAdmin setupTokenRequired={setupTokenRequired} onCreated={() => setGate("checking")} />;
       break;
     case "login":
       screen = <Login onLoggedIn={() => setGate("checking")} />;

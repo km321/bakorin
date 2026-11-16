@@ -57,6 +57,14 @@ export interface FieldAST {
   private?: boolean;
 }
 
+/** Fixed window request limit, counted in the database per client IP or signed in user. */
+export interface RateLimitAST {
+  limit: number;
+  windowSeconds: number;
+  /** ip: per client IP. user: per signed in user, falling back to IP when signed out. */
+  per: "ip" | "user";
+}
+
 export interface EntityAST {
   name: string;
   label: string;
@@ -71,6 +79,8 @@ export interface EntityAST {
   deprecated: boolean;
   /** Previous entity (table) name, declared in app.yaml to rename without losing data. */
   renameFrom?: string;
+  /** Optional per action request limits (app.yaml rateLimit:). */
+  rateLimit?: Partial<Record<ActionName, RateLimitAST>>;
 }
 
 export const WEBHOOK_DEFAULT_MAX_ATTEMPTS = 10;
@@ -128,6 +138,8 @@ export interface FilesRuntimeAST {
   maxBytes: number;
   allowedMimeTypes: string[];
   signedUrlTtlSeconds: number;
+  /** Optional upload limit (runtime.files.rateLimit). */
+  rateLimit?: RateLimitAST;
 }
 
 export interface BackupRuntimeAST {

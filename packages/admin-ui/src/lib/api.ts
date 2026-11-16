@@ -71,9 +71,15 @@ async function storeSession(response: Response, fallback: string): Promise<void>
   localStorage.setItem(REFRESH_KEY, json.data.refreshToken);
 }
 
-export async function getSetup(): Promise<{ firstAdmin: boolean }> {
+export interface SetupState {
+  firstAdmin: boolean;
+  /** Production: the form needs the one time setup token from the server log. */
+  setupTokenRequired?: boolean;
+}
+
+export async function getSetup(): Promise<SetupState> {
   const response = await fetch("/api/v1/auth/setup");
-  const json = (await response.json()) as { data?: { firstAdmin: boolean }; error?: { message: string } };
+  const json = (await response.json()) as { data?: SetupState; error?: { message: string } };
   if (!response.ok || !json.data) {
     throw new Error(json.error?.message ?? "failed to load setup");
   }
@@ -89,11 +95,11 @@ export async function login(identityField: string, identity: string, password: s
   await storeSession(response, "login failed");
 }
 
-export async function createFirstAdmin(email: string, password: string): Promise<void> {
+export async function createFirstAdmin(email: string, password: string, setupToken?: string): Promise<void> {
   const response = await fetch("/api/v1/auth/first-admin", {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify(setupToken ? { email, password, setupToken } : { email, password }),
   });
   await storeSession(response, "could not create admin");
 }

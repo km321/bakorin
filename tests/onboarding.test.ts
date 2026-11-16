@@ -11,7 +11,7 @@ describe("first admin onboarding", () => {
     const http = client(runtime);
     const setup = await http.fetch("/api/v1/auth/setup");
     expect(setup.status).toBe(200);
-    expect(await setup.json()).toEqual({ data: { firstAdmin: true, signup: "open" } });
+    expect(await setup.json()).toEqual({ data: { firstAdmin: true, setupTokenRequired: false, signup: "open" } });
 
     const created = await http.fetch("/api/v1/auth/first-admin", {
       method: "POST",
@@ -24,7 +24,7 @@ describe("first admin onboarding", () => {
     expect(payload.data.accessToken).toBeTruthy();
 
     const again = await http.fetch("/api/v1/auth/setup");
-    expect(await again.json()).toEqual({ data: { firstAdmin: false, signup: "open" } });
+    expect(await again.json()).toEqual({ data: { firstAdmin: false, setupTokenRequired: false, signup: "open" } });
 
     const refused = await http.fetch("/api/v1/auth/first-admin", {
       method: "POST",
@@ -83,7 +83,7 @@ describe("first admin onboarding", () => {
     });
     expect(signup.status).toBe(201);
     const setup = await http.fetch("/api/v1/auth/setup");
-    expect(await setup.json()).toEqual({ data: { firstAdmin: true, signup: "open" } });
+    expect(await setup.json()).toEqual({ data: { firstAdmin: true, setupTokenRequired: false, signup: "open" } });
     const created = await http.fetch("/api/v1/auth/first-admin", {
       method: "POST",
       body: JSON.stringify({ email: "owner@studio.test", password: "password123" }),

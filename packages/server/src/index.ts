@@ -1,11 +1,12 @@
 export { createRuntime, loadProject } from "./app.ts";
 export { applyProjectEnv, parseEnvFile } from "./env-files.ts";
-export { countAdmins, createFirstAdmin, hasAdmin, seedAdminIfRequested, seedAdminOrLog } from "./auth/seed.ts";
+export { countAdmins, createFirstAdmin, hasAdmin, issueSetupTokenIfNeeded, seedAdminIfRequested, seedAdminOrLog } from "./auth/seed.ts";
 export { createDebounced } from "./dev-watch.ts";
 export type { RuntimeHandles } from "./app.ts";
 export { createChangeBus } from "./bus.ts";
 export type { ChangeBus, ChangeHandler } from "./bus.ts";
-export type { BakorinHooks, EntityHooks, HookContext } from "./hooks/types.ts";
+export type { BakorinHooks, EntityHooks, HookContext, VerifyContext, VerifyHookResult } from "./hooks/types.ts";
+export { VERIFY_TOKEN_HEADER } from "./hooks/types.ts";
 export { decideAccess } from "./crud/policies-sql.ts";
 export { migrateToSchema, planMigration } from "./db/migrator.ts";
 export type { MigrateOptions, MigrateResult, MigrationPlan } from "./db/migrator.ts";

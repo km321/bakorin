@@ -1,5 +1,7 @@
 import { Hono } from "hono";
 import { FILES_TABLE } from "../db/system.ts";
+import { checkRateRule, rateLimitedResponse } from "../auth/rate-limit.ts";
+import { clientIp } from "../http/client-ip.ts";
 import { signFileUrl, verifyFileSignature } from "./sign.ts";
 
 function mimeFromName(name: string): string | null {
@@ -86,6 +88,10 @@ export function createFileRoutes(): Hono {
       return c.json({ error: { code: "unauthenticated", message: "sign in to upload files" } }, 401);
     }
     const ctx = c.get("app");
+    const uploadRule = ctx.ast.runtime.files.rateLimit;
+    if (!(await checkRateRule(ctx.db, "files:upload", uploadRule, clientIp(c), actor.id))) {
+      return rateLimitedResponse(uploadRule!, "too many uploads");
+    }
     const body = await c.req.parseBody();
     const file = body.file;
     if (!(file instanceof File)) {

@@ -6,7 +6,7 @@ import { interpolateEnv } from "./interpolate.ts";
 import { parsePolicies } from "./policies.ts";
 import { topologicalOrder } from "./topo.ts";
 import { formatZodError } from "./format-schema.ts";
-import { appYamlSchema, type AppYaml, type RawField } from "./yaml-schema.ts";
+import { appYamlSchema, RATE_WINDOW_PATTERN, type AppYaml, type RawField } from "./yaml-schema.ts";
 import {
   MAIL_DEFAULT_MAX_ATTEMPTS,
   MAIL_DEFAULT_RETAIN_DAYS,
@@ -25,6 +25,7 @@ import {
   type MailConditionAST,
   type MailRuleAST,
   type PolicyAST,
+  type RateLimitAST,
   type AlertsRuntimeAST,
   type RuntimeAST,
   type SchemaAST,
@@ -360,6 +361,7 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
       maxBytes: runtime.files?.maxBytes ?? 10 * 1024 * 1024,
       allowedMimeTypes: parseAllowedMime(runtime.files?.allowedMimeTypes),
       signedUrlTtlSeconds: runtime.files?.signedUrlTtlSeconds ?? 900,
+      ...(runtime.files?.rateLimit ? { rateLimit: compileRateLimit(runtime.files.rateLimit) } : {}),
     },
     backups: {
       intervalHours: parseIntervalHours(runtime.backups?.interval),
@@ -885,6 +887,7 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
       indexes: compileIndexes(name, fieldMap, raw.indexes),
       deprecated: false,
       ...(raw.renameFrom ? { renameFrom: raw.renameFrom } : {}),
+      ...(raw.rateLimit ? { rateLimit: compileEntityRateLimit(raw.rateLimit) } : {}),
     };
   });
 
@@ -1002,4 +1005,38 @@ export function deserializeAst(raw: string): SchemaAST {
     hook.timeoutMs = hook.timeoutMs ?? WEBHOOK_DEFAULT_TIMEOUT_MS;
   }
   return parsed;
+}
+
+type RawRateLimit = { limit: number; window: string | number; per?: "ip" | "user" };
+
+const WINDOW_UNIT_SECONDS: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+
+export function rateWindowSeconds(window: string | number): number {
+  if (typeof window === "number") {
+    return window;
+  }
+  const match = RATE_WINDOW_PATTERN.exec(window);
+  if (!match) {
+    throw new SchemaError(`rate limit window ${JSON.stringify(window)} must look like 30s, 10m, 1h, or 1d`);
+  }
+  const seconds = Number(match[1]) * WINDOW_UNIT_SECONDS[match[2]!]!;
+  if (seconds > 7 * 86400) {
+    throw new SchemaError(`rate limit window ${window} is longer than 7 days`);
+  }
+  return seconds;
+}
+
+function compileRateLimit(raw: RawRateLimit): RateLimitAST {
+  return { limit: raw.limit, windowSeconds: rateWindowSeconds(raw.window), per: raw.per ?? "ip" };
+}
+
+function compileEntityRateLimit(raw: Partial<Record<ActionName, RawRateLimit>>): Partial<Record<ActionName, RateLimitAST>> {
+  const out: Partial<Record<ActionName, RateLimitAST>> = {};
+  for (const action of ["read", "create", "update", "delete"] as const) {
+    const rule = raw[action];
+    if (rule) {
+      out[action] = compileRateLimit(rule);
+    }
+  }
+  return out;
 }

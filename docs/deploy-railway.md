@@ -24,7 +24,7 @@ Railway injects `PORT`. Production refuses CORS `*`. Health check path: `/health
 
 A deploy whose `app.yaml` removes a field or entity stops at boot with a confirmation code. Set `BAKORIN_ALLOW_DESTRUCTIVE=<code>` for that one deploy, then remove it. See [Schema changes](migrations.md).
 
-Optional first admin: `BAKORIN_ADMIN_EMAIL`, `BAKORIN_ADMIN_PASSWORD` (min 8). Created only while no admin exists. You can also use Create your first admin at `/admin/`.
+Optional first admin: `BAKORIN_ADMIN_EMAIL`, `BAKORIN_ADMIN_PASSWORD` (min 8). Created only while no admin exists. Without them, use Create your first admin at `/admin/` with the setup token printed in the deploy logs.
 
 ## Optional: mail and S3
 

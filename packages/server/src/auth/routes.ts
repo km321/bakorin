@@ -5,8 +5,10 @@ import { hashPassword, verifyPassword } from "./password.ts";
 import { signAccessToken, verifyAccessToken } from "./jwt.ts";
 import { issueRefreshToken, revokeAllForUser, revokeToken, rotateRefreshToken } from "./refresh.ts";
 import { rateLimit } from "./rate-limit.ts";
+import { runVerifyHook } from "../hooks/verify.ts";
 import { clearLockout, getLockout, recordFailedLogin } from "./lockout.ts";
 import { writeAudit } from "../audit/log.ts";
+import { authTokenValid, retireAuthTokens } from "./tokens.ts";
 import { publicRow } from "../crud/validate.ts";
 import { decodeRow } from "../crud/query.ts";
 import { sendVerificationEmail } from "./account.ts";
@@ -22,7 +24,9 @@ export function createAuthRoutes(): Hono {
   app.get("/setup", async (c) => {
     const ctx = c.get("app");
     const firstAdmin = !(await hasAdmin(ctx.ast, ctx.db));
-    return c.json({ data: { firstAdmin, signup: ctx.ast.auth.signup } });
+    return c.json({
+      data: { firstAdmin, setupTokenRequired: firstAdmin && ctx.requireSetupToken === true, signup: ctx.ast.auth.signup },
+    });
   });
 
   app.post("/first-admin", async (c) => {
@@ -46,6 +50,22 @@ export function createAuthRoutes(): Hono {
         { error: { code: "invalid_input", message: "email and a password of at least 8 characters are required" } },
         400,
       );
+    }
+    if (ctx.requireSetupToken) {
+      const setupToken = String(body.setupToken ?? c.req.header("x-bakorin-setup-token") ?? "").trim();
+      if (!(await authTokenValid(ctx.db, setupToken, "setup"))) {
+        await writeAudit(ctx.db, { action: "failed_first_admin", entity: entity.name, ip, meta: { reason: "setup_token" } });
+        return c.json(
+          {
+            error: {
+              code: "setup_token_required",
+              message:
+                "Enter the one time setup token from the server log, or set BAKORIN_ADMIN_EMAIL and BAKORIN_ADMIN_PASSWORD and restart.",
+            },
+          },
+          403,
+        );
+      }
     }
     let result: Awaited<ReturnType<typeof createFirstAdmin>>;
     let createdEvent: ChangeEvent | null = null;
@@ -71,6 +91,7 @@ export function createAuthRoutes(): Hono {
     if (result.status === "exists") {
       return c.json({ error: { code: "conflict", message: "an admin already exists" } }, 409);
     }
+    await retireAuthTokens(ctx.db, "setup");
     const stored = await ctx.db.selectFrom(entity.name).selectAll().where("id", "=", result.id).executeTakeFirstOrThrow();
     const after = decodeRow(entity, stored as Record<string, unknown>);
     const role = String(after[ctx.ast.auth.roleField]);
@@ -120,6 +141,10 @@ export function createAuthRoutes(): Hono {
     const entity = ctx.ast.entityMap[ctx.ast.auth.entity];
     if (!entity) {
       return c.json({ error: { code: "misconfigured", message: "auth entity missing" } }, 500);
+    }
+    const refused = await runVerifyHook(c, "signup", entity.name);
+    if (refused) {
+      return refused;
     }
     const body = (await c.req.json().catch(() => ({}))) as Record<string, unknown>;
     const identityField = entity.fieldMap[ctx.ast.auth.identityField];

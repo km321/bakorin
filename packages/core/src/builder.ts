@@ -47,6 +47,25 @@ export interface EntityDraft {
   indexes: string[][];
   /** Empty list means "use the server default" for that action. */
   policies: Record<PolicyAction, string[]>;
+  /** Optional request limits per action. An empty limit means no limit for that action. */
+  rateLimit: Record<PolicyAction, RateLimitDraft>;
+}
+
+export interface RateLimitDraft {
+  /** Requests allowed per window, as typed. Empty means no limit. */
+  limit: string;
+  /** Window like 30s, 10m, 1h, 1d. */
+  window: string;
+  per: "" | "ip" | "user";
+}
+
+export function emptyRateLimits(): Record<PolicyAction, RateLimitDraft> {
+  return {
+    read: { limit: "", window: "", per: "" },
+    create: { limit: "", window: "", per: "" },
+    update: { limit: "", window: "", per: "" },
+    delete: { limit: "", window: "", per: "" },
+  };
 }
 
 export interface WhenDraft {
@@ -166,6 +185,7 @@ export function emptyEntity(name = ""): EntityDraft {
     fields: [],
     indexes: [],
     policies: emptyPolicies(),
+    rateLimit: emptyRateLimits(),
   };
 }
 
@@ -301,6 +321,17 @@ export function importAppYaml(source: string): ImportResult {
     entity.indexes = (Array.isArray(raw.indexes) ? raw.indexes : []).map((item) => strList(item));
     const policies = record(raw.policies);
     for (const action of POLICY_ACTIONS) entity.policies[action] = strList(policies[action]);
+    const limits = record(raw.rateLimit);
+    for (const action of POLICY_ACTIONS) {
+      const rule = record(limits[action]);
+      if (Object.keys(rule).length === 0) continue;
+      const per = str(rule.per);
+      entity.rateLimit[action] = {
+        limit: rule.limit === undefined ? "" : String(rule.limit),
+        window: rule.window === undefined ? "" : String(rule.window),
+        per: per === "ip" || per === "user" ? per : "",
+      };
+    }
     config.entities.push(entity);
   }
   for (const rawRule of Array.isArray(root.mail) ? root.mail : []) {
@@ -482,6 +513,20 @@ export function toAppObject(config: BuilderConfig): Record<string, unknown> {
       if (value !== undefined) policies[action] = value;
     }
     if (Object.keys(policies).length > 0) raw.policies = policies;
+    const limits: Record<string, unknown> = {};
+    for (const action of POLICY_ACTIONS) {
+      const rule = entity.rateLimit?.[action];
+      if (!rule || rule.limit.trim() === "") continue;
+      const limit = Number(rule.limit.trim());
+      const windowText = rule.window.trim();
+      const out: Record<string, unknown> = {
+        limit: Number.isFinite(limit) ? limit : rule.limit.trim(),
+        window: /^\d+$/.test(windowText) ? Number(windowText) : windowText,
+      };
+      if (rule.per) out.per = rule.per;
+      limits[action] = out;
+    }
+    if (Object.keys(limits).length > 0) raw.rateLimit = limits;
     entities[entity.name] = raw;
   }
   out.entities = entities;

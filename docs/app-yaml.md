@@ -65,6 +65,8 @@ webhooks:
 
 `runtime.trustProxy` (or `TRUST_PROXY`) tells Bakorin how many proxies sit in front, or which proxy CIDRs to trust, when it reads the client IP for rate limits. Unset trusts none and uses the socket address.
 
+An entity can cap requests per action with `rateLimit:`, for example `rateLimit: { create: { limit: 5, window: 10m } }`. `window` is `30s`, `10m`, `1h`, `1d`, or seconds (7 days at most), and `per` is `ip` (default) or `user`. Over the limit the API answers 429 with `Retry-After`. `runtime.files.rateLimit` does the same for uploads.
+
 Leave `jwt.secret` as `${JWT_SECRET}` with no fallback. `bakorin start` refuses to boot without a strong secret.
 
 Set `runtime.webhooks.retainDays` (default 30) to control how long delivered outbox rows are kept. See [Webhooks](webhooks.md).
