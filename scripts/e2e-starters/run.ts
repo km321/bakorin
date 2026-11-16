@@ -236,8 +236,9 @@ async function flows(browser: Browser, site: string, logs: string[]) {
     await page.getByRole("cell", { name: title, exact: true }).waitFor();
   }
   log("created 3 tasks");
+  const toggled = page.waitForResponse((response) => response.request().method() === "PATCH" && response.url().includes("/tasks/"));
   await page.getByRole("checkbox", { name: "Done: Book the venue" }).check();
-  await page.waitForTimeout(500);
+  check((await toggled).ok(), "the toggle request succeeded");
   await page.reload();
   await ready(page);
   check(await page.getByRole("checkbox", { name: "Done: Book the venue" }).isChecked(), "toggle persisted");
@@ -247,8 +248,11 @@ async function flows(browser: Browser, site: string, logs: string[]) {
   await shot(page, "data-table", ".bk-table-wrap");
   await shot(page, "record-form", "form.bk-record-form");
   page.once("dialog", (dialog) => void dialog.accept());
+  // The row goes away at once (optimistic); wait for the API to confirm before reloading.
+  const deleted = page.waitForResponse((response) => response.request().method() === "DELETE" && response.url().includes("/tasks/"));
   await page.getByRole("button", { name: "Delete Order stickers" }).click();
   await page.getByRole("cell", { name: "Order stickers", exact: true }).waitFor({ state: "detached" });
+  check((await deleted).ok(), "the delete request succeeded");
   await page.reload();
   check((await page.getByRole("cell", { name: "Order stickers", exact: true }).count()) === 0, "delete persisted");
   log("deleted a task");
