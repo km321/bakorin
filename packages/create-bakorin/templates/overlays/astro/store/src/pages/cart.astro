@@ -53,9 +53,9 @@ const total = rows.reduce((sum, row) => sum + (row.line ?? 0), 0);
           <tbody>
             {rows.map(({ item, product, unit, line }) => (
               <tr>
-                <td>{product ? <a href={`/products/${product.slug}`}>{product.name}</a> : "Removed product"}</td>
-                <td>{money(unit)}</td>
-                <td>
+                <td data-label="Product">{product ? <a href={`/products/${product.slug}`}>{product.name}</a> : "Removed product"}</td>
+                <td data-label="Price">{money(unit)}</td>
+                <td data-label="Quantity">
                   <form method="post" class="inline-form">
                     <input type="hidden" name="_action" value="update" />
                     <input type="hidden" name="id" value={item.id} />
@@ -63,8 +63,8 @@ const total = rows.reduce((sum, row) => sum + (row.line ?? 0), 0);
                     <button type="submit" class="secondary">Update</button>
                   </form>
                 </td>
-                <td>{line === null ? "None" : money(line)}</td>
-                <td>
+                <td data-label="Total">{line === null ? "None" : money(line)}</td>
+                <td class="rows-action">
                   <form method="post" class="inline-form">
                     <input type="hidden" name="_action" value="remove" />
                     <input type="hidden" name="id" value={item.id} />

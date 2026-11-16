@@ -31,9 +31,9 @@ export default async function CheckoutPage({ params }: { params: Promise<{ id: s
               <tbody>
                 {lines.map((line) => (
                   <tr key={line.productId}>
-                    <td>{line.name}</td>
-                    <td>{line.quantity}</td>
-                    <td>{money(line.unitCents)}</td>
+                    <td data-label="Product">{line.name}</td>
+                    <td data-label="Quantity">{line.quantity}</td>
+                    <td data-label="Price">{money(line.unitCents)}</td>
                   </tr>
                 ))}
               </tbody>

@@ -241,6 +241,60 @@ button.secondary:not([class*="bk-"]), .button.secondary { background: transparen
   vertical-align: middle;
 }
 
+/* Narrow screens: each table row becomes a small card, and each cell shows its
+   column name (data-label), so wide tables like the cart never scroll sideways. */
+@media (max-width: 640px) {
+  .rows thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .rows,
+  .rows tbody,
+  .rows tr,
+  .rows td {
+    display: block;
+    width: 100%;
+  }
+
+  .rows tr {
+    margin: 0 0 12px;
+    padding: 4px 12px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+  }
+
+  .rows td {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+    text-align: right;
+  }
+
+  .rows tr > td:last-child {
+    border-bottom: 0;
+  }
+
+  .rows td[data-label]::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+  }
+
+  .rows td.rows-action {
+    justify-content: flex-end;
+  }
+}
+
 .notice {
   border: 1px solid var(--line);
   border-left: 4px solid var(--accent);

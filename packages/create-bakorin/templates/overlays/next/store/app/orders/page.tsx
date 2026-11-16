@@ -26,12 +26,12 @@ export default async function OrdersPage() {
           <tbody>
             {orders.map((order) => (
               <tr key={order.id}>
-                <td>
+                <td data-label="Order">
                   <Link href={`/checkout/${order.id}`}>{orderNumber(order.id)}</Link>
                 </td>
-                <td>{new Date(order.createdAt).toLocaleDateString("en-US")}</td>
-                <td>{STATUS_LABELS[order.status] ?? order.status}</td>
-                <td>{money(order.totalCents)}</td>
+                <td data-label="Placed">{new Date(order.createdAt).toLocaleDateString("en-US")}</td>
+                <td data-label="Status">{STATUS_LABELS[order.status] ?? order.status}</td>
+                <td data-label="Total">{money(order.totalCents)}</td>
               </tr>
             ))}
           </tbody>

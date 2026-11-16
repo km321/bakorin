@@ -46,9 +46,9 @@ export default async function CartPage({ searchParams }: { searchParams: Promise
             <tbody>
               {rows.map(({ item, product, unit, line }) => (
                 <tr key={item.id}>
-                  <td>{product ? <Link href={`/products/${product.slug}`}>{product.name}</Link> : "Removed product"}</td>
-                  <td>{money(unit)}</td>
-                  <td>
+                  <td data-label="Product">{product ? <Link href={`/products/${product.slug}`}>{product.name}</Link> : "Removed product"}</td>
+                  <td data-label="Price">{money(unit)}</td>
+                  <td data-label="Quantity">
                     <form action={updateCartItem} className="inline-form">
                       <input type="hidden" name="id" value={item.id} />
                       <input type="number" name="quantity" min="0" max="99" defaultValue={item.quantity ?? 1} aria-label={`Quantity of ${product?.name ?? "item"}`} />
@@ -57,8 +57,8 @@ export default async function CartPage({ searchParams }: { searchParams: Promise
                       </button>
                     </form>
                   </td>
-                  <td>{line === null ? "None" : money(line)}</td>
-                  <td>
+                  <td data-label="Total">{line === null ? "None" : money(line)}</td>
+                  <td className="rows-action">
                     <form action={removeCartItem} className="inline-form">
                       <input type="hidden" name="id" value={item.id} />
                       <button type="submit" className="secondary" aria-label={`Remove ${product?.name ?? "item"}`}>

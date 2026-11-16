@@ -102,8 +102,36 @@ async function axe(page: Page, label: string) {
 
 let mobileHeaderSaved = false;
 
+/** At phone width (375px) the page fits: nothing makes it scroll sideways. */
+async function noSidewaysScroll(page: Page, label: string) {
+  const size = page.viewportSize();
+  if (!size) return;
+  await page.setViewportSize({ width: 375, height: 800 });
+  try {
+    const wide = await page.evaluate(() => {
+      const limit = document.documentElement.clientWidth;
+      if (document.documentElement.scrollWidth <= limit + 1) return null;
+      // Name the widest culprit so the failure says what to fix.
+      let worst = "";
+      let right = limit;
+      for (const el of document.body.querySelectorAll("*")) {
+        const r = el.getBoundingClientRect().right;
+        if (r > right + 1) {
+          right = r;
+          worst = el.tagName.toLowerCase() + (el.className && typeof el.className === "string" ? `.${el.className.trim().split(/\s+/).join(".")}` : "");
+        }
+      }
+      return `${document.documentElement.scrollWidth}px wide (limit ${limit}px), widest: ${worst || "unknown"} to ${right.toFixed(0)}px`;
+    });
+    check(wide === null, `${label} scrolls sideways at 375px: ${wide}`);
+  } finally {
+    await page.setViewportSize(size);
+  }
+}
+
 /** The header lines up at desktop width and at phone width (where it may wrap). */
 async function navCheck(page: Page, label: string) {
+  await noSidewaysScroll(page, label);
   if ((await page.locator(".site-header nav").count()) === 0) return;
   const desktop = await navReport(page);
   check(desktop.ok, `header lines up on ${label}: ${desktop.detail}`);
@@ -139,6 +167,12 @@ async function shot(page: Page, name: string, locator?: string) {
   if (locator) await page.locator(locator).first().screenshot({ path });
   else {
     await page.screenshot({ path, fullPage: true });
+    const size = page.viewportSize();
+    if (size) {
+      await page.setViewportSize({ width: 375, height: 800 });
+      await page.screenshot({ path: path.replace(/\.png$/, "-mobile.png"), fullPage: true });
+      await page.setViewportSize(size);
+    }
     if ((await page.locator(".site-header").count()) > 0) await page.locator(".site-header").first().screenshot({ path: path.replace(/\.png$/, "-header.png") });
   }
   log(`screenshot ${path}`);
