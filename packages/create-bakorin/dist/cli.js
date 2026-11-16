@@ -113,7 +113,9 @@ function mailFromHeader(appName, mail) {
   }
 }
 function envExample(appName, mail) {
-  return `JWT_SECRET=change-me-to-a-long-random-string
+  return `# Required for bakorin start: 32+ random characters. Generate one with: openssl rand -base64 48
+# bakorin dev works without it and prints a warning.
+JWT_SECRET=
 PORT=4371
 APP_URL=http://localhost:4321
 CORS_ORIGINS=http://localhost:4321,http://localhost:3000
@@ -130,6 +132,8 @@ MAIL_FROM=${mailFromHeader(appName, mail)}
 BAKORIN_DATA_DIR=
 BAKORIN_ENV=
 NODE_ENV=
+# Set to 1 behind one proxy such as Railway, or a comma list of proxy CIDRs. Empty trusts no proxy.
+TRUST_PROXY=
 DATABASE_URL=
 JWT_SECRET_PREVIOUS=
 # Placeholder only. Paste a Resend API key locally. Never commit a real key.
@@ -224,6 +228,9 @@ async function copyDir(from, to) {
       await cp(src, dest);
     }
   }
+}
+function railwayName(appName) {
+  return appName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "app";
 }
 async function writeTemplated(src, dest, name) {
   const text = (await readFile(src, "utf8")).replaceAll("{{APP_NAME}}", name);
@@ -404,8 +411,9 @@ async function run(options) {
   }
   await writeFile(join(dest, "Dockerfile"), dockerfileFor(sdk));
   await writeFile(join(dest, ".dockerignore"), dockerignore());
-  await cp(join(TEMPLATES, "railway.json"), join(dest, "railway.json"));
-  await cp(join(TEMPLATES, "railway.toml"), join(dest, "railway.toml"));
+  await mkdir(join(dest, ".railway"), { recursive: true });
+  await writeTemplated(join(TEMPLATES, "railway.ts"), join(dest, ".railway", "railway.ts"), railwayName(appName));
+  await cp(join(TEMPLATES, "railway-README.md"), join(dest, ".railway", "README.md"));
   await cp(join(TEMPLATES, "docker-compose.yml"), join(dest, "docker-compose.yml"));
   await writeFile(join(dest, "README.md"), projectReadme(appName, options, sdk));
   await mkdir(join(dest, "mail"), { recursive: true });
@@ -486,5 +494,6 @@ export {
   USAGE,
   detectCheckoutSdk,
   envExample,
+  railwayName,
   run
 };
