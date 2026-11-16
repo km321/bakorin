@@ -58,6 +58,11 @@ SQLite on the volume is the default. Postgres is optional: set `runtime.dialect:
 | `S3_ACCESS_KEY` or `AWS_ACCESS_KEY_ID` | |
 | `S3_SECRET_KEY` or `AWS_SECRET_ACCESS_KEY` | |
 | `S3_REGION` or `AWS_DEFAULT_REGION` | Defaults to `auto` |
+| `METRICS_TOKEN` | Serve Prometheus metrics at `/metrics` |
+| `SENTRY_DSN` or `ERROR_WEBHOOK_URL` | Forward unhandled errors |
+| `BAKORIN_ALLOW_DESTRUCTIVE` | Set for one deploy to confirm a schema change that removes something, then remove it. See [Schema changes](/docs/migrations/) |
+
+Railway sets `RAILWAY_GIT_COMMIT_SHA`, so the admin Status page shows the deployed commit. Request logs are JSON in production and show up in Railway's log view, searchable by `requestId`.
 
 The full list is on [Configuration](/docs/configuration/).
 

@@ -1,23 +1,28 @@
 #!/usr/bin/env bun
-import { mkdir, watch } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { mkdir, rm, stat, watch } from "node:fs/promises";
+import { dirname, join, resolve } from "node:path";
 import {
   buildSchemaGraph,
   compileAppYaml,
+  DestructiveChangeError,
   DEV_JWT_SECRET,
+  diffSchemas,
+  formatPlan,
   formatAppYamlError,
   generateTypes,
   isAppYamlValidationError,
   schemaToJson,
   schemaToMermaid,
 } from "@bakorin/core";
-import { loadProject } from "./app.ts";
+import { createFiles, loadProject, migrationOptions, openDb } from "./app.ts";
 import { createDebounced } from "./dev-watch.ts";
 import { applyProjectEnv } from "./env-files.ts";
 import { runBackup } from "./backup/schedule.ts";
 import { exportPortable, importPortable, readManifest, restoreProjectAssets } from "./backup/archive.ts";
 import { restoreSqliteSnapshot } from "./backup/sqlite.ts";
-import { migrateToSchema } from "./db/migrator.ts";
+import { migrateToSchema, planMigration } from "./db/migrator.ts";
+import { backupSchema, verifyBackup, type VerifyResult } from "./backup/integrity.ts";
+import { readTar } from "./backup/tar.ts";
 import { resolveRuntimePath } from "./paths.ts";
 import { buildPreview, PreviewError } from "./mail/routes.ts";
 import { listTemplates } from "./mail/files.ts";
@@ -26,7 +31,7 @@ import templateYaml from "./templates/app.yaml" with { type: "text" };
 import templateHooks from "./templates/hooks.ts" with { type: "text" };
 
 const TEMPLATE_YAML = templateYaml;
-const TEMPLATE_HOOKS = templateHooks;
+const TEMPLATE_HOOKS = templateHooks as unknown as string;
 
 function arg(flag: string, fallback?: string): string | undefined {
   const index = process.argv.indexOf(flag);
@@ -65,6 +70,13 @@ async function cmdInit(): Promise<void> {
 }
 
 function reportValidationError(error: unknown, context: "startup" | "reload"): void {
+  if (error instanceof DestructiveChangeError) {
+    if (context === "reload") {
+      console.error("[bakorin] reload stopped; keeping previous schema");
+    }
+    console.error(error.message);
+    return;
+  }
   if (isAppYamlValidationError(error)) {
     if (context === "reload") {
       console.error("[bakorin] reload failed; keeping previous schema");
@@ -245,34 +257,220 @@ async function cmdExport(): Promise<void> {
   await runtime.close();
 }
 
+function hasFlag(flag: string): boolean {
+  return process.argv.includes(flag);
+}
+
+/** Opens the project's database and schema without migrating, for planning. */
+async function openForPlan(dir: string) {
+  await applyProjectEnv(dir);
+  const yamlPath = join(dir, "app.yaml");
+  if (!(await Bun.file(yamlPath).exists())) {
+    console.error(`no app.yaml in ${dir}`);
+    process.exit(1);
+  }
+  let ast;
+  try {
+    ast = compileAppYaml(await Bun.file(yamlPath).text(), { env: process.env });
+  } catch (error) {
+    reportValidationError(error, "startup");
+    process.exit(1);
+  }
+  const opened = openDb(ast, dir);
+  return { ast, opened };
+}
+
+async function cmdMigrate(): Promise<void> {
+  const dir = projectDir();
+  const { ast, opened } = await openForPlan(dir);
+  const allow = arg("--allow-destructive");
+  try {
+    const planned = await planMigration(opened.db, ast);
+    const { plan, confirmCode } = planned;
+    if (hasFlag("--plan")) {
+      console.log(`Migration plan for ${ast.appName} (${ast.runtime.dialect})`);
+      console.log("");
+      console.log(formatPlan(plan));
+      if (plan.abort.length > 0) {
+        console.log("");
+        console.log("Blocked changes stop the server from starting. Change app.yaml so they are not needed.");
+      }
+      if (confirmCode) {
+        console.log("");
+        console.log(`Confirm code: ${confirmCode}`);
+        console.log(`Apply with: bakorin migrate --allow-destructive ${confirmCode}`);
+        console.log("A backup is taken automatically before anything is changed.");
+      }
+      return;
+    }
+    if (plan.abort.length > 0) {
+      console.error(formatPlan(plan));
+      console.error("");
+      console.error("Nothing was changed. Change app.yaml so the blocked changes are not needed.");
+      process.exitCode = 1;
+      return;
+    }
+    const files = createFiles(ast, dir);
+    const result = await migrateToSchema(
+      opened.db,
+      ast,
+      migrationOptions(ast, opened.db, files, dir, process.env, allow ? { allowDestructive: allow } : {}),
+    );
+    const total = result.plan.auto.length + result.plan.safe.length + result.plan.deprecate.length;
+    console.log(total === 0 ? "Schema is up to date." : `Applied ${total} change${total === 1 ? "" : "s"}.`);
+    if (result.backup) {
+      console.log(`Backup taken first: ${result.backup}`);
+    }
+  } catch (error) {
+    if (error instanceof DestructiveChangeError) {
+      console.error(error.message);
+      process.exitCode = 2;
+      return;
+    }
+    throw error;
+  } finally {
+    await opened.close();
+  }
+}
+
+function printVerify(result: VerifyResult): void {
+  const manifest = result.manifest;
+  console.log(`Backup: ${String(manifest.appName ?? "?")}, ${String(manifest.kind ?? "?")} from ${String(manifest.dialect ?? "?")}`);
+  console.log(`Created: ${String(manifest.createdAt ?? "?")}${manifest.reason ? ` (${String(manifest.reason)})` : ""}`);
+  if (result.checkedFiles > 0) {
+    console.log(`Checksums: ${result.checkedFiles} files match`);
+  }
+  for (const warning of result.warnings) {
+    console.log(`Warning: ${warning}`);
+  }
+  for (const error of result.errors) {
+    console.error(`Error: ${error}`);
+  }
+  const counts = Object.entries(result.counts);
+  if (counts.length > 0) {
+    console.log("Rows:");
+    for (const [table, count] of counts) {
+      console.log(`  ${table}: ${count}`);
+    }
+  }
+}
+
+async function findManifestRoot(dir: string): Promise<string> {
+  if (await Bun.file(join(dir, "manifest.json")).exists()) {
+    return dir;
+  }
+  const { readdir } = await import("node:fs/promises");
+  const entries = await readdir(dir, { withFileTypes: true });
+  const dirs = entries.filter((entry) => entry.isDirectory());
+  if (dirs.length === 1 && (await Bun.file(join(dir, dirs[0]!.name, "manifest.json")).exists())) {
+    return join(dir, dirs[0]!.name);
+  }
+  return dir;
+}
+
+/** Accepts a backup folder or a downloaded .tar.gz; returns the folder to restore from. */
+async function openBackupSource(dir: string, src: string): Promise<{ source: string; cleanup: () => Promise<void> }> {
+  const path = resolve(src);
+  let info;
+  try {
+    info = await stat(path);
+  } catch {
+    console.error(`backup not found: ${path}`);
+    process.exit(1);
+  }
+  if (info.isDirectory()) {
+    return { source: path, cleanup: async () => {} };
+  }
+  const tmp = join(dir, ".tmp-restore", new Date().toISOString().replaceAll(":", "-"));
+  const files = readTar(new Uint8Array(await Bun.file(path).arrayBuffer()));
+  for (const file of files) {
+    const target = resolve(tmp, file.path);
+    if (!target.startsWith(`${resolve(tmp)}/`)) {
+      throw new Error(`unsafe path in archive: ${file.path}`);
+    }
+    await mkdir(dirname(target), { recursive: true });
+    await Bun.write(target, file.bytes);
+  }
+  return {
+    source: await findManifestRoot(tmp),
+    cleanup: async () => {
+      await rm(join(dir, ".tmp-restore"), { recursive: true, force: true });
+    },
+  };
+}
+
 async function cmdRestore(): Promise<void> {
   const dir = projectDir();
   const src = process.argv[3];
-  if (!src) {
-    console.error("usage: bakorin restore <backup-dir>");
+  if (!src || src.startsWith("-")) {
+    console.error("usage: bakorin restore <backup-dir | backup.tar.gz> [--dry-run] [--no-backup]");
     process.exit(1);
   }
-  const source = resolve(src);
-  const manifest = await readManifest(source);
-  const assets = await restoreProjectAssets(source, dir);
-  if (assets.length > 0) {
-    console.log(`restored branding/: ${assets.join(", ")}`);
-  }
-  const runtime = await loadOrExit(dir);
-  if (manifest.kind === "sqlite-snapshot") {
+  const dryRun = hasFlag("--dry-run") || hasFlag("--verify");
+  const { source, cleanup } = await openBackupSource(dir, src);
+  try {
+    const verified = await verifyBackup(source);
+    printVerify(verified);
+    if (!verified.ok) {
+      console.error("Restore stopped: the backup failed verification. Nothing was changed.");
+      process.exitCode = 1;
+      return;
+    }
+    const manifest = await readManifest(source);
+    if (dryRun) {
+      const planned = await openForPlan(dir);
+      try {
+        const saved = await backupSchema(source);
+        const targetDialect = planned.ast.runtime.dialect;
+        const method =
+          manifest.kind === "sqlite-snapshot" && targetDialect === "sqlite"
+            ? "replace the SQLite database file and uploads with the snapshot"
+            : "replace all records, file metadata, mail and webhook queues and audit log with the portable copy";
+        console.log("");
+        console.log(`Dry run: restore would ${method}, into ${targetDialect}.`);
+        if (saved) {
+          const plan = diffSchemas(saved, planned.ast);
+          console.log("Compared with the current app.yaml:");
+          console.log(formatPlan(plan).replace(/^/gm, "  "));
+        }
+        console.log("Nothing was changed.");
+      } finally {
+        await planned.opened.close();
+      }
+      return;
+    }
+    const assets = await restoreProjectAssets(source, dir);
+    if (assets.length > 0) {
+      console.log(`restored branding/: ${assets.join(", ")}`);
+    }
+    const runtime = await loadOrExit(dir, { workers: false });
+    if (!hasFlag("--no-backup")) {
+      const safety = await runBackup({
+        ast: runtime.ast,
+        db: runtime.db,
+        files: runtime.context.files,
+        projectDir: dir,
+        reason: "pre-restore",
+      });
+      console.log(`current data backed up first to ${safety}`);
+    }
+    if (manifest.kind === "sqlite-snapshot" && runtime.ast.runtime.dialect === "sqlite") {
+      await runtime.close();
+      await restoreSqliteSnapshot({
+        src: source,
+        dbPath: resolveRuntimePath(dir, runtime.ast.runtime.sqlitePath),
+        uploadsPath: resolveRuntimePath(dir, runtime.ast.runtime.files.path),
+      });
+      console.log("sqlite snapshot restored");
+      return;
+    }
+    const portable = manifest.kind === "sqlite-snapshot" ? join(source, "portable") : source;
+    await importPortable({ src: portable, ast: runtime.ast, db: runtime.db, files: runtime.context.files });
+    console.log("portable backup restored");
     await runtime.close();
-    await restoreSqliteSnapshot({
-      src: source,
-      dbPath: resolveRuntimePath(dir, runtime.ast.runtime.sqlitePath),
-      uploadsPath: resolveRuntimePath(dir, runtime.ast.runtime.files.path),
-    });
-    console.log("sqlite snapshot restored");
-    return;
+  } finally {
+    await cleanup();
   }
-  await migrateToSchema(runtime.db, runtime.ast);
-  await importPortable({ src: source, ast: runtime.ast, db: runtime.db, files: runtime.context.files });
-  console.log("portable backup restored");
-  await runtime.close();
 }
 
 async function cmdImport(): Promise<void> {
@@ -344,7 +542,12 @@ Commands:
   typegen [-o file]   Write bakorin.gen.ts
   schema [--format mermaid|json]  Print the schema as Mermaid or JSON
   backup [dir]        Consistent snapshot (SQLite VACUUM INTO) plus portable export
-  restore <dir>       Restore a snapshot or portable archive
+  restore <dir|file.tar.gz> [--dry-run]
+                      Verify checksums, back up current data, then restore.
+                      --dry-run only verifies and shows what would change
+  migrate [--plan] [--allow-destructive <code>]
+                      Show or apply schema changes. Removals need the code
+                      printed by --plan; a backup is taken first
   export [dir]        Portable NDJSON archive for moving SQLite <-> Postgres
   import <dir>        Import a portable archive into the current dialect
   mail list           List templates in mail/
@@ -377,6 +580,9 @@ switch (command) {
     break;
   case "restore":
     await cmdRestore();
+    break;
+  case "migrate":
+    await cmdMigrate();
     break;
   case "export":
     await cmdExport();

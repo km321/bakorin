@@ -162,6 +162,7 @@ COPY .bakorin/packages ./packages
 RUN bun install
 WORKDIR /project
 COPY app.yaml hooks.ts ./
+COPY mail ./mail
 COPY branding ./branding
 ENV NODE_ENV=production
 ENV BAKORIN_ENV=production
@@ -174,6 +175,7 @@ CMD ["bun", "/bakorin/packages/server/src/cli.ts", "start", "--dir", "/project"]
   return `FROM oven/bun:1.4
 WORKDIR /project
 COPY app.yaml hooks.ts ./
+COPY mail ./mail
 COPY branding ./branding
 ENV NODE_ENV=production
 ENV BAKORIN_ENV=production
@@ -307,6 +309,17 @@ async function rewriteSdkDependency(webDir, sdk, checkoutSdk) {
   await writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}
 `);
 }
+var MAIL_NOTES = `# mail/
+
+Email templates for the mail rules in app.yaml and for ctx.mail.send in hooks.ts.
+
+- \`<name>.html\` and/or \`<name>.txt\`: the body, with {{ record.field }} placeholders
+- \`<name>.subject\`: optional subject when the rule has no subject:
+- \`_layout.html\`: optional wrapper with {{{ body }}}
+- \`_auth/verify.html\`, \`_auth/reset.html\`, \`_auth/invite.html\`: optional overrides for account emails
+
+The Dockerfile copies this folder into the image. Preview with: bakorin mail preview <template>
+`;
 var BRANDING_NOTES = `# branding/
 
 Optional white label. Put a logo and favicon here and add a branding section to app.yaml:
@@ -395,6 +408,8 @@ async function run(options) {
   await cp(join(TEMPLATES, "railway.toml"), join(dest, "railway.toml"));
   await cp(join(TEMPLATES, "docker-compose.yml"), join(dest, "docker-compose.yml"));
   await writeFile(join(dest, "README.md"), projectReadme(appName, options, sdk));
+  await mkdir(join(dest, "mail"), { recursive: true });
+  await writeFile(join(dest, "mail", "README.md"), MAIL_NOTES);
   await mkdir(join(dest, "branding"), { recursive: true });
   await writeFile(join(dest, "branding", "README.md"), BRANDING_NOTES);
   if (sdk === "local") {

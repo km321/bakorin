@@ -261,7 +261,7 @@ export interface WebhookDelivery {
   webhookId: string | null;
   event: string;
   urlHost: string;
-  status: "pending" | "delivered" | "failed";
+  status: "pending" | "delivered" | "failed" | "discarded";
   attempts: number;
   lastStatusCode: number | null;
   lastError: string | null;
@@ -282,7 +282,7 @@ export async function listWebhooks(): Promise<WebhookConfig[]> {
 export async function listWebhookDeliveries(params: {
   limit: number;
   offset: number;
-  status?: "pending" | "delivered" | "failed" | "all";
+  status?: "pending" | "delivered" | "failed" | "discarded" | "all";
 }): Promise<{ data: WebhookDelivery[]; meta: { total: number; limit: number; offset: number } }> {
   const search = new URLSearchParams({ limit: String(params.limit), offset: String(params.offset) });
   if (params.status && params.status !== "all") {
@@ -316,6 +316,79 @@ export async function sendWebhookTest(id: string): Promise<WebhookDelivery> {
     throw new Error(json.error?.message ?? "test event failed");
   }
   return json.data;
+}
+
+/** Asks for a short-lived download link, then lets the browser download the .tar.gz. */
+export async function downloadBackup(id: string): Promise<void> {
+  const response = await request(`/api/v1/backups/${encodeURIComponent(id)}/link`, { method: "POST" });
+  const json = (await response.json()) as { data?: { url: string }; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "could not start the download");
+  }
+  const link = document.createElement("a");
+  link.href = json.data.url;
+  link.rel = "noopener";
+  link.download = "";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+export interface QueueStats {
+  pending: number;
+  retrying: number;
+  sending: number;
+  failed: number;
+  done: number;
+  discarded: number;
+  oldestPendingAt: string | null;
+  oldestPendingAgeSeconds: number | null;
+  failedItems: Array<{
+    id: string;
+    target: string;
+    label: string;
+    attempts: number;
+    lastError: string | null;
+    createdAt: string;
+  }>;
+}
+
+export interface StatusReport {
+  app: string;
+  version: string;
+  commit: string | null;
+  runtime: string;
+  startedAt: string;
+  uptimeSeconds: number;
+  database: { dialect: "sqlite" | "postgres"; sizeBytes: number | null };
+  storage: { driver: string };
+  queues: { mail: QueueStats; webhooks: QueueStats };
+  errors: {
+    total: number;
+    recent: Array<{ at: string; name: string; message: string; requestId?: string; method?: string; path?: string; status?: number }>;
+    forwarding: { sentry: boolean; webhook: boolean };
+  };
+  backups: { lastAt: string | null; lastLocation: string | null; intervalHours: number | null; maxAgeHours: number | null; overdue: boolean };
+  alerts: { email: boolean; webhook: boolean; backupMaxAgeHours: number | null; checkIntervalMinutes: number };
+  logging: "json" | "pretty" | "off";
+  metrics: boolean;
+}
+
+export async function getStatus(): Promise<StatusReport> {
+  const response = await request("/api/v1/status");
+  const json = (await response.json()) as { data?: StatusReport; error?: { message: string } };
+  if (!response.ok || !json.data) {
+    throw new Error(json.error?.message ?? "failed to load status");
+  }
+  return json.data;
+}
+
+export async function actOnDelivery(queue: "mail" | "webhooks", id: string, action: "retry" | "discard"): Promise<void> {
+  const response = await request(`/api/v1/${queue}/deliveries/${encodeURIComponent(id)}/${action}`, { method: "POST" });
+  if (!response.ok) {
+    const json = (await response.json().catch(() => ({}))) as { error?: { message: string } };
+    throw new Error(json.error?.message ?? `${action} failed`);
+  }
 }
 
 export async function createBackup(): Promise<BackupRecord> {
@@ -426,7 +499,7 @@ export interface MailPreview {
   frameUrl: string;
 }
 
-export type MailDeliveryStatus = "pending" | "sending" | "sent" | "failed";
+export type MailDeliveryStatus = "pending" | "sending" | "sent" | "failed" | "discarded";
 
 export interface MailDelivery {
   id: string;

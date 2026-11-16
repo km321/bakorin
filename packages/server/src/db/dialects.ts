@@ -1,7 +1,8 @@
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { Database } from "bun:sqlite";
+import { Database, type SQLQueryBindings } from "bun:sqlite";
 import {
+  CompiledQuery,
   Kysely,
   PostgresDialect,
   SqliteAdapter,
@@ -27,10 +28,10 @@ class BunSqliteConnection implements DatabaseConnection {
     const stmt = this.db.prepare(compiled.sql);
     const isSelect = /^\s*(select|pragma|with)\b/i.test(compiled.sql);
     if (isSelect) {
-      const rows = stmt.all(...compiled.parameters) as R[];
+      const rows = stmt.all(...(compiled.parameters as SQLQueryBindings[])) as R[];
       return { rows };
     }
-    const result = stmt.run(...compiled.parameters);
+    const result = stmt.run(...(compiled.parameters as SQLQueryBindings[]));
     return {
       rows: [],
       numAffectedRows: BigInt(result.changes),
@@ -53,15 +54,15 @@ class BunSqliteDriver implements Driver {
   }
 
   async beginTransaction(connection: DatabaseConnection): Promise<void> {
-    await connection.executeQuery({ sql: "begin immediate", parameters: [] });
+    await connection.executeQuery(CompiledQuery.raw("begin immediate"));
   }
 
   async commitTransaction(connection: DatabaseConnection): Promise<void> {
-    await connection.executeQuery({ sql: "commit", parameters: [] });
+    await connection.executeQuery(CompiledQuery.raw("commit"));
   }
 
   async rollbackTransaction(connection: DatabaseConnection): Promise<void> {
-    await connection.executeQuery({ sql: "rollback", parameters: [] });
+    await connection.executeQuery(CompiledQuery.raw("rollback"));
   }
 
   async releaseConnection(): Promise<void> {}

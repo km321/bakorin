@@ -30,3 +30,14 @@ export class IdentError extends BakorinError {
     this.name = "IdentError";
   }
 }
+
+/** Schema changes that remove data from the API need an explicit confirmation code. */
+export class DestructiveChangeError extends BakorinError {
+  readonly confirmCode: string;
+
+  constructor(message: string, confirmCode: string, details?: unknown) {
+    super("destructive_change", message, details);
+    this.name = "DestructiveChangeError";
+    this.confirmCode = confirmCode;
+  }
+}

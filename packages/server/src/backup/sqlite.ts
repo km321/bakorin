@@ -1,4 +1,4 @@
-import { mkdir, cp } from "node:fs/promises";
+import { mkdir, cp, rename, rm } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { Database } from "bun:sqlite";
 import type { SchemaAST } from "@bakorin/core";
@@ -14,6 +14,7 @@ export async function backupSqlite(options: {
   dest: string;
   ast: SchemaAST;
   uploadsPath: string;
+  reason?: string;
 }): Promise<string> {
   const dest = resolve(options.dest);
   await mkdir(dest, { recursive: true });
@@ -27,13 +28,6 @@ export async function backupSqlite(options: {
     db.close();
   }
   await copyProjectFiles(options.projectDir, dest);
-  if (await Bun.file(options.uploadsPath).exists().catch(() => false)) {
-    try {
-      await cp(options.uploadsPath, join(dest, "uploads"), { recursive: true });
-    } catch {
-      await mkdir(join(dest, "uploads"), { recursive: true });
-    }
-  }
   try {
     await cp(options.uploadsPath, join(dest, "uploads"), { recursive: true });
   } catch {
@@ -45,6 +39,7 @@ export async function backupSqlite(options: {
     appName: options.ast.appName,
     dialect: "sqlite",
     kind: "sqlite-snapshot",
+    ...(options.reason ? { reason: options.reason } : {}),
   });
   return dest;
 }
@@ -55,7 +50,15 @@ export async function restoreSqliteSnapshot(options: { src: string; dbPath: stri
     throw new Error("sqlite snapshot is missing app.db");
   }
   await mkdir(dirname(options.dbPath), { recursive: true });
-  await cp(srcDb, options.dbPath);
+  // A leftover write-ahead log from the old database would be replayed on top of
+  // the restored file, so remove it before copying.
+  await rm(`${options.dbPath}-wal`, { force: true });
+  await rm(`${options.dbPath}-shm`, { force: true });
+  // Copy next to the target, then rename: the database gets a fresh file instead of
+  // being overwritten in place under any handle that is still open.
+  const staging = `${options.dbPath}.restore-${process.pid}`;
+  await cp(srcDb, staging);
+  await rename(staging, options.dbPath);
   const uploads = join(options.src, "uploads");
   try {
     await mkdir(options.uploadsPath, { recursive: true });

@@ -16,7 +16,7 @@ export const AUTH_LINK_TTL_MS: Record<AuthEmailKind, number> = {
   invite: 7 * 24 * 60 * 60 * 1000,
 };
 
-export type MailDeliveryStatus = "pending" | "sending" | "sent" | "failed";
+export type MailDeliveryStatus = "pending" | "sending" | "sent" | "failed" | "discarded";
 export type MailSource = "rule" | "hook" | "test" | "auth";
 
 const CLAIM_MS = 60_000;
@@ -513,7 +513,25 @@ export async function cleanupSentMail(db: BakorinDb, retainDays: number): Promis
     .where("status", "=", "sent")
     .where("sent_at", "<", cutoff)
     .executeTakeFirst();
-  return Number(result?.numDeletedRows ?? 0);
+  const discarded = await db
+    .deleteFrom(MAIL_OUTBOX_TABLE)
+    .where("status", "=", "discarded")
+    .where("created_at", "<", cutoff)
+    .executeTakeFirst();
+  return Number(result?.numDeletedRows ?? 0) + Number(discarded?.numDeletedRows ?? 0);
+}
+
+/** Marks a failed delivery as discarded so it stops counting as a failure. The row is kept for the record. */
+export async function discardMailDelivery(db: BakorinDb, id: string): Promise<"ok" | "missing" | "not_failed"> {
+  const row = await db.selectFrom(MAIL_OUTBOX_TABLE).select(["status"]).where("id", "=", id).executeTakeFirst();
+  if (!row) {
+    return "missing";
+  }
+  if (String(row.status) !== "failed") {
+    return "not_failed";
+  }
+  await db.updateTable(MAIL_OUTBOX_TABLE).set({ status: "discarded", locked_until: null }).where("id", "=", id).execute();
+  return "ok";
 }
 
 /** Only failed rows can be retried. A sent row is final and is never sent again. */

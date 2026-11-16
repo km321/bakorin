@@ -11,6 +11,7 @@ import {
   deliverMailById,
   enqueueMail,
   resolveAddresses,
+  discardMailDelivery,
   retryMailDelivery,
   viewMailDelivery,
   type MailDeliveryStatus,
@@ -241,6 +242,7 @@ function parseStatus(value: string | null): MailDeliveryStatus | undefined {
     case "sending":
     case "sent":
     case "failed":
+    case "discarded":
       return value;
     default:
       return undefined;
@@ -404,6 +406,23 @@ export function createMailRoutes(): Hono {
       data: rows.map((row) => viewMailDelivery(row as Record<string, unknown>)),
       meta: { total: Number(totalRow?.count ?? 0), limit, offset },
     });
+  });
+
+  app.post("/deliveries/:id/discard", async (c) => {
+    const denied = requireAdmin(c);
+    if (denied) {
+      return denied;
+    }
+    const ctx = c.get("app");
+    const id = c.req.param("id");
+    const result = await discardMailDelivery(ctx.db, id);
+    if (result === "missing") {
+      return c.json({ error: { code: "not_found", message: "delivery not found" } }, 404);
+    }
+    if (result === "not_failed") {
+      return c.json({ error: { code: "conflict", message: "only failed deliveries can be discarded" } }, 409);
+    }
+    return c.json({ data: { id, status: "discarded" } });
   });
 
   app.post("/deliveries/:id/retry", async (c) => {

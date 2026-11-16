@@ -14,21 +14,34 @@ import { Drawer } from "../components/Drawer.tsx";
 import { InviteUser } from "../components/InviteUser.tsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
 import { ThemeToggle } from "../components/ThemeToggle.tsx";
-import { IconAudit, IconBackup, IconDocs, IconMenu, IconSchema, IconSearch, IconWebhook, IconMail } from "../components/Icons.tsx";
+import {
+  IconAudit,
+  IconBackup,
+  IconDocs,
+  IconMenu,
+  IconSchema,
+  IconSearch,
+  IconStatus,
+  IconWebhook,
+  IconMail,
+} from "../components/Icons.tsx";
 import { fieldLabel, relatedLabel } from "../lib/label.ts";
 import { emptyLabel, formatDate, formatDateTime, initials } from "../lib/format.ts";
 import { pushToast } from "../lib/toast.ts";
 import { Backups } from "./Backups.tsx";
 import { Audit } from "./Audit.tsx";
+import { Status } from "./Status.tsx";
 import { Webhooks } from "./Webhooks.tsx";
 import { Mail } from "./Mail.tsx";
 import { Schema } from "./Schema.tsx";
 import { Brand } from "../components/Brand.tsx";
 
-type AdminPage = "records" | "backups" | "audit" | "webhooks" | "mail" | "schema";
+type AdminPage = "records" | "status" | "backups" | "audit" | "webhooks" | "mail" | "schema";
 
 function pageFromHash(hash: string): AdminPage {
   switch (hash) {
+    case "#status":
+      return "status";
     case "#backups":
       return "backups";
     case "#audit":
@@ -258,6 +271,21 @@ export function AppShell({ onLogout, onForbidden }: Props) {
             </button>
           ))}
           <div class="nav-section">Project</div>
+          <button
+            data-nav="status"
+            class={page === "status" ? "active" : ""}
+            aria-current={page === "status" ? "page" : undefined}
+            onClick={() => {
+              setPage("status");
+              location.hash = "status";
+              setNavOpen(false);
+            }}
+          >
+            <span class="nav-icon">
+              <IconStatus />
+            </span>
+            Status
+          </button>
           <button
             data-nav="backups"
             class={page === "backups" ? "active" : ""}
@@ -580,6 +608,8 @@ function ProjectScreen({
   onOpenEntity: (name: string) => void;
 }) {
   switch (page) {
+    case "status":
+      return <Status />;
     case "backups":
       return <Backups />;
     case "webhooks":

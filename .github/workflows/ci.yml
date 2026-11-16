@@ -14,6 +14,8 @@ jobs:
         with:
           bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run typecheck
       - name: SQLite tests
         run: bun test
       - run: bun run build:ui
@@ -42,7 +44,7 @@ jobs:
           bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       - name: Postgres tests
-        run: bun test tests/postgres.test.ts
+        run: bun test tests/postgres.test.ts tests/restore.test.ts
         env:
           DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/bakorin
 

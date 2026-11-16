@@ -23,6 +23,7 @@ import {
   type MailConditionAST,
   type MailRuleAST,
   type PolicyAST,
+  type AlertsRuntimeAST,
   type RuntimeAST,
   type SchemaAST,
 } from "./ast.ts";
@@ -321,6 +322,74 @@ function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, 
     appUrl: parseAppUrl(env, parsePort(runtime.port, env)),
     webhooksRetainDays: parseWebhookRetainDays(runtime.webhooks?.retainDays, env),
     mailRetainDays: parseMailRetainDays(runtime.mail?.retainDays, env),
+    alerts: parseAlerts(runtime.alerts, env),
+  };
+}
+
+function parseAlerts(
+  yaml: { email?: string | string[]; webhook?: string; backupMaxAgeHours?: number; checkIntervalMinutes?: number } | undefined,
+  env: Record<string, string | undefined>,
+): AlertsRuntimeAST {
+  const emailSource = yaml?.email ?? env.BAKORIN_ALERT_EMAIL;
+  const email = (Array.isArray(emailSource) ? emailSource : (emailSource ?? "").split(","))
+    .map((value) => value.trim())
+    .filter(Boolean);
+  for (const address of email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+      throw new SchemaError(`runtime.alerts.email: ${address} is not an email address`);
+    }
+  }
+  const webhook = (yaml?.webhook ?? env.BAKORIN_ALERT_WEBHOOK ?? "").trim() || undefined;
+  if (webhook && !/^https?:\/\//.test(webhook)) {
+    throw new SchemaError("runtime.alerts.webhook must be an http(s) URL");
+  }
+  const envMaxAge = env.BAKORIN_ALERT_BACKUP_MAX_AGE_HOURS ? Number(env.BAKORIN_ALERT_BACKUP_MAX_AGE_HOURS) : undefined;
+  const maxAge = yaml?.backupMaxAgeHours ?? (envMaxAge && Number.isFinite(envMaxAge) && envMaxAge > 0 ? envMaxAge : undefined);
+  return {
+    email,
+    ...(webhook ? { webhook } : {}),
+    backupMaxAgeHours: maxAge ?? null,
+    checkIntervalMinutes: yaml?.checkIntervalMinutes ?? 15,
+  };
+}
+
+const REDACTED = "[redacted]";
+
+function redactUrl(value: string | undefined): string | undefined {
+  if (!value) {
+    return value;
+  }
+  try {
+    const url = new URL(value);
+    if (url.password) {
+      url.password = REDACTED;
+    }
+    url.search = "";
+    return url.toString();
+  } catch {
+    return REDACTED;
+  }
+}
+
+/**
+ * The stored copy of the schema (in _bakorin_meta and in backups) never holds
+ * secrets: the JWT secrets, bucket keys, database password and alert webhook
+ * are replaced, since the running server always reads them from app.yaml and env.
+ */
+function redactRuntime(runtime: RuntimeAST): RuntimeAST {
+  return {
+    ...runtime,
+    jwtSecret: REDACTED,
+    ...(runtime.jwtSecretPrevious ? { jwtSecretPrevious: REDACTED } : {}),
+    ...(runtime.postgresUrl ? { postgresUrl: redactUrl(runtime.postgresUrl) } : {}),
+    files: {
+      ...runtime.files,
+      ...(runtime.files.accessKey ? { accessKey: REDACTED } : {}),
+      ...(runtime.files.secretKey ? { secretKey: REDACTED } : {}),
+    },
+    ...(runtime.alerts
+      ? { alerts: { ...runtime.alerts, ...(runtime.alerts.webhook ? { webhook: redactUrl(runtime.alerts.webhook) } : {}) } }
+      : {}),
   };
 }
 
@@ -662,6 +731,7 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
       policies,
       indexes: compileIndexes(name, fieldMap, raw.indexes),
       deprecated: false,
+      ...(raw.renameFrom ? { renameFrom: raw.renameFrom } : {}),
     };
   });
 
@@ -717,7 +787,7 @@ export function serializeAst(ast: SchemaAST): string {
     appVersion: ast.appVersion,
     appDescription: ast.appDescription,
     branding: ast.branding,
-    runtime: ast.runtime,
+    runtime: redactRuntime(ast.runtime),
     entities: ast.entities,
     order: ast.order,
     auth: ast.auth,

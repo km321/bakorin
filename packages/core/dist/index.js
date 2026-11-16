@@ -1,5 +1,10 @@
 // src/ast.ts
 var SCHEMA_AST_VERSION = 1;
+var WEBHOOK_DEFAULT_MAX_ATTEMPTS = 10;
+var WEBHOOK_DEFAULT_TIMEOUT_MS = 1e4;
+var WEBHOOK_DEFAULT_RETAIN_DAYS = 30;
+var MAIL_DEFAULT_MAX_ATTEMPTS = 8;
+var MAIL_DEFAULT_RETAIN_DAYS = 30;
 // src/compile.ts
 import { parse as parseYaml } from "yaml";
 
@@ -34,6 +39,227 @@ class IdentError extends BakorinError {
     super("invalid_identifier", message, details);
     this.name = "IdentError";
   }
+}
+
+class DestructiveChangeError extends BakorinError {
+  confirmCode;
+  constructor(message, confirmCode, details) {
+    super("destructive_change", message, details);
+    this.name = "DestructiveChangeError";
+    this.confirmCode = confirmCode;
+  }
+}
+
+// src/branding.ts
+var BRANDING_DIR = "branding";
+var BRANDING_LOGO_EXTENSIONS = ["svg", "png", "jpg", "jpeg", "webp"];
+var BRANDING_FAVICON_EXTENSIONS = ["svg", "png", "ico"];
+var BRANDING_MAX_FILE_BYTES = 1024 * 1024;
+var BRANDING_SURFACES = {
+  light: {
+    text: "#1c1917",
+    muted: "#57534e",
+    surfaces: ["#f4f1ec", "#ebe6dd", "#fffcf8", "#efe8dc", "#f7f3ec", "#ffffff"],
+    raised: "#fffcf8"
+  },
+  dark: {
+    text: "#f3eee6",
+    muted: "#b7b0a6",
+    surfaces: ["#111315", "#0d0f12", "#181c20", "#1e242a", "#15191d", "#12161a"],
+    raised: "#181c20"
+  }
+};
+var HEX = /^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/;
+function isHexColor(value) {
+  return HEX.test(value);
+}
+function normalizeHex(value) {
+  const raw = value.trim().toLowerCase();
+  if (!HEX.test(raw)) {
+    throw new Error(`${value} is not a hex color like #0f766e`);
+  }
+  if (raw.length === 4) {
+    return `#${raw[1]}${raw[1]}${raw[2]}${raw[2]}${raw[3]}${raw[3]}`;
+  }
+  return raw;
+}
+function toRgb(hex) {
+  const value = normalizeHex(hex);
+  return [1, 3, 5].map((index) => Number.parseInt(value.slice(index, index + 2), 16));
+}
+function toHex(rgb) {
+  return `#${rgb.map((part) => Math.round(Math.min(255, Math.max(0, part))).toString(16).padStart(2, "0")).join("")}`;
+}
+function channel(value) {
+  const s = value / 255;
+  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+}
+function relativeLuminance(hex) {
+  const [r, g, b] = toRgb(hex);
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+function contrastRatio(a, b) {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+function rgbToHsl([r, g, b]) {
+  const rn = r / 255;
+  const gn = g / 255;
+  const bn = b / 255;
+  const max = Math.max(rn, gn, bn);
+  const min = Math.min(rn, gn, bn);
+  const l = (max + min) / 2;
+  if (max === min) {
+    return [0, 0, l];
+  }
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  let h;
+  if (max === rn) {
+    h = (gn - bn) / d + (gn < bn ? 6 : 0);
+  } else if (max === gn) {
+    h = (bn - rn) / d + 2;
+  } else {
+    h = (rn - gn) / d + 4;
+  }
+  return [h / 6, s, l];
+}
+function hslToRgb([h, s, l]) {
+  if (s === 0) {
+    return [l * 255, l * 255, l * 255];
+  }
+  const hue = (p, q, t) => {
+    let tt = t;
+    if (tt < 0)
+      tt += 1;
+    if (tt > 1)
+      tt -= 1;
+    if (tt < 1 / 6)
+      return p + (q - p) * 6 * tt;
+    if (tt < 1 / 2)
+      return q;
+    if (tt < 2 / 3)
+      return p + (q - p) * (2 / 3 - tt) * 6;
+    return p;
+  };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  return [hue(p, q, h + 1 / 3) * 255, hue(p, q, h) * 255, hue(p, q, h - 1 / 3) * 255];
+}
+function minContrast(color, surfaces) {
+  return Math.min(...surfaces.map((surface) => contrastRatio(color, surface)));
+}
+function ensureContrast(color, surfaces, target, direction) {
+  const start = normalizeHex(color);
+  if (minContrast(start, surfaces) >= target) {
+    return start;
+  }
+  const [h, s, l] = rgbToHsl(toRgb(start));
+  for (let step = 1;step <= 100; step += 1) {
+    const nextL = direction === "darken" ? l - l * step / 100 : l + (1 - l) * step / 100;
+    const candidate = toHex(hslToRgb([h, s, nextL]));
+    if (minContrast(candidate, surfaces) >= target) {
+      return candidate;
+    }
+  }
+  return direction === "darken" ? "#000000" : "#ffffff";
+}
+function mix(a, b, amount) {
+  const ra = toRgb(a);
+  const rb = toRgb(b);
+  return toHex([0, 1, 2].map((i) => ra[i] * amount + rb[i] * (1 - amount)));
+}
+function bestForeground(background) {
+  const light = "#ffffff";
+  const dark = "#111111";
+  return contrastRatio(light, background) >= contrastRatio(dark, background) ? light : dark;
+}
+function fmt(ratio) {
+  return `${(Math.floor(ratio * 100) / 100).toFixed(2)}:1`;
+}
+function palette(primary, accent, theme, warnings, labels) {
+  const spec = BRANDING_SURFACES[theme];
+  const direction = theme === "light" ? "darken" : "lighten";
+  const accentColor = ensureContrast(primary, spec.surfaces, 4.5, direction);
+  if (accentColor !== primary) {
+    warnings.push(`${labels.primary} ${primary} is ${fmt(minContrast(primary, spec.surfaces))} against the ${theme} theme, below the 4.5:1 WCAG AA minimum for text. Using ${accentColor} (${fmt(minContrast(accentColor, spec.surfaces))}) in ${theme} mode.`);
+  }
+  const focus = accent ? ensureContrast(accent, spec.surfaces, 3, direction) : accentColor;
+  if (accent && focus !== accent) {
+    warnings.push(`${labels.accent} ${accent} is ${fmt(minContrast(accent, spec.surfaces))} against the ${theme} theme, below the 3:1 minimum for focus rings. Using ${focus} in ${theme} mode.`);
+  }
+  let accentSoft = spec.raised;
+  for (const amount of [0.16, 0.12, 0.08, 0.05, 0.03]) {
+    const candidate = mix(accentColor, spec.raised, amount);
+    if (contrastRatio(spec.text, candidate) >= 4.5 && contrastRatio(spec.muted, candidate) >= 4.5 && contrastRatio(accentColor, candidate) >= 4.5) {
+      accentSoft = candidate;
+      break;
+    }
+  }
+  return { accent: accentColor, accentFg: bestForeground(accentColor), accentSoft, focus };
+}
+function normalizeBrandingPath(value) {
+  return value.trim().replace(/^\.\//, "");
+}
+function compileBranding(raw) {
+  if (!raw) {
+    return;
+  }
+  const warnings = [];
+  const out = { warnings };
+  const name = raw.name?.trim();
+  if (name) {
+    out.name = name;
+  }
+  if (raw.logo) {
+    out.logo = normalizeBrandingPath(raw.logo);
+  }
+  if (raw.favicon) {
+    out.favicon = normalizeBrandingPath(raw.favicon);
+  }
+  if (raw.primaryColor || raw.accentColor) {
+    const primary = normalizeHex(raw.primaryColor ?? raw.accentColor);
+    const accent = raw.accentColor ? normalizeHex(raw.accentColor) : undefined;
+    if (raw.primaryColor) {
+      out.primaryColor = primary;
+    }
+    if (accent) {
+      out.accentColor = accent;
+    }
+    const labels = {
+      primary: raw.primaryColor ? "branding.primaryColor" : "branding.accentColor",
+      accent: "branding.accentColor"
+    };
+    out.light = palette(primary, accent, "light", warnings, labels);
+    out.dark = palette(primary, accent, "dark", warnings, labels);
+    const emailPrimary = ensureContrast(primary, ["#ffffff"], 4.5, "darken");
+    out.email = { primary: emailPrimary, primaryFg: bestForeground(emailPrimary) };
+  }
+  return out;
+}
+function brandName(appName, branding) {
+  return branding?.name ?? appName;
+}
+function cssVars(p, prefix) {
+  return [
+    `${prefix}accent: ${p.accent};`,
+    `${prefix}accent-fg: ${p.accentFg};`,
+    `${prefix}accent-soft: ${p.accentSoft};`,
+    `${prefix}focus: ${p.focus};`
+  ].join(" ");
+}
+function brandingCss(branding) {
+  if (!branding?.light || !branding.dark) {
+    return "";
+  }
+  return [
+    "/* Generated from the branding section of app.yaml. */",
+    `:root, :root[data-theme="light"] { ${cssVars(branding.light, "--")} ${cssVars(branding.light, "--docs-")} }`,
+    `:root[data-theme="dark"] { ${cssVars(branding.dark, "--")} ${cssVars(branding.dark, "--docs-")} }`,
+    ""
+  ].join(`
+`);
 }
 
 // src/ident.ts
@@ -170,7 +396,7 @@ function describePolicy(policy) {
 }
 
 // src/topo.ts
-function topologicalOrder(entities) {
+function topologicalLayers(entities) {
   const names = new Set(entities.map((entity) => entity.name));
   const incoming = new Map;
   for (const entity of entities) {
@@ -188,7 +414,7 @@ function topologicalOrder(entities) {
       incoming.get(entity.name)?.add(target);
     }
   }
-  const ordered = [];
+  const layers = [];
   const remaining = new Set(names);
   while (remaining.size > 0) {
     const ready = [...remaining].filter((name) => (incoming.get(name)?.size ?? 0) === 0);
@@ -196,15 +422,18 @@ function topologicalOrder(entities) {
       throw new SchemaError("circular relation detected among entities", { remaining: [...remaining] });
     }
     ready.sort();
+    layers.push(ready);
     for (const name of ready) {
-      ordered.push(name);
       remaining.delete(name);
       for (const deps of incoming.values()) {
         deps.delete(name);
       }
     }
   }
-  return ordered;
+  return layers;
+}
+function topologicalOrder(entities) {
+  return topologicalLayers(entities).flat();
 }
 
 // src/format-schema.ts
@@ -228,7 +457,7 @@ var FIELD_TYPES = [
   "file",
   "relation"
 ];
-var APP_YAML_TOP_LEVEL_KEYS = ["app", "runtime", "auth", "entities", "webhooks"];
+var APP_YAML_TOP_LEVEL_KEYS = ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail"];
 var fieldType = z.enum(FIELD_TYPES);
 var fieldObject = z.object({
   type: fieldType,
@@ -253,6 +482,7 @@ var entityObject = z.object({
   display: ident.optional(),
   description: z.string().optional(),
   auth: z.boolean().optional(),
+  renameFrom: ident.optional(),
   fields: z.record(ident, fieldValue),
   indexes: z.array(z.union([ident, z.array(ident).min(1)])).optional(),
   policies: z.object({
@@ -266,14 +496,62 @@ var webhookObject = z.object({
   entity: z.union([ident, z.literal("*")]),
   events: z.array(z.enum(["create", "update", "delete"])).min(1),
   url: z.string().min(1),
-  secret: z.string().optional()
+  secret: z.string().optional(),
+  maxAttempts: z.number().int().min(1).max(100).optional(),
+  timeoutMs: z.number().int().min(100).max(120000).optional()
 }).strict();
+var mailAddressList = z.union([z.string().min(1), z.array(z.string().min(1)).min(1)]);
+var mailScalar = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+var mailCondition = z.union([
+  mailScalar,
+  z.object({
+    equals: mailScalar.optional(),
+    not: mailScalar.optional(),
+    in: z.array(mailScalar).min(1).optional(),
+    notIn: z.array(mailScalar).min(1).optional(),
+    exists: z.boolean().optional()
+  }).strict().refine((value) => Object.keys(value).length > 0, {
+    message: "use one of equals, not, in, notIn, or exists"
+  })
+]);
+var mailRuleObject = z.object({
+  name: z.string().regex(/^[A-Za-z0-9_-]{1,64}$/, "must be letters, digits, dashes, or underscores").optional(),
+  entity: ident,
+  events: z.array(z.enum(["create", "update", "delete"])).min(1),
+  to: mailAddressList,
+  cc: mailAddressList.optional(),
+  bcc: mailAddressList.optional(),
+  replyTo: z.string().min(1).optional(),
+  subject: z.string().min(1).max(500).optional(),
+  template: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/, "must be a file name like receipt or order-shipped"),
+  when: z.record(ident, mailCondition).optional(),
+  changed: z.array(ident).min(1).optional(),
+  expand: z.array(ident).min(1).optional(),
+  maxAttempts: z.number().int().min(1).max(100).optional()
+}).strict();
+var hexColor = z.string({
+  invalid_type_error: 'must be a quoted hex color like "#0f766e" (without quotes, # starts a YAML comment)'
+}).regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "must be a hex color like #0f766e or #0a7");
+function brandingFile(kind, extensions) {
+  const pattern = new RegExp(`^(?:\\./)?branding/[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.(?:${extensions.join("|")})$`, "i");
+  return z.string().regex(pattern, `must be a file in the branding/ folder, like branding/${kind}.${extensions[0]} (${extensions.join(", ")})`);
+}
+var brandingObject = z.object({
+  name: z.string().trim().min(1).max(60).optional(),
+  primaryColor: hexColor.optional(),
+  accentColor: hexColor.optional(),
+  logo: brandingFile("logo", ["svg", "png", "jpg", "jpeg", "webp"]).optional(),
+  favicon: brandingFile("favicon", ["svg", "png", "ico"]).optional()
+}).strict().refine((value) => Object.keys(value).length > 0, {
+  message: "add at least one of name, primaryColor, accentColor, logo, or favicon, or remove branding"
+});
 var appYamlSchema = z.object({
   app: z.object({
     name: z.string().min(1),
     version: z.string().optional(),
     description: z.string().optional()
   }).strict(),
+  branding: brandingObject.optional(),
   runtime: z.object({
     dialect: z.enum(["sqlite", "postgres"]).optional(),
     host: z.string().optional(),
@@ -309,10 +587,22 @@ var appYamlSchema = z.object({
       retain: z.number().int().positive().optional(),
       destination: z.string().optional()
     }).strict().optional(),
+    alerts: z.object({
+      email: z.union([z.string().min(1), z.array(z.string().min(1))]).optional(),
+      webhook: z.string().min(1).optional(),
+      backupMaxAgeHours: z.number().positive().optional(),
+      checkIntervalMinutes: z.number().int().min(1).max(1440).optional()
+    }).strict().optional(),
     cors: z.object({
       origins: z.array(z.string()).optional()
     }).strict().optional(),
-    hooks: z.string().optional()
+    hooks: z.string().optional(),
+    webhooks: z.object({
+      retainDays: z.number().int().min(1).max(3650).optional()
+    }).strict().optional(),
+    mail: z.object({
+      retainDays: z.number().int().min(1).max(3650).optional()
+    }).strict().optional()
   }).strict().optional(),
   auth: z.object({
     entity: ident.optional(),
@@ -325,7 +615,8 @@ var appYamlSchema = z.object({
   entities: z.record(ident, entityObject).refine((value) => Object.keys(value).length > 0, {
     message: "at least one entity is required"
   }),
-  webhooks: z.array(webhookObject).optional()
+  webhooks: z.array(webhookObject).optional(),
+  mail: z.array(mailRuleObject).optional()
 }).strict();
 
 // src/format-schema.ts
@@ -403,6 +694,9 @@ function formatIssue(issue) {
   switch (issue.code) {
     case "unrecognized_keys":
       return issue.keys.map((key) => {
+        if (key === "renamedFrom" || key === "renamed_from" || key === "rename_from") {
+          return `app.yaml: unknown key "${key}"${at}. Did you mean renameFrom?`;
+        }
         if (issue.path.length === 0 && looksLikeEntityName(key)) {
           return `app.yaml: unknown top-level key "${key}". Did you mean to put it under "entities:"?`;
         }
@@ -429,6 +723,9 @@ function formatIssue(issue) {
         }
         return [`app.yaml: missing "${path}"`];
       }
+      if (issue.path[0] === "branding" && /Color$/.test(String(issue.path[1] ?? ""))) {
+        return [`app.yaml: ${path} ${issue.message}`];
+      }
       return [`app.yaml: ${path || "root"} should be ${issue.expected}, not ${issue.received}`];
     }
     case "too_small":
@@ -443,7 +740,7 @@ function formatIssue(issue) {
   }
 }
 function hintEntityKeys() {
-  return ". Valid keys are label, plural, display, description, auth, fields, indexes, policies.";
+  return ". Valid keys are label, plural, display, description, auth, renameFrom, fields, indexes, policies.";
 }
 
 // src/compile.ts
@@ -702,8 +999,201 @@ function compileRuntime(yaml, production, env) {
     },
     corsOrigins: parseCorsOrigins(runtime.cors?.origins, env),
     hooksPath: runtime.hooks,
-    appUrl: parseAppUrl(env, parsePort(runtime.port, env))
+    appUrl: parseAppUrl(env, parsePort(runtime.port, env)),
+    webhooksRetainDays: parseWebhookRetainDays(runtime.webhooks?.retainDays, env),
+    mailRetainDays: parseMailRetainDays(runtime.mail?.retainDays, env),
+    alerts: parseAlerts(runtime.alerts, env)
   };
+}
+function parseAlerts(yaml, env) {
+  const emailSource = yaml?.email ?? env.BAKORIN_ALERT_EMAIL;
+  const email = (Array.isArray(emailSource) ? emailSource : (emailSource ?? "").split(",")).map((value) => value.trim()).filter(Boolean);
+  for (const address of email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) {
+      throw new SchemaError(`runtime.alerts.email: ${address} is not an email address`);
+    }
+  }
+  const webhook = (yaml?.webhook ?? env.BAKORIN_ALERT_WEBHOOK ?? "").trim() || undefined;
+  if (webhook && !/^https?:\/\//.test(webhook)) {
+    throw new SchemaError("runtime.alerts.webhook must be an http(s) URL");
+  }
+  const envMaxAge = env.BAKORIN_ALERT_BACKUP_MAX_AGE_HOURS ? Number(env.BAKORIN_ALERT_BACKUP_MAX_AGE_HOURS) : undefined;
+  const maxAge = yaml?.backupMaxAgeHours ?? (envMaxAge && Number.isFinite(envMaxAge) && envMaxAge > 0 ? envMaxAge : undefined);
+  return {
+    email,
+    ...webhook ? { webhook } : {},
+    backupMaxAgeHours: maxAge ?? null,
+    checkIntervalMinutes: yaml?.checkIntervalMinutes ?? 15
+  };
+}
+var REDACTED = "[redacted]";
+function redactUrl(value) {
+  if (!value) {
+    return value;
+  }
+  try {
+    const url = new URL(value);
+    if (url.password) {
+      url.password = REDACTED;
+    }
+    url.search = "";
+    return url.toString();
+  } catch {
+    return REDACTED;
+  }
+}
+function redactRuntime(runtime) {
+  return {
+    ...runtime,
+    jwtSecret: REDACTED,
+    ...runtime.jwtSecretPrevious ? { jwtSecretPrevious: REDACTED } : {},
+    ...runtime.postgresUrl ? { postgresUrl: redactUrl(runtime.postgresUrl) } : {},
+    files: {
+      ...runtime.files,
+      ...runtime.files.accessKey ? { accessKey: REDACTED } : {},
+      ...runtime.files.secretKey ? { secretKey: REDACTED } : {}
+    },
+    ...runtime.alerts ? { alerts: { ...runtime.alerts, ...runtime.alerts.webhook ? { webhook: redactUrl(runtime.alerts.webhook) } : {} } } : {}
+  };
+}
+function parseWebhookRetainDays(yamlValue, env) {
+  const fromEnv = firstEnv(env, ["BAKORIN_WEBHOOK_RETAIN_DAYS"]);
+  const value = fromEnv ? Number(fromEnv) : yamlValue ?? WEBHOOK_DEFAULT_RETAIN_DAYS;
+  if (!Number.isInteger(value) || value < 1 || value > 3650) {
+    throw new SchemaError("runtime.webhooks.retainDays must be an integer from 1 to 3650");
+  }
+  return value;
+}
+function parseMailRetainDays(yamlValue, env) {
+  const fromEnv = firstEnv(env, ["BAKORIN_MAIL_RETAIN_DAYS"]);
+  const value = fromEnv ? Number(fromEnv) : yamlValue ?? MAIL_DEFAULT_RETAIN_DAYS;
+  if (!Number.isInteger(value) || value < 1 || value > 3650) {
+    throw new SchemaError("runtime.mail.retainDays must be an integer from 1 to 3650");
+  }
+  return value;
+}
+var MAIL_TEMPLATE_TOKEN = /\{\{\{?\s*([^}]*?)\s*\}?\}\}/g;
+var MAIL_ROOTS = new Set(["record", "before", "expand", "event", "app"]);
+function listOf(value) {
+  if (value === undefined) {
+    return [];
+  }
+  return Array.isArray(value) ? value : [value];
+}
+function checkMailPlaceholders(label, value, expand, entity) {
+  for (const match of value.matchAll(MAIL_TEMPLATE_TOKEN)) {
+    const path = (match[1] ?? "").trim();
+    if (match[0].startsWith("{{{")) {
+      throw new SchemaError(`${label}: raw {{{ }}} output is not allowed here, use {{ ${path} }}`);
+    }
+    if (path.startsWith("#") || path.startsWith("/") || path === "else") {
+      throw new SchemaError(`${label}: blocks like {{#if}} are only allowed in template files`);
+    }
+    const parts = path.split(".");
+    const root = parts[0] ?? "";
+    if (!MAIL_ROOTS.has(root)) {
+      throw new SchemaError(`${label}: {{ ${path} }} must start with record, before, expand, event, or app`);
+    }
+    if ((root === "record" || root === "before") && parts[1] && !entity.fieldMap[parts[1]]) {
+      throw new SchemaError(`${label}: {{ ${path} }} references unknown field ${entity.name}.${parts[1]}`);
+    }
+    if (root === "expand" && parts[1] && !expand.includes(parts[1])) {
+      throw new SchemaError(`${label}: {{ ${path} }} needs "${parts[1]}" in the rule's expand list`);
+    }
+  }
+}
+function compileMailRules(yaml, entityMap) {
+  const seen = new Set;
+  return (yaml.mail ?? []).map((rule, index) => {
+    const id = rule.name ?? `mail_${index + 1}`;
+    const label = `mail rule ${rule.name ? `"${rule.name}"` : `#${index + 1}`}`;
+    if (seen.has(id)) {
+      throw new SchemaError(`${label}: name ${id} is used by more than one mail rule`);
+    }
+    seen.add(id);
+    const entity = entityMap[rule.entity];
+    if (!entity) {
+      const known = Object.keys(entityMap).join(", ");
+      throw new SchemaError(`${label}: entity ${rule.entity} does not exist (known entities: ${known})`);
+    }
+    const expand = rule.expand ?? [];
+    for (const name of expand) {
+      const field = entity.fieldMap[name];
+      if (!field) {
+        throw new SchemaError(`${label}: expand field ${entity.name}.${name} does not exist`);
+      }
+      if (!field.relation) {
+        throw new SchemaError(`${label}: expand field ${entity.name}.${name} must be a relation field`);
+      }
+    }
+    const changed = rule.changed ?? [];
+    for (const name of changed) {
+      if (!entity.fieldMap[name]) {
+        throw new SchemaError(`${label}: changed field ${entity.name}.${name} does not exist`);
+      }
+    }
+    if (changed.length > 0 && (rule.events.length !== 1 || rule.events[0] !== "update")) {
+      throw new SchemaError(`${label}: changed only works with events: [update]`);
+    }
+    const when = [];
+    for (const [field, condition] of Object.entries(rule.when ?? {})) {
+      const target = entity.fieldMap[field];
+      if (!target) {
+        throw new SchemaError(`${label}: when field ${entity.name}.${field} does not exist`);
+      }
+      if (target.secret || target.type === "password") {
+        throw new SchemaError(`${label}: when cannot test secret field ${entity.name}.${field}`);
+      }
+      if (condition === null || typeof condition !== "object") {
+        when.push({ field, op: "equals", value: condition });
+        continue;
+      }
+      const ops = Object.keys(condition);
+      if (ops.length !== 1) {
+        throw new SchemaError(`${label}: when.${field} must use exactly one of equals, not, in, notIn, or exists`);
+      }
+      if (condition.in) {
+        when.push({ field, op: "in", values: condition.in });
+      } else if (condition.notIn) {
+        when.push({ field, op: "notIn", values: condition.notIn });
+      } else if (condition.exists !== undefined) {
+        when.push({ field, op: "exists", exists: condition.exists });
+      } else if ("not" in condition) {
+        when.push({ field, op: "not", value: condition.not ?? null });
+      } else {
+        when.push({ field, op: "equals", value: condition.equals ?? null });
+      }
+    }
+    const to = listOf(rule.to);
+    const cc = listOf(rule.cc);
+    const bcc = listOf(rule.bcc);
+    for (const [key, values] of [["to", to], ["cc", cc], ["bcc", bcc]]) {
+      for (const value of values) {
+        checkMailPlaceholders(`${label} ${key}`, value, expand, entity);
+      }
+    }
+    if (rule.replyTo) {
+      checkMailPlaceholders(`${label} replyTo`, rule.replyTo, expand, entity);
+    }
+    if (rule.subject) {
+      checkMailPlaceholders(`${label} subject`, rule.subject, expand, entity);
+    }
+    return {
+      id,
+      entity: entity.name,
+      events: rule.events,
+      to,
+      cc,
+      bcc,
+      replyTo: rule.replyTo,
+      subject: rule.subject,
+      template: rule.template,
+      when,
+      changed,
+      expand,
+      maxAttempts: rule.maxAttempts ?? MAIL_DEFAULT_MAX_ATTEMPTS
+    };
+  });
 }
 function parseCorsOrigins(yamlOrigins, env) {
   const fromEnv = firstEnv(env, ["CORS_ORIGINS"]);
@@ -873,7 +1363,8 @@ function compileAppYaml(source, options = {}) {
       fieldMap,
       policies,
       indexes: compileIndexes(name, fieldMap, raw.indexes),
-      deprecated: false
+      deprecated: false,
+      ...raw.renameFrom ? { renameFrom: raw.renameFrom } : {}
     };
   });
   const entityMap = Object.fromEntries(entities.map((entity) => [entity.name, entity]));
@@ -895,20 +1386,25 @@ function compileAppYaml(source, options = {}) {
       entity: hook.entity,
       events: hook.events,
       url: hook.url,
-      secret: hook.secret
+      secret: hook.secret,
+      maxAttempts: hook.maxAttempts ?? WEBHOOK_DEFAULT_MAX_ATTEMPTS,
+      timeoutMs: hook.timeoutMs ?? WEBHOOK_DEFAULT_TIMEOUT_MS
     };
   });
+  const mail = compileMailRules(yaml, entityMap);
   return {
     version: SCHEMA_AST_VERSION,
     appName: yaml.app.name,
     appVersion: yaml.app.version ?? "0.1.0",
     appDescription: yaml.app.description,
+    ...yaml.branding ? { branding: compileBranding(yaml.branding) } : {},
     runtime,
     entities,
     entityMap,
     order,
     auth,
-    webhooks
+    webhooks,
+    mail
   };
 }
 function serializeAst(ast) {
@@ -917,11 +1413,13 @@ function serializeAst(ast) {
     appName: ast.appName,
     appVersion: ast.appVersion,
     appDescription: ast.appDescription,
-    runtime: ast.runtime,
+    branding: ast.branding,
+    runtime: redactRuntime(ast.runtime),
     entities: ast.entities,
     order: ast.order,
     auth: ast.auth,
-    webhooks: ast.webhooks
+    webhooks: ast.webhooks,
+    mail: ast.mail
   });
 }
 function deserializeAst(raw) {
@@ -958,6 +1456,17 @@ function deserializeAst(raw) {
   }
   if (!parsed.runtime.files.signedUrlTtlSeconds) {
     parsed.runtime.files.signedUrlTtlSeconds = 900;
+  }
+  if (!parsed.runtime.webhooksRetainDays) {
+    parsed.runtime.webhooksRetainDays = WEBHOOK_DEFAULT_RETAIN_DAYS;
+  }
+  if (!parsed.runtime.mailRetainDays) {
+    parsed.runtime.mailRetainDays = MAIL_DEFAULT_RETAIN_DAYS;
+  }
+  parsed.mail = parsed.mail ?? [];
+  for (const hook of parsed.webhooks ?? []) {
+    hook.maxAttempts = hook.maxAttempts ?? WEBHOOK_DEFAULT_MAX_ATTEMPTS;
+    hook.timeoutMs = hook.timeoutMs ?? WEBHOOK_DEFAULT_TIMEOUT_MS;
   }
   return parsed;
 }
@@ -1001,13 +1510,6 @@ function typeCompatible(from, to) {
   }
   return true;
 }
-function enumOnlyAdded(from, to) {
-  if (from.type !== "enum" || to.type !== "enum") {
-    return false;
-  }
-  const oldValues = new Set(from.enumValues ?? []);
-  return (to.enumValues ?? []).every((value) => oldValues.has(value)) === false ? (from.enumValues ?? []).every((value) => (to.enumValues ?? []).includes(value)) : from.enumValues?.join() === to.enumValues?.join();
-}
 function diffSchemas(from, to) {
   const plan = { auto: [], safe: [], deprecate: [], abort: [] };
   if (!from) {
@@ -1023,17 +1525,13 @@ function diffSchemas(from, to) {
   const toEntities = new Map(to.entities.map((entity) => [entity.name, entity]));
   const consumedFrom = new Set;
   for (const next of to.entities) {
-    const renameFrom = next.fields.find((field) => field.renameFrom && field.renameFrom === next.name);
     let prev = fromEntities.get(next.name);
-    if (!prev) {
-      const renamed = from.entities.find((candidate) => {
-        if (consumedFrom.has(candidate.name)) {
-          return false;
-        }
-        const overlap = candidate.fields.filter((field) => next.fieldMap[field.name] || next.fields.some((n) => n.renameFrom === field.name));
-        return overlap.length >= Math.min(2, candidate.fields.length) && candidate.auth === next.auth;
-      });
-      if (renamed && next.fields.some((field) => field.renameFrom)) {}
+    if (!prev && next.renameFrom) {
+      const old = fromEntities.get(next.renameFrom);
+      if (old && !toEntities.has(old.name) && !consumedFrom.has(old.name)) {
+        plan.safe.push({ tier: "safe", kind: "rename_entity", from: old.name, to: next.name });
+        prev = old;
+      }
     }
     if (!prev) {
       plan.auto.push({ tier: "auto", kind: "add_entity", entity: next });
@@ -1047,7 +1545,95 @@ function diffSchemas(from, to) {
       plan.deprecate.push({ tier: "deprecate", kind: "drop_entity", entity: prev.name });
     }
   }
+  addRenameHints(plan);
   return plan;
+}
+function addRenameHints(plan) {
+  for (const change of plan.deprecate) {
+    if (change.kind !== "drop_field") {
+      continue;
+    }
+    const added = plan.auto.find((item) => item.kind === "add_field" && item.entity === change.entity);
+    if (added && added.kind === "add_field") {
+      change.hint = `if ${change.entity}.${added.field.name} is ${change.field} renamed, add renameFrom: ${change.field} to it instead`;
+    }
+  }
+  for (const change of plan.deprecate) {
+    if (change.kind !== "drop_entity") {
+      continue;
+    }
+    const added = plan.auto.find((item) => item.kind === "add_entity");
+    if (added && added.kind === "add_entity") {
+      change.hint = `if ${added.entity.name} is ${change.entity} renamed, add renameFrom: ${change.entity} to the entity instead`;
+    }
+  }
+}
+function describeChange(change) {
+  switch (change.kind) {
+    case "add_entity":
+      return `add entity ${change.entity.name}`;
+    case "add_field":
+      return `add field ${change.entity}.${change.field.name} (${change.field.type})`;
+    case "add_index":
+      return `add index on ${change.entity} (${change.fields.join(", ")})`;
+    case "rename_entity":
+      return `rename entity ${change.from} to ${change.to}`;
+    case "rename_field":
+      return `rename field ${change.entity}.${change.from} to ${change.entity}.${change.to}`;
+    case "drop_entity":
+      return `remove entity ${change.entity} (the table stays in the database but the API stops serving it)`;
+    case "drop_field":
+      return `remove field ${change.entity}.${change.field} (the column stays in the database but the API stops serving it)`;
+    case "remove_enum_values":
+      return `remove enum values ${change.values.join(", ")} from ${change.entity}.${change.field} (existing rows keep them)`;
+    case "breaking":
+      return change.message;
+    default: {
+      const _never = change;
+      return String(_never);
+    }
+  }
+}
+function needsConfirmation(plan) {
+  return plan.deprecate.length > 0;
+}
+function touchesExistingData(plan) {
+  return plan.safe.length > 0 || plan.deprecate.length > 0;
+}
+function destructiveCode(plan) {
+  const text = plan.deprecate.map((change) => describeChange(change)).sort().join(`
+`);
+  let hash = 2166136261;
+  for (let i = 0;i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619) >>> 0;
+  }
+  return hash.toString(16).padStart(8, "0");
+}
+function formatPlan(plan) {
+  const lines = [];
+  const section = (title, changes) => {
+    if (changes.length === 0) {
+      return;
+    }
+    lines.push(title);
+    for (const change of changes) {
+      lines.push(`  - ${describeChange(change)}`);
+      const hint = change.hint;
+      if (hint) {
+        lines.push(`    hint: ${hint}`);
+      }
+    }
+  };
+  section("Additive, applied automatically:", plan.auto);
+  section("Renames declared with renameFrom, applied automatically after a backup:", plan.safe);
+  section("Removals, need confirmation:", plan.deprecate);
+  section("Blocked, cannot be applied without losing data:", plan.abort);
+  if (lines.length === 0) {
+    lines.push("No schema changes.");
+  }
+  return lines.join(`
+`);
 }
 function diffEntity(prev, next, plan) {
   const prevFields = new Map(prev.fields.map((field) => [field.name, field]));
@@ -1119,7 +1705,7 @@ function compareField(entity, from, to, plan) {
     plan.abort.push({
       tier: "abort",
       kind: "breaking",
-      message: `cannot change ${entity}.${from.name} from ${from.type} to ${to.type}`
+      message: `cannot change ${entity}.${from.name} from ${from.type} to ${to.type}. Add a new field, copy the data in a hook or script, then remove the old one`
     });
     return;
   }
@@ -1132,12 +1718,8 @@ function compareField(entity, from, to, plan) {
   }
   if (from.type === "enum" && to.type === "enum") {
     const removed = (from.enumValues ?? []).filter((value) => !(to.enumValues ?? []).includes(value));
-    if (removed.length > 0 && !enumOnlyAdded(from, to)) {
-      plan.abort.push({
-        tier: "abort",
-        kind: "breaking",
-        message: `cannot remove enum values ${removed.join(", ")} from ${entity}.${from.name}`
-      });
+    if (removed.length > 0) {
+      plan.deprecate.push({ tier: "deprecate", kind: "remove_enum_values", entity, field: to.name, values: removed });
     }
   }
   if (!from.unique && to.unique) {
@@ -1241,35 +1823,157 @@ ${writeMap}
 export type BakorinEntityName = keyof BakorinEntities;
 `;
 }
+// src/schema-graph.ts
+function buildSchemaGraph(ast) {
+  const layers = topologicalLayers(ast.entities);
+  const entities = ast.entities.map((entity) => ({
+    name: entity.name,
+    label: entity.label,
+    plural: entity.plural,
+    display: entity.display,
+    description: entity.description,
+    auth: entity.auth,
+    fields: entity.fields.map((field) => ({
+      name: field.name,
+      type: field.type,
+      displayType: field.secret ? "hidden" : field.type,
+      required: field.required,
+      unique: field.unique,
+      secret: field.secret,
+      description: field.description,
+      relation: field.relation ? { to: field.relation.to, onDelete: field.relation.onDelete } : undefined
+    })),
+    indexes: entity.indexes,
+    policies: {
+      read: entity.policies.read.map(describePolicy),
+      create: entity.policies.create.map(describePolicy),
+      update: entity.policies.update.map(describePolicy),
+      delete: entity.policies.delete.map(describePolicy)
+    }
+  }));
+  const relations = [];
+  for (const entity of ast.entities) {
+    for (const field of entity.fields) {
+      if (!field.relation) {
+        continue;
+      }
+      relations.push({
+        from: entity.name,
+        field: field.name,
+        to: field.relation.to,
+        onDelete: field.relation.onDelete
+      });
+    }
+  }
+  return {
+    app: { name: ast.appName, version: ast.appVersion },
+    order: layers.flat(),
+    layers,
+    entities,
+    relations,
+    webhooks: ast.webhooks.map((hook) => ({
+      id: hook.id,
+      entity: String(hook.entity),
+      events: hook.events
+    }))
+  };
+}
+function mermaidIdent(name) {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(name) ? name : JSON.stringify(name);
+}
+function schemaToMermaid(graph) {
+  const lines = ["erDiagram"];
+  for (const entity of graph.entities) {
+    lines.push(`  ${mermaidIdent(entity.name)} {`);
+    for (const field of entity.fields) {
+      const flags = [];
+      if (field.name === "id") {
+        flags.push("PK");
+      }
+      if (field.unique && field.name !== "id") {
+        flags.push("UK");
+      }
+      if (field.relation) {
+        flags.push("FK");
+      }
+      const type = mermaidIdent(field.displayType);
+      const extra = flags.length > 0 ? ` ${flags.join(",")}` : "";
+      lines.push(`    ${type} ${mermaidIdent(field.name)}${extra}`);
+    }
+    lines.push("  }");
+  }
+  for (const rel of graph.relations) {
+    const label = `${rel.field} ${rel.onDelete}`;
+    lines.push(`  ${mermaidIdent(rel.from)} }o--|| ${mermaidIdent(rel.to)} : "${label}"`);
+  }
+  return `${lines.join(`
+`)}
+`;
+}
+function schemaToJson(graph) {
+  return `${JSON.stringify(graph, null, 2)}
+`;
+}
+function webhooksForEntity(graph, entityName) {
+  return graph.webhooks.filter((hook) => hook.entity === entityName || hook.entity === "*");
+}
 export {
   APP_YAML_TOP_LEVEL_KEYS,
+  BRANDING_DIR,
+  BRANDING_FAVICON_EXTENSIONS,
+  BRANDING_LOGO_EXTENSIONS,
+  BRANDING_MAX_FILE_BYTES,
+  BRANDING_SURFACES,
   BakorinError,
   DEFAULT_ALLOWED_MIME_TYPES,
   DEV_JWT_SECRET,
+  DestructiveChangeError,
   DiffAbortError,
   FIELD_TYPES,
   IdentError,
+  MAIL_DEFAULT_MAX_ATTEMPTS,
+  MAIL_DEFAULT_RETAIN_DAYS,
   SCHEMA_AST_VERSION,
   SchemaError,
+  WEBHOOK_DEFAULT_MAX_ATTEMPTS,
+  WEBHOOK_DEFAULT_RETAIN_DAYS,
+  WEBHOOK_DEFAULT_TIMEOUT_MS,
   appYamlSchema,
   assertIdent,
   assertPlanApplyable,
+  brandName,
+  brandingCss,
+  buildSchemaGraph,
   compileAppYaml,
+  compileBranding,
+  contrastRatio,
+  describeChange,
   describePolicy,
   deserializeAst,
+  destructiveCode,
   diffSchemas,
+  ensureContrast,
   formatAppYamlError,
+  formatPlan,
   formatZodError,
   generateTypes,
   interpolateEnv,
   invalidPolicyMessage,
   isAppYamlValidationError,
+  isHexColor,
   isIdent,
+  needsConfirmation,
+  normalizeHex,
   parsePolicies,
   parsePolicy,
   policyRequiresAuth,
   quoteChecked,
   quoteIdent,
+  schemaToJson,
+  schemaToMermaid,
   serializeAst,
-  topologicalOrder
+  topologicalLayers,
+  topologicalOrder,
+  touchesExistingData,
+  webhooksForEntity
 };

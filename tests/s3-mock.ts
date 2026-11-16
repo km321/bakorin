@@ -68,7 +68,7 @@ export function startS3Mock(bucket = "bakorin"): S3Mock {
         if (!bytes) {
           return new Response("not found", { status: 404 });
         }
-        return new Response(bytes);
+        return new Response(bytes as BodyInit);
       }
       if (request.method === "PUT") {
         const bytes = new Uint8Array(await request.arrayBuffer());

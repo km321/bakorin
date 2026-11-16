@@ -10,7 +10,7 @@ import {
 import { formatDateTime } from "../lib/format.ts";
 import { pushToast } from "../lib/toast.ts";
 
-type StatusFilter = "all" | "pending" | "delivered" | "failed";
+type StatusFilter = "all" | "pending" | "delivered" | "failed" | "discarded";
 
 function statusLabel(status: WebhookDelivery["status"]): string {
   switch (status) {
@@ -20,6 +20,8 @@ function statusLabel(status: WebhookDelivery["status"]): string {
       return "Delivered";
     case "failed":
       return "Failed";
+    case "discarded":
+      return "Discarded";
     default: {
       const exhaustive: never = status;
       return exhaustive;
@@ -95,7 +97,7 @@ export function Webhooks() {
     }
   }
 
-  const filters: StatusFilter[] = ["all", "pending", "delivered", "failed"];
+  const filters: StatusFilter[] = ["all", "pending", "delivered", "failed", "discarded"];
 
   return (
     <>

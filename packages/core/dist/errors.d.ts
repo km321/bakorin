@@ -12,3 +12,8 @@ export declare class DiffAbortError extends BakorinError {
 export declare class IdentError extends BakorinError {
     constructor(message: string, details?: unknown);
 }
+/** Schema changes that remove data from the API need an explicit confirmation code. */
+export declare class DestructiveChangeError extends BakorinError {
+    readonly confirmCode: string;
+    constructor(message: string, confirmCode: string, details?: unknown);
+}

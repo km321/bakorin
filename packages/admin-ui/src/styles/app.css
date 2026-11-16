@@ -1460,3 +1460,132 @@ textarea:focus {
   height: auto;
   flex: 0 0 auto;
 }
+
+/* Status page */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.stat-grid.two {
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.stat-card {
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: var(--space-4);
+}
+
+.stat-card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.stat-card p {
+  margin: 0;
+}
+
+.stat-value {
+  font-size: var(--text-lg);
+  font-weight: 650;
+  color: var(--text);
+  margin-bottom: var(--space-1) !important;
+  overflow-wrap: anywhere;
+}
+
+.section-title {
+  font-size: var(--text-md);
+  font-weight: 650;
+  margin: var(--space-5) 0 var(--space-3);
+  color: var(--text);
+}
+
+.queue-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.queue-counts dt {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.queue-counts dd {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-lg);
+  font-weight: 650;
+  color: var(--text);
+}
+
+.queue-counts .bad dd,
+.queue-counts .bad dt {
+  color: var(--danger);
+}
+
+.problem-list {
+  margin: var(--space-2) 0 0;
+  padding-left: 18px;
+}
+
+.setup-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+  font-size: var(--text-md);
+}
+
+.badge.status-discarded {
+  background: var(--badge-no-bg);
+  color: var(--badge-no-fg);
+}
+
+@media (max-width: 640px) {
+  .queue-counts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.status-banner {
+  margin-bottom: var(--space-4);
+}
+
+.status-table td.wrap {
+  white-space: normal;
+  min-width: 180px;
+}
+
+.status-table td.actions {
+  max-width: none;
+  overflow: visible;
+}
+
+.status-table td.actions .row-actions {
+  flex-wrap: nowrap;
+}
+
+.muted.small {
+  font-size: var(--text-xs);
+}
+
+.toolbar > .btn {
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.status-table td.target-cell {
+  max-width: 200px;
+}
+
+.status-table td.label-cell {
+  max-width: 220px;
+}

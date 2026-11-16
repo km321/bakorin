@@ -197,7 +197,7 @@ entities:
     );
     await writeFile(join(dir, "hooks.ts"), "export default { entities: {} };\n");
     await mkdir(join(dir, "data"), { recursive: true });
-    const env = { ...process.env, NODE_ENV: "development", BAKORIN_ENV: "development" };
+    const env: Record<string, string | undefined> = { ...process.env, NODE_ENV: "development", BAKORIN_ENV: "development" };
     delete env.JWT_SECRET;
     const proc = Bun.spawn(["bun", join(import.meta.dir, "../packages/server/src/cli.ts"), "dev", "--dir", dir, "--port", "43991"], {
       cwd: dir,

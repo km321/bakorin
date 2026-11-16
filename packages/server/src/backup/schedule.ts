@@ -6,7 +6,9 @@ import { createS3FileStore, parseS3Url, pruneS3Backups, type FileStore } from ".
 import { resolveRuntimePath } from "../paths.ts";
 import { acquireLease, instanceHolder, releaseLease } from "../db/leases.ts";
 import { writeAudit } from "../audit/log.ts";
+import { metaSet } from "../db/system.ts";
 import { exportPortable, pruneBackups } from "./archive.ts";
+import { sealBackup } from "./integrity.ts";
 import { backupSqlite } from "./sqlite.ts";
 
 function stamp(): string {
@@ -35,6 +37,8 @@ export async function runBackup(options: {
   files: FileStore;
   projectDir: string;
   destination?: string;
+  /** Recorded in the manifest: "manual", "scheduled", "pre-migration", "pre-restore". */
+  reason?: string;
 }): Promise<string> {
   const destRoot = options.destination ?? options.ast.runtime.backups.destination;
   const remote = destRoot.startsWith("s3://");
@@ -49,6 +53,7 @@ export async function runBackup(options: {
       dest,
       ast: options.ast,
       uploadsPath: resolveRuntimePath(options.projectDir, options.ast.runtime.files.path),
+      reason: options.reason,
     });
     await exportPortable({
       dest: join(dest, "portable"),
@@ -56,7 +61,9 @@ export async function runBackup(options: {
       ast: options.ast,
       db: options.db,
       files: options.files,
+      reason: options.reason,
     });
+    await sealBackup(dest);
   } else {
     await exportPortable({
       dest,
@@ -64,6 +71,7 @@ export async function runBackup(options: {
       ast: options.ast,
       db: options.db,
       files: options.files,
+      reason: options.reason,
     });
   }
   if (remote) {
@@ -74,12 +82,24 @@ export async function runBackup(options: {
     await pruneS3Backups(store, prefix, options.ast.runtime.backups.retain);
     await rm(join(options.projectDir, ".tmp-backup"), { recursive: true, force: true });
     const location = `s3://${bucket}/${keyPrefix}`;
-    await writeAudit(options.db, { action: "backup", meta: { location, remote: true } });
+    await writeAudit(options.db, { action: "backup", meta: { location, remote: true, reason: options.reason ?? "manual" } });
+    await recordBackup(options.db, location);
     return location;
   }
   await pruneBackups(localRoot, options.ast.runtime.backups.retain);
-  await writeAudit(options.db, { action: "backup", meta: { location: dest, remote: false } });
+  await writeAudit(options.db, { action: "backup", meta: { location: dest, remote: false, reason: options.reason ?? "manual" } });
+  await recordBackup(options.db, dest);
   return dest;
+}
+
+/** Remembers the last successful backup for the Status page and alerts. */
+async function recordBackup(db: BakorinDb, location: string): Promise<void> {
+  try {
+    await metaSet(db, "last_backup_at", new Date().toISOString());
+    await metaSet(db, "last_backup_location", location);
+  } catch (error) {
+    console.error("[bakorin] could not record backup time", error);
+  }
 }
 
 export function startBackupScheduler(
@@ -103,7 +123,7 @@ export function startBackupScheduler(
           return;
         }
         try {
-          await runBackup(options);
+          await runBackup({ ...options, reason: "scheduled" });
         } catch (error: unknown) {
           console.error("[bakorin] scheduled backup failed", error);
         }

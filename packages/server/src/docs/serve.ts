@@ -1,10 +1,13 @@
 import { Hono } from "hono";
 import swaggerUiCss from "swagger-ui-dist/swagger-ui.css" with { type: "text" };
 import swaggerUiBundle from "swagger-ui-dist/swagger-ui-bundle.js" with { type: "text" };
-import pageHtml from "./page.html" with { type: "text" };
+import pageHtmlSource from "./page.html" with { type: "text" };
 import pageCss from "./page.css" with { type: "text" };
 import initJs from "./init.js" with { type: "text" };
 import themeJs from "./theme.js" with { type: "text" };
+
+// Bun types .html imports as an HTML bundle; with type "text" it is the file contents.
+const pageHtml = pageHtmlSource as unknown as string;
 import type { SchemaAST } from "@bakorin/core";
 import { brandName } from "@bakorin/core";
 import { injectBranding, publicBranding } from "../branding/assets.ts";

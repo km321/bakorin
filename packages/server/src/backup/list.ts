@@ -23,7 +23,8 @@ function stampToIso(stamp: string): string {
 
 function restoreCommand(location: string): string {
   if (location.startsWith("s3://")) {
-    return `bakorin restore <local-dir>  # copy ${location} locally first; restore is CLI-only`;
+    const id = location.replace(/\/+$/, "").split("/").pop() ?? "backup";
+    return `bakorin restore ./${id}.tar.gz  # download it from the Backups screen first`;
   }
   return `bakorin restore ${location}`;
 }

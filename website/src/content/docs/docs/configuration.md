@@ -61,6 +61,20 @@ Path style is the default. You can also set `runtime.files.pathStyle` or `runtim
 | `BAKORIN_BACKUP_PREFIX` | Object prefix inside the bucket. Default `backups` |
 | `BAKORIN_BACKUP_DESTINATION` | Override the destination (`./dir` or `s3://bucket/prefix`) |
 | `BAKORIN_WEBHOOK_RETAIN_DAYS` | How long delivered webhook rows are kept. Default 30 |
+| `BAKORIN_ALLOW_DESTRUCTIVE` | Confirmation code for a schema change that removes something. See [Schema changes](/docs/migrations/) |
+
+## Monitoring
+
+| Variable | Notes |
+|---|---|
+| `BAKORIN_REQUEST_LOG` | `json`, `pretty`, or `off`. Default `json` in production, `off` otherwise |
+| `SENTRY_DSN` | Send unhandled errors to Sentry. Off when unset |
+| `ERROR_WEBHOOK_URL` | Post unhandled errors as JSON. Off when unset |
+| `METRICS_TOKEN` | Serve Prometheus metrics at `/metrics` to requests with this bearer token |
+| `BAKORIN_COMMIT` | Commit shown on the Status page. Railway's `RAILWAY_GIT_COMMIT_SHA` is used when unset |
+| `BAKORIN_ALERT_EMAIL`, `BAKORIN_ALERT_WEBHOOK`, `BAKORIN_ALERT_BACKUP_MAX_AGE_HOURS` | Same as `runtime.alerts` |
+
+See [Monitoring](/docs/monitoring/).
 
 ## Example .env
 

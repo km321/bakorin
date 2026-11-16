@@ -63,6 +63,8 @@ export interface EntityAST {
   policies: Record<ActionName, PolicyAST[]>;
   indexes: string[][];
   deprecated: boolean;
+  /** Previous entity (table) name, declared in app.yaml to rename without losing data. */
+  renameFrom?: string;
 }
 
 export const WEBHOOK_DEFAULT_MAX_ATTEMPTS = 10;
@@ -129,6 +131,14 @@ export interface BackupRuntimeAST {
   destination: string;
 }
 
+/** Optional alerts for a failing outbox or overdue backups. Off unless email or webhook is set. */
+export interface AlertsRuntimeAST {
+  email: string[];
+  webhook?: string;
+  backupMaxAgeHours: number | null;
+  checkIntervalMinutes: number;
+}
+
 export interface RuntimeAST {
   dialect: DialectName;
   host: string;
@@ -146,6 +156,7 @@ export interface RuntimeAST {
   appUrl: string;
   webhooksRetainDays: number;
   mailRetainDays: number;
+  alerts: AlertsRuntimeAST;
 }
 
 export interface AuthAST {

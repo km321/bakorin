@@ -5,7 +5,7 @@ description: Build and run the Bakorin image anywhere Docker runs, including Fly
 
 Every scaffolded project includes a `Dockerfile` and `docker-compose.yml`. The image runs `bakorin start`, listens on `PORT`, stores SQLite under `BAKORIN_DATA_DIR`, and uses S3 for uploads and backups when bucket credentials are set.
 
-Health checks: `GET /health` (also `/healthz`).
+Health checks: `GET /health` (also `/healthz`) for liveness, and `GET /ready` for readiness (checks the database and storage, returns 503 when either fails). See [Monitoring](/docs/monitoring/).
 
 ## Run locally
 

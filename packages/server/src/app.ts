@@ -5,7 +5,7 @@ import { sql } from "kysely";
 import { compileAppYaml, SchemaError, type SchemaAST } from "@bakorin/core";
 import { createChangeBus } from "./bus.ts";
 import { openPostgres, openSqlite, type BakorinDb } from "./db/dialects.ts";
-import { migrateToSchema } from "./db/migrator.ts";
+import { migrateToSchema, type MigrateOptions } from "./db/migrator.ts";
 import { createAuthRoutes, verifyAccessToken } from "./auth/routes.ts";
 import { createAccountRoutes } from "./auth/account.ts";
 import { createMailer, mailFrom } from "./mail/create.ts";
@@ -27,9 +27,14 @@ import { validateMailTemplates } from "./mail/files.ts";
 import { createMailApi, startMailWorker, subscribeMail } from "./mail/outbox.ts";
 import { createMailRoutes } from "./mail/routes.ts";
 import type { AppContext } from "./context.ts";
-import { startBackupScheduler } from "./backup/schedule.ts";
+import { runBackup, startBackupScheduler } from "./backup/schedule.ts";
 import { resolveRuntimePath } from "./paths.ts";
 import { securityHeaders } from "./http/headers.ts";
+import { HTTPException } from "hono/http-exception";
+import { createMonitor, resolveCommit } from "./monitor/monitor.ts";
+import { createStatusRoutes, metricsExtras, readiness } from "./monitor/status.ts";
+import { startAlertWorker } from "./monitor/alerts.ts";
+import { serverVersion } from "./version.ts";
 import { createBrandingRoutes, logBrandingWarnings, validateBrandingFiles } from "./branding/assets.ts";
 
 export interface RuntimeHandles {
@@ -41,7 +46,7 @@ export interface RuntimeHandles {
   context: AppContext;
 }
 
-function createFiles(ast: SchemaAST, projectDir: string): FileStore {
+export function createFiles(ast: SchemaAST, projectDir: string): FileStore {
   if (ast.runtime.files.driver === "s3") {
     return createS3FileStore({
       bucket: ast.runtime.files.bucket ?? "",
@@ -55,7 +60,7 @@ function createFiles(ast: SchemaAST, projectDir: string): FileStore {
   return createLocalFileStore(resolveRuntimePath(projectDir, ast.runtime.files.path));
 }
 
-function openDb(ast: SchemaAST, projectDir: string): { db: BakorinDb; close: () => Promise<void> } {
+export function openDb(ast: SchemaAST, projectDir: string): { db: BakorinDb; close: () => Promise<void> } {
   if (ast.runtime.dialect === "postgres") {
     const { db } = openPostgres(ast.runtime.postgresUrl ?? "");
     return {
@@ -94,14 +99,25 @@ export async function createRuntime(options: {
   validateBrandingFiles(projectDir, ast.branding);
   logBrandingWarnings(ast.branding);
   let opened = openDb(ast, projectDir);
-  await migrateToSchema(opened.db, ast);
+  let files = createFiles(ast, projectDir);
+  try {
+    await migrateToSchema(opened.db, ast, migrationOptions(ast, opened.db, files, projectDir, env));
+  } catch (error) {
+    await opened.close();
+    throw error;
+  }
   await seedAdminOrLog(ast, opened.db, env);
   const bus = createChangeBus();
   let hooks = await loadHooks(projectDir, ast.runtime.hooksPath);
-  let files = createFiles(ast, projectDir);
   const mailer = createMailer(env, mailFrom(env, ast.appName));
   const mail = createMailApi(opened.db, () => context.ast, projectDir);
-  const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir, mailer, mail };
+  const monitor = createMonitor({
+    env,
+    appName: () => context.ast.appName,
+    version: serverVersion(env),
+    commit: resolveCommit(env),
+  });
+  const context: AppContext = { ast, db: opened.db, bus, hooks, files, projectDir, mailer, mail, monitor };
   subscribeWebhooks(() => context.ast, opened.db, (handler) => bus.subscribe(handler));
   subscribeMail(() => context.ast, opened.db, projectDir, (handler) => bus.subscribe(handler));
   subscribeAfterHooks(hooks, opened.db, (handler) => bus.subscribe(handler), mail);
@@ -111,8 +127,25 @@ export async function createRuntime(options: {
   const stopBackups = workers ? startBackupScheduler({ ast, db: opened.db, files, projectDir }) : noop;
   const stopWebhooks = workers ? startWebhookWorker(opened.db, () => context.ast) : noop;
   const stopMail = workers ? startMailWorker(opened.db, () => context.ast, () => context.mailer) : noop;
+  const stopAlerts = workers ? startAlertWorker(context, monitor) : noop;
 
   const app = new Hono();
+  app.use("*", monitor.middleware());
+  app.onError((error, c) => {
+    if (error instanceof HTTPException) {
+      return error.getResponse();
+    }
+    const requestId = c.get("requestId");
+    monitor.captureError(error, {
+      requestId,
+      method: c.req.method,
+      path: new URL(c.req.url).pathname,
+      status: 500,
+      source: "request",
+    });
+    console.error(`[bakorin] unhandled error (request ${requestId})`, error);
+    return c.json({ error: { code: "internal", message: "Something went wrong on the server.", requestId } }, 500);
+  });
   app.use("*", cors(corsOptions(ast.runtime.corsOrigins)));
   app.use("*", securityHeaders());
   app.use("*", async (c, next) => {
@@ -132,6 +165,21 @@ export async function createRuntime(options: {
   });
   app.get("/health", (c) => c.json({ ok: true, app: context.ast.appName }));
   app.get("/healthz", (c) => c.json({ ok: true, app: context.ast.appName }));
+  app.get("/ready", async (c) => {
+    const result = await readiness(context);
+    return c.json(result, result.ok ? 200 : 503, { "cache-control": "no-store" });
+  });
+  app.get("/metrics", async (c) => {
+    if (!monitor.metricsEnabled) {
+      return c.notFound();
+    }
+    if (!monitor.authorizeMetrics(c.req.header("authorization"))) {
+      return c.text("unauthorized", 401, { "www-authenticate": 'Bearer realm="metrics"' });
+    }
+    const body = monitor.metricsText(await metricsExtras(context, monitor));
+    return c.body(body, 200, { "content-type": "text/plain; version=0.0.4; charset=utf-8", "cache-control": "no-store" });
+  });
+  app.route("/api/v1/status", createStatusRoutes(monitor));
   app.get("/docs", () => docsIndex(context.ast));
   app.route("/docs", createDocsRoutes());
   app.route("/api/v1/docs", createDocsRoutes());
@@ -162,7 +210,7 @@ export async function createRuntime(options: {
       validateMailTemplates(projectDir, next.mail);
       validateBrandingFiles(projectDir, next.branding);
       logBrandingWarnings(next.branding);
-      await migrateToSchema(context.db, next);
+      await migrateToSchema(context.db, next, migrationOptions(next, context.db, context.files, projectDir, env));
       context.ast = next;
       context.hooks = await loadHooks(projectDir, next.runtime.hooksPath);
       console.log(`[bakorin] reloaded schema for ${next.appName}`);
@@ -171,7 +219,38 @@ export async function createRuntime(options: {
       stopBackups();
       stopWebhooks();
       stopMail();
+      stopAlerts();
+      await monitor.flush();
       await opened.close();
+    },
+  };
+}
+
+/**
+ * Removals need BAKORIN_ALLOW_DESTRUCTIVE set to the plan's code. Renames and
+ * removals both take a backup first, using the schema that is live now.
+ */
+export function migrationOptions(
+  ast: SchemaAST,
+  db: BakorinDb,
+  files: FileStore,
+  projectDir: string,
+  env: Record<string, string | undefined>,
+  extra: { allowDestructive?: string } = {},
+): MigrateOptions {
+  const allow = extra.allowDestructive ?? env.BAKORIN_ALLOW_DESTRUCTIVE;
+  return {
+    ...(allow ? { allowDestructive: allow } : {}),
+    beforeChange: async (previous) => {
+      const location = await runBackup({
+        ast: { ...previous, appName: ast.appName, runtime: ast.runtime },
+        db,
+        files,
+        projectDir,
+        reason: "pre-migration",
+      });
+      console.log(`[bakorin] backup before schema change written to ${location}`);
+      return location;
     },
   };
 }

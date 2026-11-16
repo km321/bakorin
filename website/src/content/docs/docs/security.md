@@ -18,3 +18,7 @@ description: What Bakorin does to keep a client backend safe by default.
 - Webhook payloads strip secret fields, including password hashes, and signatures cover the timestamp to block replays.
 - Webhook delivery and scheduled backups take a database lease so a second instance does not double run.
 - `MAIL_DRIVER=resend` without `RESEND_API_KEY` refuses to start.
+- The schema copy stored in the database and in backups has JWT secrets, bucket keys, the database password, and the alert webhook replaced with `[redacted]`.
+- Backup downloads are admin only. The admin gets a link that works for 60 seconds for one backup, and the server checks again that the person is still an admin before it streams the file. There are no public backup URLs.
+- `bakorin restore` checks each file's sha256 before it changes anything, and takes a safety backup first.
+- Request logs and error reports leave out query strings, headers, bodies, and tokens. Error messages are scrubbed of email addresses and token looking strings. `/metrics` is off unless `METRICS_TOKEN` is set.

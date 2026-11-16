@@ -55,6 +55,8 @@ describe("create-bakorin", () => {
     expect(dockerfile).toContain("/bakorin/packages/server/src/cli.ts");
     expect(dockerfile).not.toContain("bunx");
     expect(dockerfile).toContain("COPY branding ./branding");
+    expect(dockerfile).toContain("COPY mail ./mail");
+    expect(await Bun.file(join(dir, "mail/README.md")).exists()).toBe(true);
     const brandingNotes = await Bun.file(join(dir, "branding/README.md")).text();
     expect(brandingNotes).toContain('primaryColor: "#0f766e"');
     expect(await Bun.file(join(dir, ".bakorin/packages/server/src/cli.ts")).exists()).toBe(true);
@@ -225,6 +227,7 @@ describe("create-bakorin", () => {
     const dockerfile = await Bun.file(join(dir, "Dockerfile")).text();
     expect(dockerfile).toContain("bunx");
     expect(dockerfile).toContain("COPY branding ./branding");
+    expect(dockerfile).toContain("COPY mail ./mail");
     expect(await Bun.file(join(dir, ".bakorin/package.json")).exists()).toBe(false);
   });
 

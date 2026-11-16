@@ -4,6 +4,7 @@ import { WEBHOOK_OUTBOX_TABLE } from "../db/system.ts";
 import {
   deliverById,
   enqueueWebhook,
+  discardDelivery,
   retryDelivery,
   sampleTestEvent,
   webhookHost,
@@ -38,6 +39,7 @@ function parseStatus(value: string | undefined): WebhookDeliveryStatus | undefin
     case "pending":
     case "delivered":
     case "failed":
+    case "discarded":
       return value;
     case undefined:
     case "":
@@ -53,6 +55,7 @@ function asStatus(value: unknown): WebhookDeliveryStatus {
     case "pending":
     case "delivered":
     case "failed":
+    case "discarded":
       return value;
     default:
       return "pending";
@@ -117,6 +120,23 @@ export function createWebhookRoutes(): Hono {
       data: rows.map((row) => viewDelivery(row)),
       meta: { total: Number(totalRow?.count ?? 0), limit, offset },
     });
+  });
+
+  app.post("/deliveries/:id/discard", async (c) => {
+    const denied = requireAdmin(c);
+    if (denied) {
+      return denied;
+    }
+    const ctx = c.get("app");
+    const id = c.req.param("id");
+    const result = await discardDelivery(ctx.db, id);
+    if (result === "missing") {
+      return c.json({ error: { code: "not_found", message: "delivery not found" } }, 404);
+    }
+    if (result === "not_failed") {
+      return c.json({ error: { code: "conflict", message: "only failed deliveries can be discarded" } }, 409);
+    }
+    return c.json({ data: { id, status: "discarded" } });
   });
 
   app.post("/deliveries/:id/retry", async (c) => {

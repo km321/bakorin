@@ -96,9 +96,23 @@ Optional flags: `required`, `unique`, `index`, `default`, `values` (enum), `to` 
 
 Defaults: 10 MiB, a small allow-list of image/PDF/text types, 15-minute signed URLs. Set `allowedMimeTypes: ["*"]` to allow any type. Private files are not served by session cookie; the upload response includes a signed `url`.
 
-## Diff tiers
+## Schema changes
 
-- auto: add entity, add optional/defaulted field, add index
-- safe: `renameFrom`
-- deprecate: dropped fields stay in the database
-- abort: type changes, required without default
+- Additive: add entity, add optional or defaulted field, add index, add enum value. Applied on start.
+- Renames: `renameFrom` on a field, or on an entity (`renameFrom: oldName` next to `fields`). Applied after an automatic backup.
+- Removals: dropped fields, entities, or enum values. Refused until confirmed with `bakorin migrate --allow-destructive <code>` or `BAKORIN_ALLOW_DESTRUCTIVE=<code>`. Data stays in the database.
+- Blocked: type changes, required without default, unique on an existing column.
+
+`bakorin migrate --plan` shows the plan. See [Schema changes](migrations.md).
+
+## Alerts
+
+```yaml
+runtime:
+  alerts:
+    email: ops@example.com
+    webhook: ${ALERT_WEBHOOK_URL}
+    backupMaxAgeHours: 48
+```
+
+See [Monitoring](monitoring.md#alerts).

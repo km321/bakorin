@@ -24,6 +24,7 @@ const STATUS_LABELS: Record<MailDeliveryStatus, string> = {
   sending: "Sending",
   sent: "Sent",
   failed: "Failed",
+  discarded: "Discarded",
 };
 
 const SYSTEM_LABELS: Record<string, string> = {
@@ -222,7 +223,7 @@ export function Mail({ meta }: { meta: MetaResponse | null }) {
   const isSystem = selection?.template.startsWith("_auth/") ?? false;
   const entityNames = meta?.entities.map((entity) => entity.name) ?? [];
   const activeRule = rules.find((rule) => rule.id === selection?.ruleId) ?? null;
-  const filters: StatusFilter[] = ["all", "pending", "sending", "sent", "failed"];
+  const filters: StatusFilter[] = ["all", "pending", "sending", "sent", "failed", "discarded"];
 
   return (
     <>

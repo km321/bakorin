@@ -9,6 +9,7 @@ export {
 export type {
   ActionName,
   AuthAST,
+  AlertsRuntimeAST,
   BackupRuntimeAST,
   ChangeEvent,
   ChangeOp,
@@ -31,9 +32,17 @@ export type {
 } from "./ast.ts";
 export { compileAppYaml, deserializeAst, serializeAst, DEFAULT_ALLOWED_MIME_TYPES, DEV_JWT_SECRET } from "./compile.ts";
 export type { CompileOptions } from "./compile.ts";
-export { assertPlanApplyable, diffSchemas } from "./diff.ts";
+export {
+  assertPlanApplyable,
+  describeChange,
+  destructiveCode,
+  diffSchemas,
+  formatPlan,
+  needsConfirmation,
+  touchesExistingData,
+} from "./diff.ts";
 export type { DiffChange, DiffPlan, DiffTier } from "./diff.ts";
-export { BakorinError, DiffAbortError, IdentError, SchemaError } from "./errors.ts";
+export { BakorinError, DestructiveChangeError, DiffAbortError, IdentError, SchemaError } from "./errors.ts";
 export { formatAppYamlError, formatZodError, isAppYamlValidationError } from "./format-schema.ts";
 export { assertIdent, isIdent, quoteChecked, quoteIdent } from "./ident.ts";
 export { interpolateEnv } from "./interpolate.ts";

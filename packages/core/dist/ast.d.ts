@@ -1,3 +1,4 @@
+import type { BrandingAST } from "./branding.ts";
 export declare const SCHEMA_AST_VERSION: 1;
 export type DialectName = "sqlite" | "postgres";
 export type FileDriver = "local" | "s3";
@@ -49,13 +50,45 @@ export interface EntityAST {
     policies: Record<ActionName, PolicyAST[]>;
     indexes: string[][];
     deprecated: boolean;
+    /** Previous entity (table) name, declared in app.yaml to rename without losing data. */
+    renameFrom?: string;
 }
+export declare const WEBHOOK_DEFAULT_MAX_ATTEMPTS = 10;
+export declare const WEBHOOK_DEFAULT_TIMEOUT_MS = 10000;
+export declare const WEBHOOK_DEFAULT_RETAIN_DAYS = 30;
 export interface WebhookAST {
     id: string;
     entity: string | "*";
     events: Array<"create" | "update" | "delete">;
     url: string;
     secret?: string;
+    maxAttempts: number;
+    timeoutMs: number;
+}
+export declare const MAIL_DEFAULT_MAX_ATTEMPTS = 8;
+export declare const MAIL_DEFAULT_RETAIN_DAYS = 30;
+export type MailScalar = string | number | boolean | null;
+export interface MailConditionAST {
+    field: string;
+    op: "equals" | "not" | "in" | "notIn" | "exists";
+    value?: MailScalar;
+    values?: MailScalar[];
+    exists?: boolean;
+}
+export interface MailRuleAST {
+    id: string;
+    entity: string;
+    events: Array<"create" | "update" | "delete">;
+    to: string[];
+    cc: string[];
+    bcc: string[];
+    replyTo?: string;
+    subject?: string;
+    template: string;
+    when: MailConditionAST[];
+    changed: string[];
+    expand: string[];
+    maxAttempts: number;
 }
 export interface FilesRuntimeAST {
     driver: FileDriver;
@@ -76,6 +109,13 @@ export interface BackupRuntimeAST {
     retain: number;
     destination: string;
 }
+/** Optional alerts for a failing outbox or overdue backups. Off unless email or webhook is set. */
+export interface AlertsRuntimeAST {
+    email: string[];
+    webhook?: string;
+    backupMaxAgeHours: number | null;
+    checkIntervalMinutes: number;
+}
 export interface RuntimeAST {
     dialect: DialectName;
     host: string;
@@ -91,6 +131,9 @@ export interface RuntimeAST {
     corsOrigins: string[];
     hooksPath?: string;
     appUrl: string;
+    webhooksRetainDays: number;
+    mailRetainDays: number;
+    alerts: AlertsRuntimeAST;
 }
 export interface AuthAST {
     entity: string;
@@ -105,12 +148,15 @@ export interface SchemaAST {
     appName: string;
     appVersion: string;
     appDescription?: string;
+    /** Present only when app.yaml has a branding section. */
+    branding?: BrandingAST;
     runtime: RuntimeAST;
     entities: EntityAST[];
     entityMap: Record<string, EntityAST>;
     order: string[];
     auth: AuthAST;
     webhooks: WebhookAST[];
+    mail: MailRuleAST[];
 }
 export type ChangeOp = "create" | "update" | "delete";
 export interface ChangeEvent {

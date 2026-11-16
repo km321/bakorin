@@ -14,7 +14,7 @@ export interface ClientOptions {
   getAccessToken?: () => Promise<string | null> | string | null;
   getRefreshToken?: () => Promise<string | null> | string | null;
   setTokens?: (tokens: AuthTokens) => Promise<void> | void;
-  fetch?: typeof fetch;
+  fetch?: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>;
 }
 
 export interface Query {

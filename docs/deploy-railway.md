@@ -19,7 +19,9 @@ SQLite on the volume is the default. A Postgres plugin is optional (`DATABASE_UR
 | `CORS_ORIGINS` | your Astro/Next origin, comma-separated if more than one |
 | `APP_URL` | public URL of the front end |
 
-Railway injects `PORT`. Production refuses CORS `*`. Health check path: `/health`.
+Railway injects `PORT`. Production refuses CORS `*`. Health check path: `/health` (use `/ready` to also check the database and storage). Railway sets `RAILWAY_GIT_COMMIT_SHA`, which the admin Status page shows as the deployed commit.
+
+A deploy whose `app.yaml` removes a field or entity stops at boot with a confirmation code. Set `BAKORIN_ALLOW_DESTRUCTIVE=<code>` for that one deploy, then remove it. See [Schema changes](migrations.md).
 
 Optional first admin: `BAKORIN_ADMIN_EMAIL`, `BAKORIN_ADMIN_PASSWORD` (min 8). Created only while no admin exists. You can also use Create your first admin at `/admin/`.
 
@@ -36,6 +38,8 @@ Optional first admin: `BAKORIN_ADMIN_EMAIL`, `BAKORIN_ADMIN_PASSWORD` (min 8). C
 | `S3_ACCESS_KEY` or `AWS_ACCESS_KEY_ID` | |
 | `S3_SECRET_KEY` or `AWS_SECRET_ACCESS_KEY` | |
 | `S3_REGION` or `AWS_DEFAULT_REGION` | defaults to `auto` |
+
+Monitoring (all optional): `METRICS_TOKEN`, `SENTRY_DSN`, `ERROR_WEBHOOK_URL`, `BAKORIN_REQUEST_LOG`. See [Monitoring](monitoring.md).
 
 Also accepted: `JWT_SECRET_PREVIOUS`, `BAKORIN_ADMIN_NAME`, `DATABASE_URL`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_SECURE`.
 

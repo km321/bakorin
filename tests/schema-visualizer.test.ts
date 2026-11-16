@@ -199,7 +199,7 @@ webhooks:
     expect(Array.isArray(users?.indexes)).toBe(true);
     const items = payload.data.entities.find((entity) => entity.name === "items");
     expect(items?.fields.find((field) => field.name === "ownerId")?.relation?.onDelete).toBe("restrict");
-    const mermaid = metaToMermaid(payload.data);
+    const mermaid = metaToMermaid(payload.data as unknown as Parameters<typeof metaToMermaid>[0]);
     expect(mermaid).toContain("erDiagram");
     expect(mermaid).toContain("hidden password");
     expect(mermaid).toContain("ownerId restrict");

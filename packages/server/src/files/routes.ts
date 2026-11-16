@@ -122,7 +122,7 @@ export function createFileRoutes(): Hono {
     if (!stored) {
       return c.json({ error: { code: "not_found", message: "file missing from store" } }, 404);
     }
-    return new Response(stored.bytes, {
+    return new Response(stored.bytes as BodyInit, {
       headers: {
         "content-type": String(row.content_type),
         "content-disposition": `inline; filename="${String(row.filename).replaceAll('"', "")}"`,

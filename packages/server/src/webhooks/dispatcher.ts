@@ -11,7 +11,7 @@ import { WEBHOOK_OUTBOX_TABLE } from "../db/system.ts";
 import { acquireLease, instanceHolder } from "../db/leases.ts";
 import { redactChangeEvent } from "./redact.ts";
 
-export type WebhookDeliveryStatus = "pending" | "delivered" | "failed";
+export type WebhookDeliveryStatus = "pending" | "delivered" | "failed" | "discarded";
 
 export interface DeliveryResult {
   ok: boolean;
@@ -279,7 +279,25 @@ export async function cleanupDelivered(db: BakorinDb, retainDays: number): Promi
     .where("status", "=", "delivered")
     .where("delivered_at", "<", cutoff)
     .executeTakeFirst();
-  return Number(result?.numDeletedRows ?? 0);
+  const discarded = await db
+    .deleteFrom(WEBHOOK_OUTBOX_TABLE)
+    .where("status", "=", "discarded")
+    .where("created_at", "<", cutoff)
+    .executeTakeFirst();
+  return Number(result?.numDeletedRows ?? 0) + Number(discarded?.numDeletedRows ?? 0);
+}
+
+/** Marks a failed delivery as discarded so it stops counting as a failure. The row is kept for the record. */
+export async function discardDelivery(db: BakorinDb, id: string): Promise<"ok" | "missing" | "not_failed"> {
+  const row = await db.selectFrom(WEBHOOK_OUTBOX_TABLE).select(["status"]).where("id", "=", id).executeTakeFirst();
+  if (!row) {
+    return "missing";
+  }
+  if (String(row.status) !== "failed") {
+    return "not_failed";
+  }
+  await db.updateTable(WEBHOOK_OUTBOX_TABLE).set({ status: "discarded", locked_until: null }).where("id", "=", id).execute();
+  return "ok";
 }
 
 export async function retryDelivery(db: BakorinDb, id: string): Promise<"ok" | "missing" | "not_failed"> {

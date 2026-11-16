@@ -55,6 +55,7 @@ const entityObject = z
     display: ident.optional(),
     description: z.string().optional(),
     auth: z.boolean().optional(),
+    renameFrom: ident.optional(),
     fields: z.record(ident, fieldValue),
     indexes: z.array(z.union([ident, z.array(ident).min(1)])).optional(),
     policies: z
@@ -205,6 +206,15 @@ export const appYamlSchema = z
             cron: z.string().optional(),
             retain: z.number().int().positive().optional(),
             destination: z.string().optional(),
+          })
+          .strict()
+          .optional(),
+        alerts: z
+          .object({
+            email: z.union([z.string().min(1), z.array(z.string().min(1))]).optional(),
+            webhook: z.string().min(1).optional(),
+            backupMaxAgeHours: z.number().positive().optional(),
+            checkIntervalMinutes: z.number().int().min(1).max(1440).optional(),
           })
           .strict()
           .optional(),

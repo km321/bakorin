@@ -125,6 +125,10 @@ Optional white label for the admin, `/docs`, and system emails. Leave it out to 
 | `backups.destination` | `./data/backups` | Folder or `s3://bucket/prefix` |
 | `webhooks.retainDays` | `30` | How long delivered outbox rows are kept (1 to 3650) |
 | `mail.retainDays` | `30` | How long sent mail rows are kept (1 to 3650) |
+| `alerts.email` | | Address or list. Alerts for failed deliveries and overdue backups. See [Monitoring](/docs/monitoring/#alerts) |
+| `alerts.webhook` | | URL that receives alerts as JSON |
+| `alerts.backupMaxAgeHours` | | Alert when there has been no backup for this long |
+| `alerts.checkIntervalMinutes` | `15` | How often alerts are checked |
 | `cors.origins` | | Allowed origins. `CORS_ORIGINS` overrides it |
 | `hooks` | `./hooks.ts` | Path to the hooks module |
 
@@ -151,6 +155,7 @@ Each key under `entities` is an entity name. Names must start with a letter or u
 | `display` | Field used as the row label in tables and relation pickers. Falls back to `name`, `title`, `email`, `company`, then `id`. Cannot be a secret field |
 | `description` | Shown in the admin UI and OpenAPI |
 | `auth` | Marks the auth entity |
+| `renameFrom` | Previous entity name. Renames the table and keeps its rows. See [Schema changes](/docs/migrations/) |
 | `fields` | Map of field name to a type or a field object |
 | `indexes` | List of field names or arrays of field names |
 | `policies` | `read`, `create`, `update`, `delete`. See [Permissions](/docs/permissions/) |
@@ -257,11 +262,11 @@ See [Email](/docs/email/#transactional-email).
 
 ## Schema changes
 
-When `app.yaml` changes, Bakorin plans the migration in tiers:
+When `app.yaml` changes, Bakorin plans the migration in four groups:
 
-- **auto:** add an entity, add an optional or defaulted field, add an index
-- **safe:** `renameFrom` on a field
-- **deprecate:** dropped fields and entities stay in the database and disappear from the API
-- **abort:** type changes, required without a default, unique on an existing column
+- **Additive:** add an entity, an optional or defaulted field, an index, or an enum value. Applied automatically.
+- **Renames:** `renameFrom` on a field or an entity. Applied after an automatic backup; data is kept.
+- **Removals:** removed fields, entities, or enum values. Refused until you confirm with `bakorin migrate --allow-destructive <code>` or `BAKORIN_ALLOW_DESTRUCTIVE`. The data stays in the database.
+- **Blocked:** type changes, required without a default, unique on an existing column. Stop the reload (or startup) instead of guessing.
 
-Abort tier changes stop the reload (or startup) instead of guessing.
+`bakorin migrate --plan` shows the plan. See [Schema changes](/docs/migrations/).

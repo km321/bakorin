@@ -94,7 +94,7 @@ describe("admin UI gate", () => {
     expect(screenForAccess("error")).toBe("access-error");
   });
 
-  const fetcherFor = (token?: string) => (path: string) => client(runtime, token).fetch(path);
+  const fetcherFor = (token?: string) => async (path: string) => client(runtime, token).fetch(path);
 
   test("admin session passes the gate", async () => {
     expect(await checkAdminAccess(fetcherFor(adminToken))).toEqual({ access: "admin", identity: null });

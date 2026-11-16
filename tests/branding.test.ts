@@ -13,7 +13,9 @@ import {
 import { createRuntime, restoreProjectAssets } from "@bakorin/server";
 import { copyProjectFiles } from "../packages/server/src/backup/archive.ts";
 import { renderAccountEmail } from "../packages/server/src/mail/templates.ts";
-import pageHtml from "../packages/server/src/docs/page.html" with { type: "text" };
+import pageHtmlSource from "../packages/server/src/docs/page.html" with { type: "text" };
+
+const pageHtml = pageHtmlSource as unknown as string;
 import { client, MINI_YAML, tempProject } from "./helpers.ts";
 
 const ENV = { env: {}, production: false };

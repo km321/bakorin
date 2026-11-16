@@ -80,6 +80,8 @@ export default defineConfig({
             { label: "Deploy on Railway", slug: "docs/deploy-railway" },
             { label: "Deploy with Docker", slug: "docs/deploy-docker" },
             { label: "Backup and restore", slug: "docs/backups" },
+            { label: "Schema changes", slug: "docs/migrations" },
+            { label: "Monitoring", slug: "docs/monitoring" },
             { label: "Configuration", slug: "docs/configuration" },
             { label: "CLI", slug: "docs/cli" },
             { label: "Security", slug: "docs/security" },

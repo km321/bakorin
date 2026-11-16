@@ -4,9 +4,9 @@ import type { SchemaAST } from "@bakorin/core";
 import { embeddedUi } from "../embedded-ui.ts";
 import { injectBranding } from "../branding/assets.ts";
 
-function brandDocument(bytes: Uint8Array, ast: SchemaAST | undefined): Uint8Array | string {
+function brandDocument(bytes: Uint8Array, ast: SchemaAST | undefined): BodyInit {
   if (!ast?.branding) {
-    return bytes;
+    return bytes as BodyInit;
   }
   return injectBranding(Buffer.from(bytes).toString("utf8"), ast, (name) => `${name} Admin`);
 }
@@ -57,7 +57,7 @@ export function createAdminRoutes(): Hono {
     const ast = c.get("app")?.ast as SchemaAST | undefined;
     const disk = await fromDisk(rel);
     if (disk) {
-      const body = rel.endsWith(".html") ? brandDocument(disk, ast) : disk;
+      const body: BodyInit = rel.endsWith(".html") ? brandDocument(disk, ast) : (disk as BodyInit);
       return new Response(body, { headers: { "content-type": contentType(rel) } });
     }
     if (isDocument) {
@@ -70,7 +70,7 @@ export function createAdminRoutes(): Hono {
     if (embedded) {
       const bytes =
         embedded.encoding === "base64" ? Buffer.from(embedded.content, "base64") : Buffer.from(embedded.content, "utf8");
-      const body = contentType(rel) === "text/html" ? brandDocument(new Uint8Array(bytes), ast) : bytes;
+      const body: BodyInit = contentType(rel) === "text/html" ? brandDocument(new Uint8Array(bytes), ast) : (bytes as BodyInit);
       return new Response(body, { headers: { "content-type": contentType(rel) } });
     }
     return c.text("Admin UI is not built. Run bun run build:ui.", 503);

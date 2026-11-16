@@ -59,7 +59,8 @@ Each entity appears under **Data** in the sidebar.
 
 | Page | What it does |
 |---|---|
-| **Backups** | Lists snapshots and takes a live backup (`POST /api/v1/backups`). Restore stays CLI only |
+| **Status** | Uptime, version, database size, the email and webhook queues with Retry and Discard for failed items, recent errors, and the last backup. See [Monitoring](/docs/monitoring/#status-page) |
+| **Backups** | Lists snapshots, takes a live backup (`POST /api/v1/backups`), and downloads any backup as a `.tar.gz`. Restore stays CLI only. See [Backup and restore](/docs/backups/#download-a-backup) |
 | **Schema** | Draws your entities and relations. See [Schema visualizer](/docs/schema/) |
 | **Webhooks** | Lists configured webhooks and deliveries, filters by status, retries failed rows, sends a test event |
 | **Mail** | Lists mail rules and templates, previews a template against sample data or a real record in a sandboxed frame, sends a test to you, and shows the delivery log with Retry. See [Email](/docs/email/#admin-mail-page) |

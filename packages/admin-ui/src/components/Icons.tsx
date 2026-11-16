@@ -26,6 +26,20 @@ export function IconBackup() {
   );
 }
 
+export function IconStatus() {
+  return (
+    <Svg>
+      <path
+        d="M2 8.5h2.5l1.5-4 3 7 1.5-3H14"
+        stroke="currentColor"
+        stroke-width="1.25"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </Svg>
+  );
+}
+
 export function IconAudit() {
   return (
     <Svg>

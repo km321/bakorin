@@ -93,6 +93,9 @@ function formatIssue(issue: ZodIssue): string[] {
   switch (issue.code) {
     case "unrecognized_keys":
       return issue.keys.map((key) => {
+        if (key === "renamedFrom" || key === "renamed_from" || key === "rename_from") {
+          return `app.yaml: unknown key "${key}"${at}. Did you mean renameFrom?`;
+        }
         if (issue.path.length === 0 && looksLikeEntityName(key)) {
           return `app.yaml: unknown top-level key "${key}". Did you mean to put it under "entities:"?`;
         }
@@ -137,5 +140,5 @@ function formatIssue(issue: ZodIssue): string[] {
 }
 
 function hintEntityKeys(): string {
-  return ". Valid keys are label, plural, display, description, auth, fields, indexes, policies.";
+  return ". Valid keys are label, plural, display, description, auth, renameFrom, fields, indexes, policies.";
 }

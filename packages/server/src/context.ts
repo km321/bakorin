@@ -5,6 +5,7 @@ import type { BakorinHooks } from "./hooks/types.ts";
 import type { FileStore } from "./files/store.ts";
 import type { Mailer } from "./mail/types.ts";
 import type { MailApi } from "./mail/outbox.ts";
+import type { Monitor } from "./monitor/monitor.ts";
 
 export interface Actor {
   id: string;
@@ -21,6 +22,8 @@ export interface AppContext {
   mailer: Mailer;
   /** Queue an email through the mail outbox (same as ctx.mail in hooks). */
   mail: MailApi;
+  /** Request logs, recent errors and counters for /metrics and the Status page. */
+  monitor: Monitor;
 }
 
 declare module "hono" {

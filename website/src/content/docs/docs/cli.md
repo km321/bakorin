@@ -13,7 +13,12 @@ Commands:
   typegen [-o file]   Write bakorin.gen.ts
   schema [--format mermaid|json]  Print the schema as Mermaid or JSON
   backup [dir]        Consistent snapshot (SQLite VACUUM INTO) plus portable export
-  restore <dir>       Restore a snapshot or portable archive
+  restore <dir|file.tar.gz> [--dry-run]
+                      Verify checksums, back up current data, then restore.
+                      --dry-run only verifies and shows what would change
+  migrate [--plan] [--allow-destructive <code>]
+                      Show or apply schema changes. Removals need the code
+                      printed by --plan; a backup is taken first
   export [dir]        Portable NDJSON archive for moving SQLite <-> Postgres
   import <dir>        Import a portable archive into the current dialect
   mail list           List templates in mail/
@@ -45,7 +50,11 @@ Prints the schema graph from `app.yaml`. See [Schema visualizer](/docs/schema/).
 
 ## backup, restore, export, import
 
-See [Backup and restore](/docs/backups/).
+See [Backup and restore](/docs/backups/). `restore` accepts a backup folder or a `.tar.gz` downloaded from the admin, `--dry-run` to only verify, and `--no-backup` to skip the safety backup.
+
+## migrate
+
+`bakorin migrate --plan` prints what an `app.yaml` change would do. `bakorin migrate` applies additive changes and renames, and exits with code 2 when a removal needs confirmation. `bakorin migrate --allow-destructive <code>` applies removals after a backup. See [Schema changes](/docs/migrations/).
 
 ## mail
 

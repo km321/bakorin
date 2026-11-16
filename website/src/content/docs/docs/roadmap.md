@@ -7,7 +7,7 @@ Bakorin is a v0.1 private beta.
 
 ## Works today
 
-Schema compiler, tiered schema diffs, SQLite and Postgres migrators (including `indexes:`), CRUD with filters, sorting, and expand, relations with `onDelete`, policies, auth (signup, login, forgot and reset password, email verification, invites, lockout), database backed rate limits, JWT rotation, signed file URLs, audit log, leases for backups and webhooks, durable signed webhooks with retries and an admin log, the admin UI with light and dark themes, Backups, Audit, Webhooks, and Schema pages, `bakorin schema`, the SDK, `create-bakorin`, Astro and Next.js starters, backup, restore, export, and import including S3 retention, hooks, generated OpenAPI, a compiled binary, Docker, and Railway config files.
+Schema compiler, tiered schema diffs, SQLite and Postgres migrators (including `indexes:`), CRUD with filters, sorting, and expand, relations with `onDelete`, policies, auth (signup, login, forgot and reset password, email verification, invites, lockout), database backed rate limits, JWT rotation, signed file URLs, audit log, leases for backups and webhooks, durable signed webhooks with retries and an admin log, the admin UI with light and dark themes, Status, Backups (with download), Audit, Webhooks, and Schema pages, confirmation gated schema changes with automatic backups and `renameFrom` for fields and entities, checksummed backups with verified restores, request logs, request ids, error forwarding, `/ready`, alerts, Prometheus metrics, `bakorin schema`, the SDK, `create-bakorin`, Astro and Next.js starters, backup, restore, export, and import including S3 retention, hooks, generated OpenAPI, a compiled binary, Docker, and Railway config files.
 
 ## Planned
 

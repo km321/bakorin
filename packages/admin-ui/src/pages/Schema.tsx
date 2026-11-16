@@ -119,7 +119,7 @@ export function Schema({ initial, onOpenEntity }: Props) {
     }
     function onWheel(event: WheelEvent) {
       event.preventDefault();
-      const rect = el.getBoundingClientRect();
+      const rect = el!.getBoundingClientRect();
       const cx = event.clientX - rect.left;
       const cy = event.clientY - rect.top;
       setView((current) => {
@@ -150,7 +150,7 @@ export function Schema({ initial, onOpenEntity }: Props) {
       await navigator.clipboard.writeText(metaToMermaid(meta));
       pushToast("ok", "Mermaid copied");
     } catch {
-      pushToast("err", "Could not copy");
+      pushToast("error", "Could not copy");
     }
   }
 

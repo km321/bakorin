@@ -1,6 +1,6 @@
 import { z } from "zod";
 export declare const FIELD_TYPES: readonly ["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"];
-export declare const APP_YAML_TOP_LEVEL_KEYS: readonly ["app", "runtime", "auth", "entities", "webhooks"];
+export declare const APP_YAML_TOP_LEVEL_KEYS: readonly ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail"];
 declare const fieldObject: z.ZodObject<{
     type: z.ZodEnum<["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"]>;
     required: z.ZodOptional<z.ZodBoolean>;
@@ -18,8 +18,8 @@ declare const fieldObject: z.ZodObject<{
     adminOnly: z.ZodOptional<z.ZodBoolean>;
 }, "strict", z.ZodTypeAny, {
     type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-    index?: boolean | undefined;
     values?: string[] | undefined;
+    index?: boolean | undefined;
     required?: boolean | undefined;
     unique?: boolean | undefined;
     default?: unknown;
@@ -33,8 +33,8 @@ declare const fieldObject: z.ZodObject<{
     adminOnly?: boolean | undefined;
 }, {
     type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-    index?: boolean | undefined;
     values?: string[] | undefined;
+    index?: boolean | undefined;
     required?: boolean | undefined;
     unique?: boolean | undefined;
     default?: unknown;
@@ -53,6 +53,7 @@ declare const entityObject: z.ZodObject<{
     display: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodString>;
     auth: z.ZodOptional<z.ZodBoolean>;
+    renameFrom: z.ZodOptional<z.ZodString>;
     fields: z.ZodRecord<z.ZodString, z.ZodUnion<[z.ZodEnum<["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"]>, z.ZodObject<{
         type: z.ZodEnum<["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"]>;
         required: z.ZodOptional<z.ZodBoolean>;
@@ -70,8 +71,8 @@ declare const entityObject: z.ZodObject<{
         adminOnly: z.ZodOptional<z.ZodBoolean>;
     }, "strict", z.ZodTypeAny, {
         type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-        index?: boolean | undefined;
         values?: string[] | undefined;
+        index?: boolean | undefined;
         required?: boolean | undefined;
         unique?: boolean | undefined;
         default?: unknown;
@@ -85,8 +86,8 @@ declare const entityObject: z.ZodObject<{
         adminOnly?: boolean | undefined;
     }, {
         type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-        index?: boolean | undefined;
         values?: string[] | undefined;
+        index?: boolean | undefined;
         required?: boolean | undefined;
         unique?: boolean | undefined;
         default?: unknown;
@@ -119,8 +120,8 @@ declare const entityObject: z.ZodObject<{
 }, "strict", z.ZodTypeAny, {
     fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
         type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-        index?: boolean | undefined;
         values?: string[] | undefined;
+        index?: boolean | undefined;
         required?: boolean | undefined;
         unique?: boolean | undefined;
         default?: unknown;
@@ -134,6 +135,7 @@ declare const entityObject: z.ZodObject<{
         adminOnly?: boolean | undefined;
     }>;
     auth?: boolean | undefined;
+    renameFrom?: string | undefined;
     description?: string | undefined;
     label?: string | undefined;
     plural?: string | undefined;
@@ -148,8 +150,8 @@ declare const entityObject: z.ZodObject<{
 }, {
     fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
         type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-        index?: boolean | undefined;
         values?: string[] | undefined;
+        index?: boolean | undefined;
         required?: boolean | undefined;
         unique?: boolean | undefined;
         default?: unknown;
@@ -163,6 +165,7 @@ declare const entityObject: z.ZodObject<{
         adminOnly?: boolean | undefined;
     }>;
     auth?: boolean | undefined;
+    renameFrom?: string | undefined;
     description?: string | undefined;
     label?: string | undefined;
     plural?: string | undefined;
@@ -174,6 +177,37 @@ declare const entityObject: z.ZodObject<{
         update?: string | string[] | undefined;
         delete?: string | string[] | undefined;
     } | undefined;
+}>;
+declare const brandingObject: z.ZodEffects<z.ZodObject<{
+    name: z.ZodOptional<z.ZodString>;
+    primaryColor: z.ZodOptional<z.ZodString>;
+    accentColor: z.ZodOptional<z.ZodString>;
+    logo: z.ZodOptional<z.ZodString>;
+    favicon: z.ZodOptional<z.ZodString>;
+}, "strict", z.ZodTypeAny, {
+    name?: string | undefined;
+    logo?: string | undefined;
+    favicon?: string | undefined;
+    primaryColor?: string | undefined;
+    accentColor?: string | undefined;
+}, {
+    name?: string | undefined;
+    logo?: string | undefined;
+    favicon?: string | undefined;
+    primaryColor?: string | undefined;
+    accentColor?: string | undefined;
+}>, {
+    name?: string | undefined;
+    logo?: string | undefined;
+    favicon?: string | undefined;
+    primaryColor?: string | undefined;
+    accentColor?: string | undefined;
+}, {
+    name?: string | undefined;
+    logo?: string | undefined;
+    favicon?: string | undefined;
+    primaryColor?: string | undefined;
+    accentColor?: string | undefined;
 }>;
 export declare const appYamlSchema: z.ZodObject<{
     app: z.ZodObject<{
@@ -189,6 +223,37 @@ export declare const appYamlSchema: z.ZodObject<{
         description?: string | undefined;
         version?: string | undefined;
     }>;
+    branding: z.ZodOptional<z.ZodEffects<z.ZodObject<{
+        name: z.ZodOptional<z.ZodString>;
+        primaryColor: z.ZodOptional<z.ZodString>;
+        accentColor: z.ZodOptional<z.ZodString>;
+        logo: z.ZodOptional<z.ZodString>;
+        favicon: z.ZodOptional<z.ZodString>;
+    }, "strict", z.ZodTypeAny, {
+        name?: string | undefined;
+        logo?: string | undefined;
+        favicon?: string | undefined;
+        primaryColor?: string | undefined;
+        accentColor?: string | undefined;
+    }, {
+        name?: string | undefined;
+        logo?: string | undefined;
+        favicon?: string | undefined;
+        primaryColor?: string | undefined;
+        accentColor?: string | undefined;
+    }>, {
+        name?: string | undefined;
+        logo?: string | undefined;
+        favicon?: string | undefined;
+        primaryColor?: string | undefined;
+        accentColor?: string | undefined;
+    }, {
+        name?: string | undefined;
+        logo?: string | undefined;
+        favicon?: string | undefined;
+        primaryColor?: string | undefined;
+        accentColor?: string | undefined;
+    }>>;
     runtime: z.ZodOptional<z.ZodObject<{
         dialect: z.ZodOptional<z.ZodEnum<["sqlite", "postgres"]>>;
         host: z.ZodOptional<z.ZodString>;
@@ -276,6 +341,22 @@ export declare const appYamlSchema: z.ZodObject<{
             retain?: number | undefined;
             destination?: string | undefined;
         }>>;
+        alerts: z.ZodOptional<z.ZodObject<{
+            email: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
+            webhook: z.ZodOptional<z.ZodString>;
+            backupMaxAgeHours: z.ZodOptional<z.ZodNumber>;
+            checkIntervalMinutes: z.ZodOptional<z.ZodNumber>;
+        }, "strict", z.ZodTypeAny, {
+            email?: string | string[] | undefined;
+            webhook?: string | undefined;
+            backupMaxAgeHours?: number | undefined;
+            checkIntervalMinutes?: number | undefined;
+        }, {
+            email?: string | string[] | undefined;
+            webhook?: string | undefined;
+            backupMaxAgeHours?: number | undefined;
+            checkIntervalMinutes?: number | undefined;
+        }>>;
         cors: z.ZodOptional<z.ZodObject<{
             origins: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
         }, "strict", z.ZodTypeAny, {
@@ -284,12 +365,32 @@ export declare const appYamlSchema: z.ZodObject<{
             origins?: string[] | undefined;
         }>>;
         hooks: z.ZodOptional<z.ZodString>;
+        webhooks: z.ZodOptional<z.ZodObject<{
+            retainDays: z.ZodOptional<z.ZodNumber>;
+        }, "strict", z.ZodTypeAny, {
+            retainDays?: number | undefined;
+        }, {
+            retainDays?: number | undefined;
+        }>>;
+        mail: z.ZodOptional<z.ZodObject<{
+            retainDays: z.ZodOptional<z.ZodNumber>;
+        }, "strict", z.ZodTypeAny, {
+            retainDays?: number | undefined;
+        }, {
+            retainDays?: number | undefined;
+        }>>;
     }, "strict", z.ZodTypeAny, {
         sqlite?: {
             path: string;
         } | undefined;
         postgres?: {
             url: string;
+        } | undefined;
+        webhooks?: {
+            retainDays?: number | undefined;
+        } | undefined;
+        mail?: {
+            retainDays?: number | undefined;
         } | undefined;
         dialect?: "sqlite" | "postgres" | undefined;
         host?: string | undefined;
@@ -318,6 +419,12 @@ export declare const appYamlSchema: z.ZodObject<{
             cron?: string | undefined;
             retain?: number | undefined;
             destination?: string | undefined;
+        } | undefined;
+        alerts?: {
+            email?: string | string[] | undefined;
+            webhook?: string | undefined;
+            backupMaxAgeHours?: number | undefined;
+            checkIntervalMinutes?: number | undefined;
         } | undefined;
         cors?: {
             origins?: string[] | undefined;
@@ -330,6 +437,12 @@ export declare const appYamlSchema: z.ZodObject<{
         postgres?: {
             url: string;
         } | undefined;
+        webhooks?: {
+            retainDays?: number | undefined;
+        } | undefined;
+        mail?: {
+            retainDays?: number | undefined;
+        } | undefined;
         dialect?: "sqlite" | "postgres" | undefined;
         host?: string | undefined;
         port?: number | undefined;
@@ -357,6 +470,12 @@ export declare const appYamlSchema: z.ZodObject<{
             cron?: string | undefined;
             retain?: number | undefined;
             destination?: string | undefined;
+        } | undefined;
+        alerts?: {
+            email?: string | string[] | undefined;
+            webhook?: string | undefined;
+            backupMaxAgeHours?: number | undefined;
+            checkIntervalMinutes?: number | undefined;
         } | undefined;
         cors?: {
             origins?: string[] | undefined;
@@ -391,6 +510,7 @@ export declare const appYamlSchema: z.ZodObject<{
         display: z.ZodOptional<z.ZodString>;
         description: z.ZodOptional<z.ZodString>;
         auth: z.ZodOptional<z.ZodBoolean>;
+        renameFrom: z.ZodOptional<z.ZodString>;
         fields: z.ZodRecord<z.ZodString, z.ZodUnion<[z.ZodEnum<["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"]>, z.ZodObject<{
             type: z.ZodEnum<["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"]>;
             required: z.ZodOptional<z.ZodBoolean>;
@@ -408,8 +528,8 @@ export declare const appYamlSchema: z.ZodObject<{
             adminOnly: z.ZodOptional<z.ZodBoolean>;
         }, "strict", z.ZodTypeAny, {
             type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            index?: boolean | undefined;
             values?: string[] | undefined;
+            index?: boolean | undefined;
             required?: boolean | undefined;
             unique?: boolean | undefined;
             default?: unknown;
@@ -423,8 +543,8 @@ export declare const appYamlSchema: z.ZodObject<{
             adminOnly?: boolean | undefined;
         }, {
             type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            index?: boolean | undefined;
             values?: string[] | undefined;
+            index?: boolean | undefined;
             required?: boolean | undefined;
             unique?: boolean | undefined;
             default?: unknown;
@@ -457,8 +577,8 @@ export declare const appYamlSchema: z.ZodObject<{
     }, "strict", z.ZodTypeAny, {
         fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
             type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            index?: boolean | undefined;
             values?: string[] | undefined;
+            index?: boolean | undefined;
             required?: boolean | undefined;
             unique?: boolean | undefined;
             default?: unknown;
@@ -472,6 +592,7 @@ export declare const appYamlSchema: z.ZodObject<{
             adminOnly?: boolean | undefined;
         }>;
         auth?: boolean | undefined;
+        renameFrom?: string | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
@@ -486,8 +607,8 @@ export declare const appYamlSchema: z.ZodObject<{
     }, {
         fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
             type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            index?: boolean | undefined;
             values?: string[] | undefined;
+            index?: boolean | undefined;
             required?: boolean | undefined;
             unique?: boolean | undefined;
             default?: unknown;
@@ -501,6 +622,7 @@ export declare const appYamlSchema: z.ZodObject<{
             adminOnly?: boolean | undefined;
         }>;
         auth?: boolean | undefined;
+        renameFrom?: string | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
@@ -515,8 +637,8 @@ export declare const appYamlSchema: z.ZodObject<{
     }>>, Record<string, {
         fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
             type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            index?: boolean | undefined;
             values?: string[] | undefined;
+            index?: boolean | undefined;
             required?: boolean | undefined;
             unique?: boolean | undefined;
             default?: unknown;
@@ -530,6 +652,7 @@ export declare const appYamlSchema: z.ZodObject<{
             adminOnly?: boolean | undefined;
         }>;
         auth?: boolean | undefined;
+        renameFrom?: string | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
@@ -544,8 +667,8 @@ export declare const appYamlSchema: z.ZodObject<{
     }>, Record<string, {
         fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
             type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            index?: boolean | undefined;
             values?: string[] | undefined;
+            index?: boolean | undefined;
             required?: boolean | undefined;
             unique?: boolean | undefined;
             default?: unknown;
@@ -559,6 +682,7 @@ export declare const appYamlSchema: z.ZodObject<{
             adminOnly?: boolean | undefined;
         }>;
         auth?: boolean | undefined;
+        renameFrom?: string | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
@@ -576,16 +700,107 @@ export declare const appYamlSchema: z.ZodObject<{
         events: z.ZodArray<z.ZodEnum<["create", "update", "delete"]>, "many">;
         url: z.ZodString;
         secret: z.ZodOptional<z.ZodString>;
+        maxAttempts: z.ZodOptional<z.ZodNumber>;
+        timeoutMs: z.ZodOptional<z.ZodNumber>;
     }, "strict", z.ZodTypeAny, {
         entity: string;
         events: ("create" | "update" | "delete")[];
         url: string;
         secret?: string | undefined;
+        maxAttempts?: number | undefined;
+        timeoutMs?: number | undefined;
     }, {
         entity: string;
         events: ("create" | "update" | "delete")[];
         url: string;
         secret?: string | undefined;
+        maxAttempts?: number | undefined;
+        timeoutMs?: number | undefined;
+    }>, "many">>;
+    mail: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        name: z.ZodOptional<z.ZodString>;
+        entity: z.ZodString;
+        events: z.ZodArray<z.ZodEnum<["create", "update", "delete"]>, "many">;
+        to: z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>;
+        cc: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
+        bcc: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodArray<z.ZodString, "many">]>>;
+        replyTo: z.ZodOptional<z.ZodString>;
+        subject: z.ZodOptional<z.ZodString>;
+        template: z.ZodString;
+        when: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnion<[z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>, z.ZodEffects<z.ZodObject<{
+            equals: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>>;
+            not: z.ZodOptional<z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>>;
+            in: z.ZodOptional<z.ZodArray<z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>, "many">>;
+            notIn: z.ZodOptional<z.ZodArray<z.ZodUnion<[z.ZodString, z.ZodNumber, z.ZodBoolean, z.ZodNull]>, "many">>;
+            exists: z.ZodOptional<z.ZodBoolean>;
+        }, "strict", z.ZodTypeAny, {
+            equals?: string | number | boolean | null | undefined;
+            not?: string | number | boolean | null | undefined;
+            in?: (string | number | boolean | null)[] | undefined;
+            notIn?: (string | number | boolean | null)[] | undefined;
+            exists?: boolean | undefined;
+        }, {
+            equals?: string | number | boolean | null | undefined;
+            not?: string | number | boolean | null | undefined;
+            in?: (string | number | boolean | null)[] | undefined;
+            notIn?: (string | number | boolean | null)[] | undefined;
+            exists?: boolean | undefined;
+        }>, {
+            equals?: string | number | boolean | null | undefined;
+            not?: string | number | boolean | null | undefined;
+            in?: (string | number | boolean | null)[] | undefined;
+            notIn?: (string | number | boolean | null)[] | undefined;
+            exists?: boolean | undefined;
+        }, {
+            equals?: string | number | boolean | null | undefined;
+            not?: string | number | boolean | null | undefined;
+            in?: (string | number | boolean | null)[] | undefined;
+            notIn?: (string | number | boolean | null)[] | undefined;
+            exists?: boolean | undefined;
+        }>]>>>;
+        changed: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        expand: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+        maxAttempts: z.ZodOptional<z.ZodNumber>;
+    }, "strict", z.ZodTypeAny, {
+        entity: string;
+        to: string | string[];
+        events: ("create" | "update" | "delete")[];
+        template: string;
+        name?: string | undefined;
+        maxAttempts?: number | undefined;
+        cc?: string | string[] | undefined;
+        bcc?: string | string[] | undefined;
+        replyTo?: string | undefined;
+        subject?: string | undefined;
+        when?: Record<string, string | number | boolean | {
+            equals?: string | number | boolean | null | undefined;
+            not?: string | number | boolean | null | undefined;
+            in?: (string | number | boolean | null)[] | undefined;
+            notIn?: (string | number | boolean | null)[] | undefined;
+            exists?: boolean | undefined;
+        } | null> | undefined;
+        changed?: string[] | undefined;
+        expand?: string[] | undefined;
+    }, {
+        entity: string;
+        to: string | string[];
+        events: ("create" | "update" | "delete")[];
+        template: string;
+        name?: string | undefined;
+        maxAttempts?: number | undefined;
+        cc?: string | string[] | undefined;
+        bcc?: string | string[] | undefined;
+        replyTo?: string | undefined;
+        subject?: string | undefined;
+        when?: Record<string, string | number | boolean | {
+            equals?: string | number | boolean | null | undefined;
+            not?: string | number | boolean | null | undefined;
+            in?: (string | number | boolean | null)[] | undefined;
+            notIn?: (string | number | boolean | null)[] | undefined;
+            exists?: boolean | undefined;
+        } | null> | undefined;
+        changed?: string[] | undefined;
+        expand?: string[] | undefined;
     }>, "many">>;
 }, "strict", z.ZodTypeAny, {
     app: {
@@ -596,8 +811,8 @@ export declare const appYamlSchema: z.ZodObject<{
     entities: Record<string, {
         fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
             type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            index?: boolean | undefined;
             values?: string[] | undefined;
+            index?: boolean | undefined;
             required?: boolean | undefined;
             unique?: boolean | undefined;
             default?: unknown;
@@ -611,6 +826,7 @@ export declare const appYamlSchema: z.ZodObject<{
             adminOnly?: boolean | undefined;
         }>;
         auth?: boolean | undefined;
+        renameFrom?: string | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
@@ -623,12 +839,25 @@ export declare const appYamlSchema: z.ZodObject<{
             delete?: string | string[] | undefined;
         } | undefined;
     }>;
+    branding?: {
+        name?: string | undefined;
+        logo?: string | undefined;
+        favicon?: string | undefined;
+        primaryColor?: string | undefined;
+        accentColor?: string | undefined;
+    } | undefined;
     runtime?: {
         sqlite?: {
             path: string;
         } | undefined;
         postgres?: {
             url: string;
+        } | undefined;
+        webhooks?: {
+            retainDays?: number | undefined;
+        } | undefined;
+        mail?: {
+            retainDays?: number | undefined;
         } | undefined;
         dialect?: "sqlite" | "postgres" | undefined;
         host?: string | undefined;
@@ -658,6 +887,12 @@ export declare const appYamlSchema: z.ZodObject<{
             retain?: number | undefined;
             destination?: string | undefined;
         } | undefined;
+        alerts?: {
+            email?: string | string[] | undefined;
+            webhook?: string | undefined;
+            backupMaxAgeHours?: number | undefined;
+            checkIntervalMinutes?: number | undefined;
+        } | undefined;
         cors?: {
             origins?: string[] | undefined;
         } | undefined;
@@ -676,6 +911,29 @@ export declare const appYamlSchema: z.ZodObject<{
         events: ("create" | "update" | "delete")[];
         url: string;
         secret?: string | undefined;
+        maxAttempts?: number | undefined;
+        timeoutMs?: number | undefined;
+    }[] | undefined;
+    mail?: {
+        entity: string;
+        to: string | string[];
+        events: ("create" | "update" | "delete")[];
+        template: string;
+        name?: string | undefined;
+        maxAttempts?: number | undefined;
+        cc?: string | string[] | undefined;
+        bcc?: string | string[] | undefined;
+        replyTo?: string | undefined;
+        subject?: string | undefined;
+        when?: Record<string, string | number | boolean | {
+            equals?: string | number | boolean | null | undefined;
+            not?: string | number | boolean | null | undefined;
+            in?: (string | number | boolean | null)[] | undefined;
+            notIn?: (string | number | boolean | null)[] | undefined;
+            exists?: boolean | undefined;
+        } | null> | undefined;
+        changed?: string[] | undefined;
+        expand?: string[] | undefined;
     }[] | undefined;
 }, {
     app: {
@@ -686,8 +944,8 @@ export declare const appYamlSchema: z.ZodObject<{
     entities: Record<string, {
         fields: Record<string, "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation" | {
             type: "number" | "boolean" | "text" | "email" | "password" | "integer" | "date" | "datetime" | "enum" | "file" | "relation";
-            index?: boolean | undefined;
             values?: string[] | undefined;
+            index?: boolean | undefined;
             required?: boolean | undefined;
             unique?: boolean | undefined;
             default?: unknown;
@@ -701,6 +959,7 @@ export declare const appYamlSchema: z.ZodObject<{
             adminOnly?: boolean | undefined;
         }>;
         auth?: boolean | undefined;
+        renameFrom?: string | undefined;
         description?: string | undefined;
         label?: string | undefined;
         plural?: string | undefined;
@@ -713,12 +972,25 @@ export declare const appYamlSchema: z.ZodObject<{
             delete?: string | string[] | undefined;
         } | undefined;
     }>;
+    branding?: {
+        name?: string | undefined;
+        logo?: string | undefined;
+        favicon?: string | undefined;
+        primaryColor?: string | undefined;
+        accentColor?: string | undefined;
+    } | undefined;
     runtime?: {
         sqlite?: {
             path: string;
         } | undefined;
         postgres?: {
             url: string;
+        } | undefined;
+        webhooks?: {
+            retainDays?: number | undefined;
+        } | undefined;
+        mail?: {
+            retainDays?: number | undefined;
         } | undefined;
         dialect?: "sqlite" | "postgres" | undefined;
         host?: string | undefined;
@@ -748,6 +1020,12 @@ export declare const appYamlSchema: z.ZodObject<{
             retain?: number | undefined;
             destination?: string | undefined;
         } | undefined;
+        alerts?: {
+            email?: string | string[] | undefined;
+            webhook?: string | undefined;
+            backupMaxAgeHours?: number | undefined;
+            checkIntervalMinutes?: number | undefined;
+        } | undefined;
         cors?: {
             origins?: string[] | undefined;
         } | undefined;
@@ -766,9 +1044,33 @@ export declare const appYamlSchema: z.ZodObject<{
         events: ("create" | "update" | "delete")[];
         url: string;
         secret?: string | undefined;
+        maxAttempts?: number | undefined;
+        timeoutMs?: number | undefined;
+    }[] | undefined;
+    mail?: {
+        entity: string;
+        to: string | string[];
+        events: ("create" | "update" | "delete")[];
+        template: string;
+        name?: string | undefined;
+        maxAttempts?: number | undefined;
+        cc?: string | string[] | undefined;
+        bcc?: string | string[] | undefined;
+        replyTo?: string | undefined;
+        subject?: string | undefined;
+        when?: Record<string, string | number | boolean | {
+            equals?: string | number | boolean | null | undefined;
+            not?: string | number | boolean | null | undefined;
+            in?: (string | number | boolean | null)[] | undefined;
+            notIn?: (string | number | boolean | null)[] | undefined;
+            exists?: boolean | undefined;
+        } | null> | undefined;
+        changed?: string[] | undefined;
+        expand?: string[] | undefined;
     }[] | undefined;
 }>;
 export type AppYaml = z.infer<typeof appYamlSchema>;
 export type RawEntity = z.infer<typeof entityObject>;
 export type RawField = z.infer<typeof fieldObject>;
+export type RawBrandingYaml = z.infer<typeof brandingObject>;
 export {};

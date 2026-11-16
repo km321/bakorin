@@ -99,7 +99,7 @@ describe("stability", () => {
       "      ownerId: { type: relation, to: users, required: true }\n    indexes:\n      - [ownerId, title]",
     );
     const ast = compileAppYaml(yaml, { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } });
-    expect(ast.entityMap.items.indexes).toEqual([["ownerId", "title"]]);
+    expect(ast.entityMap.items?.indexes).toEqual([["ownerId", "title"]]);
     const from = compileAppYaml(MINI_YAML, { env: { JWT_SECRET: "test-secret-test-secret-test-secret-32" } });
     const plan = diffSchemas(from, ast);
     expect(plan.auto.some((change) => change.kind === "add_index")).toBe(true);

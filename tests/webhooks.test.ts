@@ -56,7 +56,7 @@ ${extra}
 `;
 }
 
-async function waitFor<T>(label: string, fn: () => T | Promise<T>, timeoutMs = 5000): Promise<T> {
+async function waitFor<T>(label: string, fn: () => T | undefined | Promise<T | undefined>, timeoutMs = 5000): Promise<T> {
   const start = Date.now();
   let last: T | undefined;
   while (Date.now() - start < timeoutMs) {
@@ -128,9 +128,9 @@ describe("webhooks", () => {
       expect(String(outbox[0]?.payload)).not.toContain("argon2");
       expect(String(outbox[0]?.status)).toBe("delivered");
 
-      const timestamp = hit.headers["x-bakorin-timestamp"];
-      const delivery = hit.headers["x-bakorin-delivery"];
-      const signature = hit.headers["x-bakorin-signature"];
+      const timestamp = hit.headers["x-bakorin-timestamp"] ?? "";
+      const delivery = hit.headers["x-bakorin-delivery"] ?? "";
+      const signature = hit.headers["x-bakorin-signature"] ?? "";
       expect(delivery).toMatch(/^[0-9a-f-]{36}$/i);
       expect(Date.parse(timestamp)).toBeGreaterThan(0);
       const expected = `sha256=${signWebhookPayload("webhook-secret-webhook-secret", timestamp, hit.body)}`;

@@ -233,14 +233,22 @@ Successful create/update/delete always emit on one in-process change bus (`entit
 ## Backup, restore, and moving hosts
 
 ```bash
-bakorin backup                  # SQLite: VACUUM INTO + portable NDJSON
-bakorin backup ./offsite        # explicit destination
-bakorin restore ./offsite       # snapshot or portable archive
-bakorin export ./portable       # dialect-agnostic NDJSON + files + app.yaml
-bakorin import ./portable       # load that archive into the current dialect
+bakorin backup                          # snapshot + portable export, with sha256 checksums
+bakorin restore <dir|file.tar.gz> --dry-run   # verify checksums, show counts and schema diff
+bakorin restore <dir|file.tar.gz>       # safety backup of current data, then restore
+bakorin export ./portable               # dialect-agnostic NDJSON + files + app.yaml
+bakorin import ./portable               # load that archive into the current dialect
 ```
 
-SQLite backups are a consistent `VACUUM INTO` copy of `app.db`, plus `app.yaml`, `hooks.ts`, and uploads. Postgres backups use the portable NDJSON format (all entities, file metadata, schema AST, uploads). Refresh tokens are not part of the portable export; users sign in again after an import.
+SQLite backups are a consistent `VACUUM INTO` copy of `app.db`, plus `app.yaml`, `hooks.ts`, `branding/`, uploads, and a portable export. Postgres backups use the portable NDJSON format (entities, users, file metadata, the mail and webhook outbox, the audit log, schema, uploads). Every backup has a `manifest.json` with a sha256 per file, and restore refuses a backup that does not match. Sessions and one-time tokens are left out; users sign in again after a restore. Admins can download any backup from the **Backups** page as a `.tar.gz` (short-lived signed link, streamed from disk or S3). Details: `docs/backups.md`.
+
+## Schema changes
+
+Additive changes apply on start. Renames declared with `renameFrom` (on a field or an entity) apply after an automatic backup. Removals refuse to boot until confirmed with `bakorin migrate --allow-destructive <code>` or `BAKORIN_ALLOW_DESTRUCTIVE=<code>`, and take a backup first. Type changes stay blocked. `bakorin migrate --plan` shows the plan. Details: `docs/migrations.md`.
+
+## Monitoring
+
+JSON request logs with an `X-Request-Id` (on by default in production), optional error forwarding (`SENTRY_DSN`, `ERROR_WEBHOOK_URL`), `/health` and `/ready`, an admin **Status** page (uptime, version, database size, outbox queues with retry and discard, recent errors, last backup), optional alerts (`runtime.alerts`), and Prometheus `/metrics` behind `METRICS_TOKEN`. Details: `docs/monitoring.md`.
 
 To move SQLite to Postgres: `bakorin export ./portable` on the old host, set `runtime.dialect: postgres` and `DATABASE_URL`, start once so tables exist, then `bakorin import ./portable`.
 
@@ -248,13 +256,13 @@ Scheduled backups: set `runtime.backups.interval` (for example `24h`) and `retai
 
 The live OpenAPI 3 document is `GET /api/v1/openapi.json`. Interactive docs (Swagger UI, bundled, no CDN) are at `GET /docs` and `GET /api/v1/docs`. Try-it-out uses the admin session token from `localStorage` (`bakorin_access`) when present, or a pasted bearer token. Admins can also open docs from the admin nav. The docs page follows the admin's light or dark theme (same System, Light, Dark setting) and both themes meet WCAG 2.2 AA contrast.
 
-Admins can take a live backup from the admin **Backups** page (`POST /api/v1/backups`). That writes the same consistent SQLite snapshot plus portable export as `bakorin backup`. Restore stays CLI-only.
+Admins can take a live backup from the admin **Backups** page (`POST /api/v1/backups`) and download any backup there. That writes the same consistent SQLite snapshot plus portable export as `bakorin backup`. Restore stays CLI-only.
 
 ## Deploy
 
 The production image bakes the `examples/studio-leads` project into `/project` and runs `bakorin start`. It listens on `PORT` (Railway injects this), stores SQLite on a volume at `BAKORIN_DATA_DIR` (default `/data` in the image), and sends uploads plus scheduled backups to an S3-compatible bucket when bucket credentials are set.
 
-Health: `GET /health` (also `GET /healthz`).
+Health: `GET /health` (also `GET /healthz`) for liveness, `GET /ready` for readiness (database and storage).
 
 `JWT_SECRET` is required when `NODE_ENV=production` or `BAKORIN_ENV=production`.
 

@@ -14,7 +14,7 @@ export async function issueRefreshToken(
   db: BakorinDb,
   userId: string,
   ttlSeconds: number,
-  familyId = crypto.randomUUID(),
+  familyId: string = crypto.randomUUID(),
 ): Promise<string> {
   const token = newToken();
   const now = new Date();
