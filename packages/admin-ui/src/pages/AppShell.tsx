@@ -1,102 +1,18 @@
-import type { ComponentChildren } from "preact";
 import { useEffect, useMemo, useState } from "preact/hooks";
-import {
-  deleteRecord,
-  getMe,
-  getMeta,
-  listRecords,
-  logout,
-  resendVerification,
-  type MetaEntity,
-  type MetaResponse,
-} from "../lib/api.ts";
+import { deleteRecord, getMe, getMeta, listRecords, logout, type MetaEntity, type MetaResponse } from "../lib/api.ts";
+import { AppHeader } from "../components/AppHeader.tsx";
+import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
 import { Drawer } from "../components/Drawer.tsx";
 import { InviteUser } from "../components/InviteUser.tsx";
-import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
-import { ThemeToggle } from "../components/ThemeToggle.tsx";
-import {
-  IconAudit,
-  IconBackup,
-  IconDocs,
-  IconMenu,
-  IconSchema,
-  IconSearch,
-  IconStatus,
-  IconWebhook,
-  IconMail,
-} from "../components/Icons.tsx";
-import { fieldLabel, relatedLabel } from "../lib/label.ts";
-import { emptyLabel, formatDate, formatDateTime, initials } from "../lib/format.ts";
+import { Sidebar } from "../components/Sidebar.tsx";
 import { pushToast } from "../lib/toast.ts";
-import { Backups } from "./Backups.tsx";
-import { Audit } from "./Audit.tsx";
-import { Status } from "./Status.tsx";
-import { Webhooks } from "./Webhooks.tsx";
-import { Mail } from "./Mail.tsx";
-import { Schema } from "./Schema.tsx";
-import { Brand } from "../components/Brand.tsx";
-
-type AdminPage = "records" | "status" | "backups" | "audit" | "webhooks" | "mail" | "schema";
-
-function pageFromHash(hash: string): AdminPage {
-  switch (hash) {
-    case "#status":
-      return "status";
-    case "#backups":
-      return "backups";
-    case "#audit":
-      return "audit";
-    case "#webhooks":
-      return "webhooks";
-    case "#mail":
-      return "mail";
-    case "#schema":
-      return "schema";
-    default:
-      return "records";
-  }
-}
+import { pageFromHash, ProjectScreen, type AdminPage } from "./ProjectScreen.tsx";
+import { RecordsView } from "./RecordsView.tsx";
 
 interface Props {
   onLogout: () => void;
   /** Called when the server says this session is no longer an admin (403). */
   onForbidden?: () => void;
-}
-
-function relationCell(row: Record<string, unknown>, fieldName: string, display?: string): string {
-  const expand = row.$expand;
-  if (expand && typeof expand === "object") {
-    const related = (expand as Record<string, unknown>)[fieldName];
-    if (Array.isArray(related)) {
-      // Many to many: the first few labels, then a count.
-      const labels = related.map((item) => relatedLabel(item as Record<string, unknown>, display));
-      return labels.length > 3 ? `${labels.slice(0, 3).join(", ")} +${labels.length - 3} more` : labels.join(", ");
-    }
-    if (related && typeof related === "object") {
-      return relatedLabel(related as Record<string, unknown>, display);
-    }
-  }
-  return "";
-}
-
-function cell(row: Record<string, unknown>, field: MetaEntity["fields"][number]): ComponentChildren {
-  if (field.relation) {
-    return relationCell(row, field.name, field.relation.display);
-  }
-  const value = row[field.name];
-  switch (field.type) {
-    case "boolean":
-      return <span class={value ? "badge yes" : "badge no"}>{value ? "Yes" : "No"}</span>;
-    case "date":
-      return formatDate(value);
-    case "datetime":
-      return formatDateTime(value);
-    default:
-      if (value === null || value === undefined) {
-        return "";
-      }
-      return String(value);
-  }
 }
 
 export function AppShell({ onLogout, onForbidden }: Props) {
@@ -259,308 +175,57 @@ export function AppShell({ onLogout, onForbidden }: Props) {
   return (
     <div class="app-shell">
       {navOpen ? <div class="sidebar-backdrop" onClick={() => setNavOpen(false)} /> : null}
-      <aside class={navOpen ? "sidebar open" : "sidebar"} id="app-sidebar">
-        <Brand sub={meta?.app.name ?? "loading"} />
-        <nav class="nav" aria-label="Entities">
-          <div class="nav-section">Data</div>
-          {(meta?.entities ?? []).map((item) => (
-            <button
-              key={item.name}
-              data-nav={item.name}
-              class={page === "records" && item.name === entityName ? "active" : ""}
-              aria-current={page === "records" && item.name === entityName ? "page" : undefined}
-              onClick={() => openEntity(item.name)}
-            >
-              <span class="nav-mark">{initials(item.plural)}</span>
-              {item.plural}
-            </button>
-          ))}
-          <div class="nav-section">Project</div>
-          <button
-            data-nav="status"
-            class={page === "status" ? "active" : ""}
-            aria-current={page === "status" ? "page" : undefined}
-            onClick={() => {
-              setPage("status");
-              location.hash = "status";
-              setNavOpen(false);
-            }}
-          >
-            <span class="nav-icon">
-              <IconStatus />
-            </span>
-            Status
-          </button>
-          <button
-            data-nav="backups"
-            class={page === "backups" ? "active" : ""}
-            aria-current={page === "backups" ? "page" : undefined}
-            onClick={() => {
-              setPage("backups");
-              location.hash = "backups";
-              setNavOpen(false);
-            }}
-          >
-            <span class="nav-icon">
-              <IconBackup />
-            </span>
-            Backups
-          </button>
-          <button
-            data-nav="schema"
-            class={page === "schema" ? "active" : ""}
-            aria-current={page === "schema" ? "page" : undefined}
-            onClick={() => {
-              setPage("schema");
-              location.hash = "schema";
-              setNavOpen(false);
-            }}
-          >
-            <span class="nav-icon">
-              <IconSchema />
-            </span>
-            Schema
-          </button>
-          <button
-            data-nav="webhooks"
-            class={page === "webhooks" ? "active" : ""}
-            aria-current={page === "webhooks" ? "page" : undefined}
-            onClick={() => {
-              setPage("webhooks");
-              location.hash = "webhooks";
-              setNavOpen(false);
-            }}
-          >
-            <span class="nav-icon">
-              <IconWebhook />
-            </span>
-            Webhooks
-          </button>
-          <button
-            data-nav="mail"
-            class={page === "mail" ? "active" : ""}
-            aria-current={page === "mail" ? "page" : undefined}
-            onClick={() => {
-              setPage("mail");
-              location.hash = "mail";
-              setNavOpen(false);
-            }}
-          >
-            <span class="nav-icon">
-              <IconMail />
-            </span>
-            Mail
-          </button>
-          <button
-            data-nav="audit"
-            class={page === "audit" ? "active" : ""}
-            aria-current={page === "audit" ? "page" : undefined}
-            onClick={() => {
-              setPage("audit");
-              location.hash = "audit";
-              setNavOpen(false);
-            }}
-          >
-            <span class="nav-icon">
-              <IconAudit />
-            </span>
-            Audit
-          </button>
-          <a data-nav="docs" href="/docs" target="_blank" rel="noreferrer">
-            <span class="nav-icon">
-              <IconDocs />
-            </span>
-            API docs
-          </a>
-        </nav>
-      </aside>
-      <header class="header">
-        <div class="header-title">
-          <button
-            class="menu-btn"
-            type="button"
-            aria-label="Open navigation"
-            aria-controls="app-sidebar"
-            aria-expanded={navOpen}
-            onClick={() => setNavOpen((open) => !open)}
-          >
-            <IconMenu />
-          </button>
-          <strong>{meta?.app.name ?? "Bakorin"}</strong>
-        </div>
-        <div class="header-actions">
-          <ThemeToggle />
-          <div class="user-menu">
-            <button
-              class="user-chip"
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={userOpen}
-              onClick={() => setUserOpen((open) => !open)}
-            >
-              <span class="nav-mark">{initials(String(meLabel))}</span>
-              <span class="user-chip-label">{meLabel}</span>
-            </button>
-            {userOpen ? (
-              <div class="menu-pop" role="menu">
-                <p>
-                  {meLabel}
-                  {typeof me?.role === "string" ? ` · ${me.role}` : ""}
-                </p>
-                <button
-                  type="button"
-                  role="menuitem"
-                  onClick={() => {
-                    logout();
-                    onLogout();
-                  }}
-                >
-                  Sign out
-                </button>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      </header>
+      <Sidebar
+        appName={meta?.app.name}
+        entities={meta?.entities ?? []}
+        page={page}
+        entityName={entityName}
+        open={navOpen}
+        onOpenEntity={openEntity}
+        onOpenPage={(next) => {
+          setPage(next);
+          location.hash = next;
+          setNavOpen(false);
+        }}
+      />
+      <AppHeader
+        appName={meta?.app.name}
+        navOpen={navOpen}
+        onToggleNav={() => setNavOpen((open) => !open)}
+        meLabel={meLabel}
+        role={me?.role}
+        userOpen={userOpen}
+        onToggleUser={() => setUserOpen((open) => !open)}
+        onSignOut={() => {
+          logout();
+          onLogout();
+        }}
+      />
       <main class="main">
         {page !== "records" ? (
           <ProjectScreen page={page} meta={meta} onOpenEntity={openEntity} />
         ) : (
-          <>
-            <div class="toolbar">
-              <div>
-                <h1>{entity?.plural ?? "Records"}</h1>
-                <div class="muted">{total} {total === 1 ? "row" : "rows"}</div>
-              </div>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {meta && entityName === meta.auth.entity ? (
-                  <button class="btn secondary" type="button" onClick={() => setInviting(true)}>
-                    Invite user
-                  </button>
-                ) : null}
-                <button class="btn" id="bakorin-new" onClick={() => setEditing(null)}>
-                  New {entity?.label ?? "record"}
-                </button>
-              </div>
-            </div>
-            {error ? <div class="banner">{error}</div> : null}
-            <div class="filters">
-              <label class="search-field">
-                <span class="sr-only">Search</span>
-                <IconSearch />
-                <input
-                  placeholder={`Search ${entity?.plural.toLowerCase() ?? "records"}`}
-                  value={filter}
-                  onInput={(event) => {
-                    setFilter((event.target as HTMLInputElement).value);
-                    setOffset(0);
-                  }}
-                />
-              </label>
-            </div>
-            <div class="table-wrap">
-              {loading && rows.length === 0 ? (
-                <div class="skeleton" aria-busy="true" aria-label="Loading">
-                  <div class="skeleton-row" />
-                  <div class="skeleton-row" />
-                  <div class="skeleton-row" />
-                  <div class="skeleton-row" />
-                </div>
-              ) : rows.length === 0 ? (
-                <div class="empty">
-                  <h2>{emptyLabel(entity?.plural ?? "records")}</h2>
-                  <p>Create the first {entity?.label.toLowerCase() ?? "record"} to start this list.</p>
-                  <button class="btn" type="button" onClick={() => setEditing(null)}>
-                    New {entity?.label ?? "record"}
-                  </button>
-                </div>
-              ) : (
-                <table>
-                  <thead>
-                    <tr>
-                      {columns.map((field) => {
-                        const active = sort === field.name || sort === `-${field.name}`;
-                        const dir = sort === `-${field.name}` ? "descending" : sort === field.name ? "ascending" : "none";
-                        if (field.relation?.many) {
-                          // Lists of links have no sort order.
-                          return <th key={field.name}>{fieldLabel(field.name)}</th>;
-                        }
-                        return (
-                          <th key={field.name} class="sortable" aria-sort={dir}>
-                            <button type="button" onClick={() => toggleSort(field.name)}>
-                              {fieldLabel(field.name)}
-                              {active ? (sort.startsWith("-") ? " ↓" : " ↑") : ""}
-                            </button>
-                          </th>
-                        );
-                      })}
-                      <th>
-                        <span class="sr-only">Actions</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={String(row.id)}>
-                        {columns.map((field) => (
-                          <td key={field.name} class={field.name === "id" ? "mono" : undefined}>
-                            {cell(row, field)}
-                          </td>
-                        ))}
-                        <td>
-                          <div class="row-actions">
-                            <button class="btn secondary" onClick={() => setEditing(row)}>
-                              Edit
-                            </button>
-                            {meta && entityName === meta.auth.entity && row.emailVerified !== true ? (
-                              <button
-                                class="btn secondary"
-                                type="button"
-                                onClick={() => {
-                                  void resendVerification(String(row.id))
-                                    .then(() => {
-                                      setError(null);
-                                      pushToast("ok", "Verification email sent");
-                                    })
-                                    .catch((err: unknown) =>
-                                      setError(err instanceof Error ? err.message : "resend failed"),
-                                    );
-                                }}
-                              >
-                                Resend verification
-                              </button>
-                            ) : null}
-                            <button class="btn danger" onClick={() => setPendingDelete(row)}>
-                              Delete
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-            <div class="pager">
-              <button
-                class="btn secondary"
-                disabled={offset === 0}
-                onClick={() => setOffset(Math.max(0, offset - limit))}
-              >
-                Previous
-              </button>
-              <span>
-                {total === 0 ? "0 of 0" : `${offset + 1}-${Math.min(offset + limit, total)} of ${total}`}
-              </span>
-              <button
-                class="btn secondary"
-                disabled={offset + limit >= total}
-                onClick={() => setOffset(offset + limit)}
-              >
-                Next
-              </button>
-            </div>
-          </>
+          <RecordsView
+            meta={meta}
+            entity={entity}
+            entityName={entityName}
+            rows={rows}
+            columns={columns}
+            total={total}
+            offset={offset}
+            limit={limit}
+            filter={filter}
+            sort={sort}
+            loading={loading}
+            error={error}
+            setError={setError}
+            setFilter={setFilter}
+            setOffset={setOffset}
+            toggleSort={toggleSort}
+            setEditing={setEditing}
+            setInviting={setInviting}
+            setPendingDelete={setPendingDelete}
+          />
         )}
       </main>
       {entity && editing !== undefined ? (
@@ -605,33 +270,4 @@ export function AppShell({ onLogout, onForbidden }: Props) {
       ) : null}
     </div>
   );
-}
-
-function ProjectScreen({
-  page,
-  meta,
-  onOpenEntity,
-}: {
-  page: Exclude<AdminPage, "records">;
-  meta: MetaResponse | null;
-  onOpenEntity: (name: string) => void;
-}) {
-  switch (page) {
-    case "status":
-      return <Status />;
-    case "backups":
-      return <Backups />;
-    case "webhooks":
-      return <Webhooks />;
-    case "mail":
-      return <Mail meta={meta} />;
-    case "schema":
-      return <Schema initial={meta} onOpenEntity={onOpenEntity} />;
-    case "audit":
-      return <Audit />;
-    default: {
-      const exhaustive: never = page;
-      return exhaustive;
-    }
-  }
 }
