@@ -46,8 +46,14 @@
   top: 8px;
 }
 
-.card + .card {
+/* Page rhythm: the same 24px between every block on a page. Grids set their own gaps. */
+.wrap > * + * {
   margin-top: 24px;
+}
+
+/* Cards end on their padding, not on a stray paragraph margin. */
+.card > :last-child {
+  margin-bottom: 0;
 }
 
 h2 {
@@ -268,8 +274,10 @@ nav a[aria-current="page"] {
 }
 
 .tile-body {
+  flex: 1;
   padding: 16px;
   display: grid;
+  align-content: start;
   gap: 6px;
 }
 
@@ -319,8 +327,9 @@ nav a[aria-current="page"] {
 
 @media (min-width: 800px) {
   .split {
-    grid-template-columns: 2fr 1fr;
-    align-items: start;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    /* Cards side by side share one height and one top edge. */
+    align-items: stretch;
   }
 }
 
@@ -359,10 +368,6 @@ nav a[aria-current="page"] {
   padding: 16px;
   border-radius: 8px;
   margin: 0 0 24px;
-}
-
-.section + .section {
-  margin-top: 24px;
 }
 
 .facts {
