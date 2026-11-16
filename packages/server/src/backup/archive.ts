@@ -11,7 +11,7 @@ import {
   META_TABLE,
   WEBHOOK_OUTBOX_TABLE,
 } from "../db/system.ts";
-import type { FileStore } from "../files/store.ts";
+import { parseS3Url, type FileStore } from "../files/store.ts";
 import { decodeRow } from "../crud/query.ts";
 import { encodeValue } from "../db/types.ts";
 import { sealBackup } from "./integrity.ts";
@@ -85,6 +85,23 @@ export async function restoreProjectAssets(src: string, projectDir: string): Pro
   return names;
 }
 
+/**
+ * Key prefixes in the file store that hold backups. When files and backups share
+ * a bucket (the default with BUCKET set), a backup must not copy older backups,
+ * or each one would contain all the ones before it.
+ */
+export function backupPrefixesInFileStore(ast: SchemaAST, destinations: string[] = []): string[] {
+  const files = ast.runtime.files;
+  if (files.driver !== "s3" || !files.bucket) return [];
+  const prefixes = new Set<string>();
+  for (const destination of [ast.runtime.backups.destination, ...destinations]) {
+    if (!destination?.startsWith("s3://")) continue;
+    const { bucket, prefix } = parseS3Url(destination);
+    if (bucket === files.bucket && prefix) prefixes.add(prefix);
+  }
+  return [...prefixes];
+}
+
 export async function exportPortable(options: {
   dest: string;
   projectDir: string;
@@ -92,6 +109,8 @@ export async function exportPortable(options: {
   db: BakorinDb;
   files: FileStore;
   reason?: string;
+  /** Backup destinations besides the configured one, left out of the files copy. */
+  backupDestinations?: string[];
 }): Promise<string> {
   const dest = resolve(options.dest);
   await mkdir(join(dest, "data"), { recursive: true });
@@ -125,7 +144,7 @@ export async function exportPortable(options: {
     // SQLite: one transaction on the shared connection gives the same snapshot.
     await options.db.transaction().execute(dumpAll);
   }
-  await options.files.copyAllTo(join(dest, "files"));
+  await options.files.copyAllTo(join(dest, "files"), backupPrefixesInFileStore(options.ast, options.backupDestinations));
   await writeManifest(dest, {
     format: BACKUP_FORMAT,
     createdAt: new Date().toISOString(),

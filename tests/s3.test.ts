@@ -87,4 +87,62 @@ entities:
     mock.stop();
     void join;
   });
+  test("a backup in the files bucket does not copy older backups", async () => {
+    const mock = startS3Mock();
+    const s3 = `
+    driver: s3
+    bucket: ${mock.bucket}
+    endpoint: ${mock.endpoint}
+    accessKey: ${mock.accessKey}
+    secretKey: ${mock.secretKey}
+    region: us-east-1
+    path: ./data/uploads`;
+    const yaml = `
+app:
+  name: mini
+runtime:
+  dialect: sqlite
+  sqlite:
+    path: ./data/app.db
+  files:${s3}
+  jwt:
+    secret: test-jwt-secret-0123456789-abcdefghijklmnop
+  backups:
+    retain: 5
+    destination: s3://${mock.bucket}/backups
+auth:
+  entity: users
+  signup: open
+entities:
+  users:
+    auth: true
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      name: { type: text, required: true }
+      role: { type: enum, values: [user, admin], default: user }
+`;
+    const runtime = await boot(yaml);
+    const files = runtime.context.files;
+    await files.put("upload-1.txt", new TextEncoder().encode("kept"), "text/plain");
+    await files.put("backupsish/keep.txt", new TextEncoder().encode("kept too"), "text/plain");
+    for (let i = 0; i < 3; i++) {
+      await runBackup({ ast: runtime.ast, db: runtime.db, files, projectDir: runtime.dir });
+      await Bun.sleep(20);
+    }
+    const keys = await files.list("backups/");
+    const stamps = [...new Set(keys.map((key) => key.split("/")[1]))].sort();
+    expect(stamps.length).toBe(3);
+    const last = keys.filter((key) => key.startsWith(`backups/${stamps.at(-1)}/`));
+    // SQLite backups hold the portable export under portable/; Postgres backups are the export.
+    const filesRoot = `backups/${stamps.at(-1)}/${last.some((key) => key.includes("/portable/")) ? "portable/" : ""}files/`;
+    expect(last.some((key) => key.startsWith(`${filesRoot}backups/`))).toBe(false);
+    expect(last).toContain(`${filesRoot}upload-1.txt`);
+    expect(last).toContain(`${filesRoot}backupsish/keep.txt`);
+    // The newest backup is no bigger than the first: no nesting.
+    const count = (stamp: string) => keys.filter((key) => key.startsWith(`backups/${stamp}/`)).length;
+    expect(count(stamps.at(-1)!)).toBe(count(stamps[0]!));
+    await runtime.close();
+    mock.stop();
+  });
 });

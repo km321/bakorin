@@ -73,7 +73,7 @@ runtime:
     destination: ./data/backups   # or s3://bucket/prefix
 ```
 
-S3 and R2 destinations list objects under the prefix and delete older stamps so `retain` is honored. When a bucket is set in the environment, backups default to `s3://$BUCKET/backups` (change the prefix with `BAKORIN_BACKUP_PREFIX`, or override everything with `BAKORIN_BACKUP_DESTINATION`).
+S3 and R2 destinations list objects under the prefix and delete older stamps so `retain` is honored. When a bucket is set in the environment, backups default to `s3://$BUCKET/backups` (change the prefix with `BAKORIN_BACKUP_PREFIX`, or override everything with `BAKORIN_BACKUP_DESTINATION`). When backups share the uploads bucket, the backup prefix is left out of the files copy, so a backup never contains older backups.
 
 Scheduled backups take a database lease (`backup-scheduler`) so two instances do not take the same backup. The time of the last backup shows on the admin [Status page](monitoring.md), and an [alert](monitoring.md#alerts) can tell you when backups stop.
 

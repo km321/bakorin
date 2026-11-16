@@ -62,6 +62,7 @@ export async function runBackup(options: {
       db: options.db,
       files: options.files,
       reason: options.reason,
+      backupDestinations: [destRoot],
     });
     await sealBackup(dest);
   } else {
@@ -72,6 +73,7 @@ export async function runBackup(options: {
       db: options.db,
       files: options.files,
       reason: options.reason,
+      backupDestinations: [destRoot],
     });
   }
   if (remote) {

@@ -19,7 +19,8 @@ export interface FileStore {
   delete(key: string): Promise<void>;
   list(prefix?: string): Promise<string[]>;
   listDetailed(prefix?: string): Promise<StoredObject[]>;
-  copyAllTo(destDir: string): Promise<void>;
+  /** Copies every object to destDir, skipping keys under any of skipPrefixes (for example the backup prefix). */
+  copyAllTo(destDir: string, skipPrefixes?: string[]): Promise<void>;
   importAllFrom(srcDir: string, keyPrefix?: string): Promise<void>;
 }
 
@@ -51,6 +52,14 @@ async function walkFiles(root: string): Promise<string[]> {
     }
   }
   return files;
+}
+
+/** True when key sits under one of the folder style prefixes ("backups" skips "backups/..." only). */
+export function underAnyPrefix(key: string, prefixes: string[]): boolean {
+  return prefixes.some((prefix) => {
+    const root = prefix.replace(/^\/+|\/+$/g, "");
+    return root !== "" && (key === root || key.startsWith(`${root}/`));
+  });
 }
 
 function matchesPrefix(key: string, prefix: string): boolean {
@@ -99,10 +108,16 @@ export function createLocalFileStore(root: string): FileStore {
     async list(prefix = "") {
       return (await this.listDetailed(prefix)).map((item) => item.key);
     },
-    async copyAllTo(destDir) {
+    async copyAllTo(destDir, skipPrefixes = []) {
       await mkdir(destDir, { recursive: true });
       try {
-        await cp(base, destDir, { recursive: true });
+        await cp(base, destDir, {
+          recursive: true,
+          filter: (source) => {
+            const rel = relative(base, source).split("\\").join("/");
+            return rel === "" || !underAnyPrefix(rel, skipPrefixes);
+          },
+        });
       } catch {
         // empty store
       }
@@ -183,10 +198,11 @@ export function createS3FileStore(options: {
       return (await listDetailedAll(prefix)).map((item) => item.key);
     },
     listDetailed: listDetailedAll,
-    async copyAllTo(destDir) {
+    async copyAllTo(destDir, skipPrefixes = []) {
       await mkdir(destDir, { recursive: true });
       for (const object of await listDetailedAll()) {
         const key = object.key;
+        if (underAnyPrefix(key, skipPrefixes)) continue;
         const file = client.file(key);
         const bytes = new Uint8Array(await file.arrayBuffer());
         const path = join(destDir, key);
