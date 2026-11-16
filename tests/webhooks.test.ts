@@ -123,10 +123,13 @@ describe("webhooks", () => {
       expect(JSON.stringify(payload)).not.toMatch(/\$argon2/i);
       expect(hit.body).not.toContain("password123");
 
-      const outbox = await runtime.db.selectFrom(WEBHOOK_OUTBOX_TABLE).selectAll().execute();
+      // The receiver can answer before the dispatcher marks the row, so wait for the status.
+      const outbox = await waitFor("delivered outbox row", async () => {
+        const rows = await runtime.db.selectFrom(WEBHOOK_OUTBOX_TABLE).selectAll().execute();
+        return rows.length === 1 && String(rows[0]?.status) === "delivered" ? rows : undefined;
+      });
       expect(outbox).toHaveLength(1);
       expect(String(outbox[0]?.payload)).not.toContain("argon2");
-      expect(String(outbox[0]?.status)).toBe("delivered");
 
       const timestamp = hit.headers["x-bakorin-timestamp"] ?? "";
       const delivery = hit.headers["x-bakorin-delivery"] ?? "";
