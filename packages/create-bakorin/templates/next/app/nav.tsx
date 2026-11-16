@@ -8,7 +8,7 @@ import type { NavLink } from "../lib/site-config.ts";
 export function NavLinks({ links }: { links: NavLink[] }) {
   const path = usePathname();
   const matches = (href: string) => (href === "/" ? path === "/" : path === href || path.startsWith(`${href}/`));
-  // Only the closest match is current, so /app/tasks marks Tasks and not Dashboard (/app) too.
+  // Only the closest match is current, so /app/projects marks Projects and not Dashboard (/app) too.
   const active = links.map((link) => link.href).filter(matches).sort((a, b) => b.length - a.length)[0];
   const current = (href: string) => href === active;
   return (
