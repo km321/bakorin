@@ -51,7 +51,25 @@ export async function tempProject(yaml = MINI_YAML, hooks = "export default { en
   return dir;
 }
 
+/** Set by the CI matrix: run every boot() based test on Postgres too. */
+export const TEST_DIALECT = process.env.BAKORIN_TEST_DIALECT === "postgres" ? "postgres" : "sqlite";
+
+const SQLITE_BLOCK = `  sqlite:\n    path: ./data/app.db\n`;
+
 export async function boot(yaml?: string, hooks?: string): Promise<RuntimeHandles & { dir: string }> {
+  const source = yaml ?? MINI_YAML;
+  if (TEST_DIALECT === "postgres" && source.includes("dialect: sqlite") && source.includes(SQLITE_BLOCK)) {
+    return bootOnPostgres(source, hooks);
+  }
+  return bootAs(source, hooks);
+}
+
+/** For tests about SQLite files themselves (snapshots, app.db downloads). */
+export async function bootSqlite(yaml?: string, hooks?: string): Promise<RuntimeHandles & { dir: string }> {
+  return bootAs(yaml ?? MINI_YAML, hooks);
+}
+
+async function bootAs(yaml: string, hooks?: string): Promise<RuntimeHandles & { dir: string }> {
   const dir = await tempProject(yaml, hooks);
   const runtime = await createRuntime({
     projectDir: dir,
@@ -68,6 +86,10 @@ export function postgresYaml(url: string, base = MINI_YAML): string {
 }
 
 export async function bootPostgres(hooks?: string, base = MINI_YAML): Promise<RuntimeHandles & { dir: string; database: string }> {
+  return bootOnPostgres(base, hooks);
+}
+
+async function bootOnPostgres(base: string, hooks?: string): Promise<RuntimeHandles & { dir: string; database: string }> {
   const adminUrl = process.env.DATABASE_URL;
   if (!adminUrl) {
     throw new Error("DATABASE_URL is required for postgres tests");
@@ -75,7 +97,7 @@ export async function bootPostgres(hooks?: string, base = MINI_YAML): Promise<Ru
   const { createPostgresDatabase, dropPostgresDatabase } = await import("@bakorin/server");
   const database = `b${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
   const url = await createPostgresDatabase(adminUrl, database);
-  const runtime = await boot(postgresYaml(url, base), hooks);
+  const runtime = await bootAs(postgresYaml(url, base), hooks);
   const originalClose = runtime.close.bind(runtime);
   runtime.close = async () => {
     await originalClose();

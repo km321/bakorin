@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
-import { boot, client } from "./helpers.ts";
+import { boot, bootSqlite, client } from "./helpers.ts";
 import { exportPortable, importPortable, runBackup } from "@bakorin/server";
 import { restoreSqliteSnapshot } from "../packages/server/src/backup/sqlite.ts";
 import { compileAppYaml } from "@bakorin/core";
@@ -8,7 +8,7 @@ import { openSqlite, migrateToSchema } from "@bakorin/server";
 
 describe("backup restore", () => {
   test("sqlite snapshot round trip", async () => {
-    const runtime = await boot();
+    const runtime = await bootSqlite();
     const signup = await client(runtime).fetch("/api/v1/auth/signup", {
       method: "POST",
       body: JSON.stringify({ email: "dev@example.com", password: "password123", name: "Dev" }),

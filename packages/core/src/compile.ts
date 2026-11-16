@@ -842,7 +842,7 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
   } catch (error) {
     throw new SchemaError(`app.yaml is not valid YAML: ${error instanceof Error ? error.message : String(error)}`);
   }
-  const parsedYaml = appYamlSchema.safeParse(parsed);
+  const parsedYaml = appYamlSchema.safeParse(parsed, { reportInput: true });
   if (!parsedYaml.success) {
     throw new SchemaError(formatZodError(parsedYaml.error));
   }

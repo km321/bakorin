@@ -1,4 +1,6 @@
-import { ZodError, type ZodIssue } from "zod";
+import { ZodError, type core } from "zod";
+
+type ZodIssue = core.$ZodIssue;
 import { SchemaError } from "./errors.ts";
 import { APP_YAML_TOP_LEVEL_KEYS, FIELD_TYPES } from "./yaml-schema.ts";
 
@@ -45,28 +47,42 @@ function prefixLines(message: string): string {
 function flattenZodIssues(error: ZodError): ZodIssue[] {
   const out: ZodIssue[] = [];
   for (const issue of error.issues) {
-    if (issue.code === "invalid_union") {
-      const children = issue.unionErrors.flatMap((child) => flattenZodIssues(child));
-      out.push(...preferUsefulIssues(children, issue.path));
-      continue;
-    }
-    out.push(issue);
+    out.push(...flattenIssue(issue, []));
   }
   return out;
+}
+
+function flattenIssue(issue: ZodIssue, prefix: PropertyKey[]): ZodIssue[] {
+  const path = [...prefix, ...issue.path];
+  if (issue.code === "invalid_union") {
+    const children = issue.errors.flatMap((branch) => branch.flatMap((child) => flattenIssue(child, path)));
+    return preferUsefulIssues(children, path);
+  }
+  if (issue.code === "invalid_key") {
+    return issue.issues.flatMap((child) => flattenIssue(child, path));
+  }
+  if (issue.code === "invalid_element") {
+    return issue.issues.flatMap((child) => flattenIssue(child, [...path, issue.key as PropertyKey]));
+  }
+  return [{ ...issue, path } as ZodIssue];
 }
 
 function preferUsefulIssues(issues: ZodIssue[], path: PropertyKey[]): ZodIssue[] {
   const ranked = issues.filter(
     (issue) =>
       issue.code === "unrecognized_keys" ||
-      issue.code === "invalid_enum_value" ||
-      (issue.code === "invalid_string" && issue.path.length >= path.length),
+      (issue.code === "invalid_value" && (issue.input === null || typeof issue.input !== "object")) ||
+      (issue.code === "invalid_format" && issue.path.length >= path.length),
   );
   if (ranked.length > 0) {
     return ranked;
   }
-  const first = issues[0];
-  return first ? [first] : [];
+  // Prefer the branch that got furthest (for example the object form of a field).
+  const deepest = issues.reduce<ZodIssue | undefined>(
+    (best, issue) => (!best || issue.path.length > best.path.length ? issue : best),
+    undefined,
+  );
+  return deepest ? [deepest] : [];
 }
 
 function looksLikeEntityName(key: string): boolean {
@@ -78,10 +94,10 @@ function pathLabel(path: PropertyKey[]): string {
 }
 
 function isFieldTypeIssue(issue: ZodIssue): boolean {
-  if (issue.code !== "invalid_enum_value") {
+  if (issue.code !== "invalid_value") {
     return false;
   }
-  const options = issue.options.map(String);
+  const options = issue.values.map(String);
   return (
     options.every((option) => FIELD_TYPE_SET.has(option)) && FIELD_TYPES.every((type) => options.includes(type))
   );
@@ -104,16 +120,16 @@ function formatIssue(issue: ZodIssue): string[] {
         }
         return `app.yaml: unknown key "${key}"${at}`;
       });
-    case "invalid_enum_value": {
+    case "invalid_value": {
       if (isFieldTypeIssue(issue)) {
         return [
-          `app.yaml: unknown field type ${JSON.stringify(issue.received)}${at}. Valid types: ${FIELD_TYPES.join(", ")}`,
+          `app.yaml: unknown field type ${JSON.stringify(issue.input)}${at}. Valid types: ${FIELD_TYPES.join(", ")}`,
         ];
       }
-      return [`app.yaml: invalid value ${JSON.stringify(issue.received)}${at}. Expected ${issue.options.join(", ")}`];
+      return [`app.yaml: invalid value ${JSON.stringify(issue.input)}${at}. Expected ${issue.values.map(String).join(", ")}`];
     }
     case "invalid_type": {
-      if (issue.received === "undefined") {
+      if (issue.input === undefined) {
         if (issue.path.length === 1 && issue.path[0] === "entities") {
           return [`app.yaml: missing "entities". At least one entity is required.`];
         }
@@ -125,7 +141,7 @@ function formatIssue(issue: ZodIssue): string[] {
       if (issue.path[0] === "branding" && /Color$/.test(String(issue.path[1] ?? ""))) {
         return [`app.yaml: ${path} ${issue.message}`];
       }
-      return [`app.yaml: ${path || "root"} should be ${issue.expected}, not ${issue.received}`];
+      return [`app.yaml: ${path || "root"} should be ${issue.expected}, not ${receivedType(issue.input)}`];
     }
     case "too_small":
       if (issue.path.length === 1 && issue.path[0] === "entities") {
@@ -137,6 +153,12 @@ function formatIssue(issue: ZodIssue): string[] {
     default:
       return [`app.yaml: ${issue.message}${at}`];
   }
+}
+
+function receivedType(input: unknown): string {
+  if (input === null) return "null";
+  if (Array.isArray(input)) return "array";
+  return typeof input;
 }
 
 function hintEntityKeys(): string {

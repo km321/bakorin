@@ -429,14 +429,16 @@ SQLite is the default:
 bun test                 # SQLite, plus an in-process S3 mock for listing and retention
 ```
 
-Postgres is a second job. Start Postgres, then:
+To run the whole suite on Postgres, start Postgres, then:
 
 ```bash
 export DATABASE_URL=postgres://postgres:postgres@127.0.0.1:5432/bakorin
-bun test tests/postgres.test.ts
+bun run test:postgres    # BAKORIN_TEST_DIALECT=postgres bun test
 ```
 
-GitHub Actions (`.github/workflows/ci.yml`) runs SQLite tests, Postgres tests against a `postgres:16` service, then a dependency audit and gitleaks scan.
+With `DATABASE_URL` set, the Postgres specific tests also run in a normal `bun test`. Tests about SQLite files themselves (snapshots, `app.db` downloads) stay on SQLite.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs typecheck and the full suite in a matrix on SQLite and on a `postgres:16` service, then a blocking `bun audit` and a gitleaks scan.
 
 Load baseline (measured, SQLite): `bench/baseline.md` via `bun scripts/bench-sqlite.ts`. Restore drill: `bun scripts/restore-drill.ts`.
 

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { createDownloadToken, readTar, verifyBackup } from "@bakorin/server";
-import { boot, client } from "./helpers.ts";
+import { boot, bootSqlite, client } from "./helpers.ts";
 import { startS3Mock } from "./s3-mock.ts";
 
 async function signInAdmin(runtime: Awaited<ReturnType<typeof boot>>, email: string) {
@@ -130,7 +130,7 @@ entities:
   }, 30_000);
 
   test("download: admin-only, short-lived, bound to one backup", async () => {
-    const runtime = await boot();
+    const runtime = await bootSqlite();
     const admin = await signInAdmin(runtime, "ops@example.com");
     const created = (await (await admin.fetch("/api/v1/backups", { method: "POST" })).json()).data as { id: string };
     const second = (await (await admin.fetch("/api/v1/backups", { method: "POST" })).json()).data as { id: string };

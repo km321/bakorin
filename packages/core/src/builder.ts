@@ -719,7 +719,7 @@ export function validateConfig(config: BuilderConfig): BuilderResult {
   const issues: BuilderIssue[] = builderIssues(config);
   if (issues.length > 0) return { yaml, issues, mailFiles, envVars, brandingFiles };
 
-  const parsed = appYamlSchema.safeParse(parseYaml(yaml));
+  const parsed = appYamlSchema.safeParse(parseYaml(yaml), { reportInput: true });
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
       const single = formatZodError({ issues: [issue] } as unknown as Parameters<typeof formatZodError>[0]);

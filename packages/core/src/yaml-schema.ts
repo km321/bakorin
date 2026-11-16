@@ -125,7 +125,8 @@ const mailRuleObject = z
 
 const hexColor = z
   .string({
-    invalid_type_error: 'must be a quoted hex color like "#0f766e" (without quotes, # starts a YAML comment)',
+    error: (issue) =>
+      issue.input === undefined ? undefined : 'must be a quoted hex color like "#0f766e" (without quotes, # starts a YAML comment)',
   })
   .regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/, "must be a hex color like #0f766e or #0a7");
 

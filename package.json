@@ -9,7 +9,7 @@
   "scripts": {
     "test": "bun test",
     "test:sqlite": "bun test",
-    "test:postgres": "bun test tests/postgres.test.ts tests/restore.test.ts",
+    "test:postgres": "BAKORIN_TEST_DIALECT=postgres bun test",
     "typecheck": "tsc -p tsconfig.json && tsc -p packages/admin-ui/tsconfig.json",
     "build:ui": "bun run --filter @bakorin/admin-ui build && bun scripts/embed-ui.ts",
     "build:bin": "bun run build:ui && bun build --compile --minify --outfile bakorin packages/server/src/cli.ts",
