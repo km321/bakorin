@@ -113,3 +113,11 @@ export function IconMenu() {
     </Svg>
   );
 }
+
+export function IconChevron() {
+  return (
+    <Svg>
+      <path d="M6 4l4 4-4 4" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" />
+    </Svg>
+  );
+}

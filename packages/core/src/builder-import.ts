@@ -105,6 +105,13 @@ export function importAppYaml(source: string): ImportResult {
     entity.description = str(raw.description);
     entity.auth = raw.auth === true;
     entity.realtime = raw.realtime === true || raw.realtime === "full" ? "full" : raw.realtime === "ids" ? "ids" : "";
+    const admin = record(raw.admin);
+    entity.admin = {
+      group: str(admin.group),
+      order: admin.order === undefined ? "" : String(admin.order),
+      icon: str(admin.icon),
+      hidden: admin.hidden === true,
+    };
     entity.fields = Object.entries(record(raw.fields)).map(([fieldName, value]) =>
       fieldFromRaw(fieldName, value, warnings, `entities.${name}.fields.${fieldName}`),
     );

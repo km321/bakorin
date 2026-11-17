@@ -48,6 +48,20 @@ export interface EntityDraft {
   rateLimit: Record<PolicyAction, RateLimitDraft>;
   /** Realtime change events: off (empty), full records, or ids only. */
   realtime: "" | "full" | "ids";
+  /** Admin sidebar placement. Empty strings and false mean "not set". */
+  admin: EntityAdminDraft;
+}
+
+export interface EntityAdminDraft {
+  group: string;
+  /** As typed. Empty means app.yaml order. */
+  order: string;
+  icon: string;
+  hidden: boolean;
+}
+
+export function emptyEntityAdmin(): EntityAdminDraft {
+  return { group: "", order: "", icon: "", hidden: false };
 }
 
 export interface RateLimitDraft {
@@ -197,6 +211,7 @@ export function emptyEntity(name = ""): EntityDraft {
     policies: emptyPolicies(),
     rateLimit: emptyRateLimits(),
     realtime: "",
+    admin: emptyEntityAdmin(),
   };
 }
 

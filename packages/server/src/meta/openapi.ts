@@ -76,6 +76,7 @@ export function metaPayload(ast: SchemaAST): Record<string, unknown> {
         display: entity.display,
         description: entity.description,
         auth: entity.auth,
+        ...(entity.admin ? { admin: entity.admin } : {}),
         indexes: entity.indexes,
         fields: entity.fields.map((field) => ({
           name: field.name,

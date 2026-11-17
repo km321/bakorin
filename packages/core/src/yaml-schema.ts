@@ -74,6 +74,21 @@ const entityRateLimit = z
   .strict()
   .refine((value) => Object.keys(value).length > 0, { message: "add at least one of read, create, update, or delete" });
 
+/** How an entity shows in the admin sidebar. Every key is optional. */
+const entityAdmin = z
+  .object({
+    group: z.string().trim().min(1).max(40).optional(),
+    order: z.number().int().min(-1000).max(1000).optional(),
+    icon: z
+      .string()
+      .trim()
+      .min(1)
+      .refine((value) => [...value].length <= 2, { message: "use 1 or 2 characters, like PO or a single emoji" })
+      .optional(),
+    hidden: z.boolean().optional(),
+  })
+  .strict();
+
 const entityObject = z
   .object({
     label: z.string().optional(),
@@ -95,6 +110,7 @@ const entityObject = z
       .optional(),
     rateLimit: entityRateLimit.optional(),
     realtime: z.union([z.boolean(), z.enum(["full", "ids"])]).optional(),
+    admin: entityAdmin.optional(),
   })
   .strict();
 
@@ -336,5 +352,6 @@ export const appYamlSchema = z
 
 export type AppYaml = z.infer<typeof appYamlSchema>;
 export type RawEntity = z.infer<typeof entityObject>;
+export type RawEntityAdmin = z.infer<typeof entityAdmin>;
 export type RawField = z.infer<typeof fieldObject>;
 export type RawBrandingYaml = z.infer<typeof brandingObject>;

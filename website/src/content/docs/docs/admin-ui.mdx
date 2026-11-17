@@ -11,6 +11,8 @@ import adminsOnly from "../../../assets/screens/admin-admins-only-light.webp";
 import statusLight from "../../../assets/screens/admin-status-light.webp";
 import schemaLight from "../../../assets/screens/admin-schema-light.webp";
 import jobsLight from "../../../assets/screens/admin-jobs-light.webp";
+import navLight from "../../../assets/screens/admin-nav-light.webp";
+import navDark from "../../../assets/screens/admin-nav-dark.webp";
 import { Image } from "astro:assets";
 
 Every project serves an admin UI at `/admin/`. It is built from your `app.yaml`, embedded in the binary, and needs no extra setup.
@@ -45,6 +47,38 @@ Regular users still use your front end and the entity API, where your [policies]
 ## Themes
 
 A **System, Light, Dark** switch sits in the top bar. System follows your operating system. The choice is saved in the browser.
+
+## Sidebar
+
+The sidebar is as tall as the window. The project name stays at the top and **API docs** at the bottom, and the list between them scrolls on its own, so a long list never moves the page. On a phone the menu button in the top bar opens the same sidebar.
+
+Entities are listed under **Data**. By default that is one list in app.yaml order. To organize a larger schema, give entities an [`admin`](/docs/app-yaml/#admin-sidebar) block in app.yaml:
+
+```yaml
+entities:
+  products:
+    admin: { group: Catalog, order: 1, icon: PR }
+  categories:
+    admin: { group: Catalog, order: 2 }
+  orders:
+    admin: { group: Sales }
+  refunds:
+    admin: { group: Sales }
+  import_rows:
+    admin: { hidden: true }
+```
+
+- Entities without a `group` come first, then each group under its own heading.
+- Click a group heading to collapse or expand it. The admin remembers collapsed groups in this browser, per project. The group holding the page you are on stays open.
+- With more than eight types, a **Filter** box appears at the top of Data. It matches names, labels, and group names, and shows matches from collapsed groups too. Press Enter to open the first match or Escape to clear it.
+- The current page is highlighted, and the sidebar scrolls to keep it in view.
+- `hidden: true` keeps an entity out of the sidebar. It still opens from links, such as the Files page and the Schema page.
+
+The [config builder](/builder/) has the same settings under **Admin sidebar** on each entity.
+
+<Image src={navLight} alt="Admin sidebar in light mode with a filter box for 23 types, Users and Customers without a group, then the Catalog and Sales groups, with Orders highlighted" />
+
+<Image src={navDark} alt="Admin sidebar in dark mode filtered by ord, showing only Orders and Order items under Sales, with Orders highlighted" />
 
 ## Data
 

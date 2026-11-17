@@ -19,6 +19,7 @@ export type {
   ChangeOp,
   DialectName,
   EntityAST,
+  EntityAdminAST,
   FieldAST,
   FieldTypeName,
   FieldWritable,

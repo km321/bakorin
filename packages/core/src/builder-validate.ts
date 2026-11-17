@@ -51,6 +51,13 @@ export function builderIssues(config: BuilderConfig): BuilderIssue[] {
     entity.indexes.forEach((index, k) => {
       if (index.length === 0) error(`entities.${i}.indexes.${k}`, "Pick at least one field or remove this index.");
     });
+    const admin = entity.admin;
+    if (admin) {
+      const order = admin.order.trim();
+      if (order && (!/^-?\d+$/.test(order) || Math.abs(Number(order)) > 1000)) error(`entities.${i}.admin.order`, "Order must be a whole number from -1000 to 1000.");
+      if ([...admin.icon.trim()].length > 2) error(`entities.${i}.admin.icon`, "Use 1 or 2 characters.");
+      if (admin.group.trim().length > 40) error(`entities.${i}.admin.group`, "Keep the group name to 40 characters.");
+    }
   });
   if (config.entities.length === 0) error("entities", "Add at least one entity.");
   const ruleNames = new Set<string>();

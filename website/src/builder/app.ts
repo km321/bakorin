@@ -11,6 +11,7 @@ import {
   cloneConfig,
   defaultAuth,
   emptyEntity,
+  emptyEntityAdmin,
   emptyField,
   emptyBranding,
   emptyJob,
@@ -96,6 +97,7 @@ function loadInitial(): void {
         config.branding = { ...emptyBranding(), ...(config.branding ?? {}) };
         config.mail = config.mail ?? [];
         config.jobs = config.jobs ?? [];
+        for (const entity of config.entities) entity.admin = { ...emptyEntityAdmin(), ...(entity.admin ?? {}) };
         starterId = saved.starterId ?? "custom";
         return;
       }
@@ -824,6 +826,7 @@ function entityCard(entity: EntityDraft, i: number): HTMLElement {
         ),
         { hint: "Clients subscribe over server sent events. Each reader only gets what they may read." },
       ),
+      adminBlock(entity, i),
       h(
         "fieldset",
         { class: "fields", "data-target": `entities.${i}.fields` },
@@ -869,6 +872,34 @@ function entityCard(entity: EntityDraft, i: number): HTMLElement {
     else openEntities.delete(i);
   });
   return details;
+}
+
+/** Where the entity shows in the admin sidebar (app.yaml admin:). All optional. */
+function adminBlock(entity: EntityDraft, i: number): HTMLElement {
+  entity.admin = entity.admin ?? emptyEntityAdmin();
+  const admin = entity.admin;
+  const groups = [...new Set(config.entities.map((item) => item.admin?.group.trim() ?? "").filter(Boolean))];
+  return h(
+    "fieldset",
+    { class: "fields", "data-target": `entities.${i}.admin` },
+    h("legend", {}, "Admin sidebar"),
+    h("p", { class: "hint" }, "Optional. Entities with the same group are listed together under that heading. Leave everything empty to keep the default list."),
+    h(
+      "div",
+      { class: "grid3" },
+      control(`entities.${i}.admin.group`, "Group", textInput(admin.group, (v) => (admin.group = v), { placeholder: "Content", list: `bk-groups-${i}` }), {
+        hint: "A heading such as Content or Billing.",
+      }),
+      control(`entities.${i}.admin.order`, "Order", textInput(admin.order, (v) => (admin.order = v), { placeholder: "1", inputmode: "numeric" }), {
+        hint: "Lower comes first. Empty keeps app.yaml order.",
+      }),
+      control(`entities.${i}.admin.icon`, "Icon", textInput(admin.icon, (v) => (admin.icon = v), { placeholder: "PR", maxlength: 4 }), {
+        hint: "1 or 2 characters for the badge. Default: initials.",
+      }),
+    ),
+    h("datalist", { id: `bk-groups-${i}` }, ...groups.map((group) => h("option", { value: group }))),
+    checkbox(`entities.${i}.admin.hidden`, "Hide from the admin sidebar (admin.hidden: true)", admin.hidden, (v) => (admin.hidden = v)),
+  );
 }
 
 function entitiesSection(): HTMLElement {

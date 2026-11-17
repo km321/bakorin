@@ -8,6 +8,8 @@ export interface MetaEntity {
   display: string;
   description?: string;
   auth?: boolean;
+  /** Sidebar placement from app.yaml admin:. Missing when the entity sets none. */
+  admin?: { group?: string; order?: number; icon?: string; hidden?: boolean };
   indexes?: string[][];
   policies?: Record<string, string[]>;
   fields: Array<{

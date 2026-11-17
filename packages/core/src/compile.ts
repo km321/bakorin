@@ -80,6 +80,7 @@ export function compileAppYaml(source: string, options: CompileOptions = {}): Sc
       ...(raw.rateLimit ? { rateLimit: compileEntityRateLimit(raw.rateLimit) } : {}),
       ...(raw.realtime === true || raw.realtime === "full" ? { realtime: "full" as const } : {}),
       ...(raw.realtime === "ids" ? { realtime: "ids" as const } : {}),
+      ...(raw.admin && Object.keys(raw.admin).length > 0 ? { admin: { ...raw.admin } } : {}),
     };
   });
 

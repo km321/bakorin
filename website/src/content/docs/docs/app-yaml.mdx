@@ -169,8 +169,35 @@ Each key under `entities` is an entity name. Names must start with a letter or u
 | `policies` | `read`, `create`, `update`, `delete`. See [Permissions](/docs/permissions/) |
 | `rateLimit` | Optional request limits per action. See [Rate limits](#rate-limits) |
 | `realtime` | `true` (send records) or `ids` (send ids only). Off by default. See [Realtime](/docs/realtime/) |
+| `admin` | Optional sidebar placement in the admin UI: `group`, `order`, `icon`, `hidden`. See [Admin sidebar](#admin-sidebar) |
 
 Every entity gets three system fields you cannot redefine: `id`, `createdAt`, and `updatedAt`.
+
+### Admin sidebar
+
+`admin` decides where an entity shows in the [admin UI](/docs/admin-ui/#sidebar) sidebar. Every key is optional, and a project that sets none gets one plain list in app.yaml order.
+
+```yaml
+entities:
+  posts:
+    admin:
+      group: Content   # heading to list it under
+      order: 1         # position inside the group, lower first
+      icon: PO         # 1 or 2 characters for the badge (default: initials)
+  invoices:
+    admin: { group: Billing }
+  audit_notes:
+    admin: { hidden: true }   # left out of the sidebar
+```
+
+| Key | Notes |
+|---|---|
+| `group` | Heading to list the entity under, up to 40 characters. Entities with the same `group` are listed together. Entities without one come first, with no heading. Groups appear in the order their first entity appears in app.yaml |
+| `order` | Whole number from -1000 to 1000. Lower comes first inside its group. Entities without `order` follow, in app.yaml order |
+| `icon` | 1 or 2 characters (letters or a single emoji) for the badge. Defaults to the initials of `plural` |
+| `hidden` | `true` leaves the entity out of the sidebar. It still opens from links (for example the Files page) and shows on the Schema page, and its API is unchanged |
+
+`admin` only changes the admin UI. It does not touch the database, so changing it never needs a migration.
 
 ### Field types
 

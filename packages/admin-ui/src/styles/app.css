@@ -161,15 +161,110 @@ a:hover {
   min-height: 100vh;
 }
 
+/* The sidebar is as tall as the window and never scrolls with the page. The brand
+   stays at the top, API docs at the bottom, and the list between them scrolls. */
 .sidebar {
   grid-row: 1 / span 2;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  height: 100dvh;
   border-right: 1px solid var(--line);
-  padding: var(--space-5) var(--space-3);
+  padding: var(--space-5) var(--space-3) var(--space-3);
   background: var(--bg-sidebar);
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: var(--space-4);
   min-width: 0;
+  overflow: hidden;
+}
+
+.nav-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  /* Room for focus rings and the scrollbar without clipping. */
+  margin: 0 calc(-1 * var(--space-2));
+  padding: 0 var(--space-2) var(--space-2);
+}
+
+.sidebar .sidebar-footer {
+  flex: 0 0 auto;
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-2);
+}
+
+.nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-list[hidden] {
+  display: none;
+}
+
+.nav-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: var(--space-1);
+}
+
+.nav .nav-group-toggle {
+  padding: 6px 10px 4px 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.01em;
+}
+
+.nav .nav-group-toggle:hover {
+  background: transparent;
+  color: var(--text);
+}
+
+.nav-chevron {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  transition: transform 120ms ease;
+}
+
+.nav-chevron.open {
+  transform: rotate(90deg);
+}
+
+.nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-filter {
+  padding: 0 0 var(--space-2);
+}
+
+.nav-filter input {
+  width: 100%;
+  font: inherit;
+  font-size: var(--text-sm);
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--text);
+}
+
+.nav-empty {
+  margin: 0;
+  padding: 6px 10px;
+  color: var(--muted);
+  font-size: var(--text-sm);
 }
 
 .brand {
@@ -231,6 +326,15 @@ a:hover {
   text-decoration: none;
 }
 
+/* The current page: accent tint and a bar on the left, so it stands out from hover. */
+.nav button[aria-current="page"],
+.nav a[aria-current="page"] {
+  background: var(--accent-soft);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .nav-mark {
   width: 22px;
   height: 22px;
@@ -256,6 +360,9 @@ a:hover {
 
 .header {
   grid-column: 2;
+  position: sticky;
+  top: 0;
+  z-index: 20;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -927,6 +1034,9 @@ textarea:focus {
 @media (prefers-reduced-motion: reduce) {
   .skeleton-row {
     animation: none;
+  }
+  .nav-chevron {
+    transition: none;
   }
 }
 

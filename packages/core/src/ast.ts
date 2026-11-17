@@ -92,6 +92,21 @@ export interface EntityAST {
    * carry only the id and operation, for heavy tables; clients refetch.
    */
   realtime?: RealtimeMode;
+  /** Admin sidebar placement (app.yaml admin:). Left out when the entity sets none. */
+  admin?: EntityAdminAST;
+}
+
+/**
+ * Where an entity shows in the admin sidebar. group: a heading to list it under.
+ * order: its position in that list (lower first; unset keeps app.yaml order, after
+ * the ordered ones). icon: 1 or 2 characters for its badge. hidden: leave it out of
+ * the sidebar (it still opens by link and shows on the Schema page).
+ */
+export interface EntityAdminAST {
+  group?: string;
+  order?: number;
+  icon?: string;
+  hidden?: boolean;
 }
 
 export type RealtimeMode = "full" | "ids";

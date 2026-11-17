@@ -5,6 +5,7 @@ import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
 import { Drawer } from "../components/Drawer.tsx";
 import { InviteUser } from "../components/InviteUser.tsx";
 import { Sidebar } from "../components/Sidebar.tsx";
+import { firstNavEntity } from "../lib/nav.ts";
 import { pushToast } from "../lib/toast.ts";
 import { pageFromHash, ProjectScreen, type AdminPage } from "./ProjectScreen.tsx";
 import { RecordsView } from "./RecordsView.tsx";
@@ -91,7 +92,7 @@ export function AppShell({ onLogout, onForbidden }: Props) {
       .then(([payload, profile]) => {
         setMeta(payload);
         setMe(profile);
-        const first = payload.entities[0]?.name ?? "";
+        const first = firstNavEntity(payload.entities);
         setEntityName(first);
         openRecordFromHash(location.hash, payload);
       })

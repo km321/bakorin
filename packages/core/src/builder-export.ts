@@ -175,6 +175,8 @@ export function toAppObject(config: BuilderConfig): Record<string, unknown> {
     if (Object.keys(limits).length > 0) raw.rateLimit = limits;
     if (entity.realtime === "full") raw.realtime = true;
     else if (entity.realtime === "ids") raw.realtime = "ids";
+    const admin = adminToRaw(entity.admin);
+    if (admin) raw.admin = admin;
     entities[entity.name] = raw;
   }
   out.entities = entities;
@@ -182,6 +184,20 @@ export function toAppObject(config: BuilderConfig): Record<string, unknown> {
   if (config.mail.length > 0) out.mail = config.mail.map((rule) => mailToRaw(config, rule));
   if (config.jobs.length > 0) out.jobs = config.jobs.map((job) => jobToRaw(job));
   return out;
+}
+
+function adminToRaw(admin: EntityDraft["admin"] | undefined): Record<string, unknown> | undefined {
+  if (!admin) return undefined;
+  const out: Record<string, unknown> = {};
+  if (admin.group.trim()) out.group = admin.group.trim();
+  const order = admin.order.trim();
+  if (order) {
+    const value = Number(order);
+    out.order = Number.isFinite(value) ? value : order;
+  }
+  if (admin.icon.trim()) out.icon = admin.icon.trim();
+  if (admin.hidden) out.hidden = true;
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 function jobToRaw(job: JobDraft): Record<string, unknown> {
