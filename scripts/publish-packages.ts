@@ -81,7 +81,15 @@ async function publishOne(dir: string, scratch: string): Promise<void> {
 
 // Unreleased changesets mean the versions in package.json are stale. Version
 // first (the "Version Packages" PR), then publish.
-const pending = (await readdir(join(ROOT, ".changeset"))).filter((f) => f.endsWith(".md") && f !== "README.md");
+// In prerelease mode the changeset files stay after versioning and are listed
+// in pre.json, so those count as released.
+const preFile = Bun.file(join(ROOT, ".changeset", "pre.json"));
+const released = new Set(
+  (await preFile.exists()) ? ((await preFile.json()) as { changesets?: string[] }).changesets ?? [] : [],
+);
+const pending = (await readdir(join(ROOT, ".changeset"))).filter(
+  (f) => f.endsWith(".md") && f !== "README.md" && !released.has(f.slice(0, -3)),
+);
 if (pending.length && !dryRun) {
   console.error(`Refusing to publish: unreleased changesets in .changeset/ (${pending.join(", ")}). Run bun run version-packages first.`);
   process.exit(1);

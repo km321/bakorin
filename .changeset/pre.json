@@ -8,5 +8,7 @@
     "@bakorin/sdk": "0.0.1",
     "@bakorin/server": "0.0.1"
   },
-  "changesets": []
+  "changesets": [
+    "first-public-beta"
+  ]
 }

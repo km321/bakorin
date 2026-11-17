@@ -1,6 +1,6 @@
 {
   "name": "@bakorin/core",
-  "version": "0.0.1",
+  "version": "0.1.0-beta.0",
   "description": "app.yaml compiler, schema AST, and migrator diff for Bakorin",
   "license": "AGPL-3.0-only",
   "author": "Melton Studios",

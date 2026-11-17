@@ -1,6 +1,6 @@
 {
   "name": "@bakorin/sdk",
-  "version": "0.0.1",
+  "version": "0.1.0-beta.0",
   "description": "Typed client for a Bakorin API, with Astro and Next.js helpers, headless stores, React hooks, and components",
   "license": "MIT",
   "author": "Melton Studios",

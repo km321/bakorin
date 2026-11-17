@@ -1,6 +1,6 @@
 {
   "name": "create-bakorin",
-  "version": "0.0.1",
+  "version": "0.1.0-beta.0",
   "description": "Scaffold a Bakorin backend and an optional Astro or Next.js starter",
   "license": "MIT",
   "author": "Melton Studios",
