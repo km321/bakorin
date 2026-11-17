@@ -29,10 +29,12 @@ describe("publish-ready packages", () => {
   ];
 
   for (const item of packages) {
-    test(`${item.name} is 0.0.1 with public beta publishConfig`, async () => {
+    test(`${item.name} shares the release version and has public beta publishConfig`, async () => {
       const pkg = await readPkg(item.dir);
       expect(pkg.name).toBe(item.name);
-      expect(pkg.version).toBe("0.0.1");
+      // The four packages are a Changesets fixed group: one version for all.
+      expect(pkg.version).toBe((await readPkg("packages/core")).version);
+      expect(pkg.version).toMatch(/^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/);
       expect(pkg.license).toBe(item.license);
       expect(pkg.private).toBeUndefined();
       expect(pkg.publishConfig).toEqual({ access: "public", tag: "beta" });
