@@ -63,6 +63,7 @@ export default defineConfig({
             { label: "Files", slug: "docs/files" },
             { label: "Branding", slug: "docs/branding" },
             { label: "Webhooks", slug: "docs/webhooks" },
+            { label: "Jobs", slug: "docs/jobs" },
             { label: "Realtime", slug: "docs/realtime" },
             { label: "Admin UI", slug: "docs/admin-ui" },
             { label: "Schema visualizer", slug: "docs/schema" },
