@@ -1,0 +1,79 @@
+# Waiting to be moved to .github/workflows/release.yml. The box push token has no
+# `workflow` scope, so GitHub refused this file under .github/workflows. Move it
+# with: git mv ci/release.yml .github/workflows/release.yml
+
+name: release
+
+# Two ways in:
+# - Push to main. If there are pending changesets, changesets/action opens or
+#   updates the "Version Packages" PR. When that PR is merged there are none
+#   left, so the same job publishes the new versions to npm.
+# - Run it by hand (workflow_dispatch). dry_run defaults to true, which builds,
+#   packs and runs npm publish --dry-run without touching the registry.
+#
+# Publishing uses npm trusted publishing (OIDC): no npm token is stored. Each
+# package needs this workflow (release.yml) added as a trusted publisher on
+# npmjs.com. See RELEASING.md. For the very first publish, before the packages
+# exist on npm, add a short lived NPM_TOKEN secret; npm uses OIDC first and
+# only falls back to the token when OIDC is not set up.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Pack and npm publish --dry-run only"
+        type: boolean
+        default: true
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release:
+    name: version or publish
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+      - name: npm 11.5.1 or later (needed for trusted publishing)
+        run: npm install -g npm@^11.5.1 && npm --version
+      - run: bun install --frozen-lockfile
+      - name: Typecheck
+        run: bun run typecheck
+      - name: Pack check
+        run: bun run pack:check
+
+      - name: Publish dry run
+        if: github.event_name == 'workflow_dispatch' && inputs.dry_run
+        run: bun scripts/publish-packages.ts --dry-run
+
+      - name: Version PR or publish
+        if: github.event_name == 'push' || !inputs.dry_run
+        uses: changesets/action@v1
+        with:
+          version: bun run version-packages
+          publish: bun run release:publish
+          title: "Version Packages"
+          commit: "Version Packages"
+          createGithubReleases: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Only used if trusted publishing is not configured yet. Leave the
+          # secret unset once every package has its trusted publisher.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

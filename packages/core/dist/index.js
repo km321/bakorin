@@ -15,6 +15,8 @@ var WEBHOOK_DEFAULT_TIMEOUT_MS = 1e4;
 var WEBHOOK_DEFAULT_RETAIN_DAYS = 30;
 var MAIL_DEFAULT_MAX_ATTEMPTS = 8;
 var MAIL_DEFAULT_RETAIN_DAYS = 30;
+var JOB_DEFAULT_RETAIN_DAYS = 30;
+var JOB_DEFAULT_TIMEOUT_SECONDS = 300;
 // src/compile.ts
 import { parse as parseYaml } from "yaml";
 
@@ -470,7 +472,7 @@ var FIELD_TYPES = [
   "file",
   "relation"
 ];
-var APP_YAML_TOP_LEVEL_KEYS = ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail"];
+var APP_YAML_TOP_LEVEL_KEYS = ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail", "jobs"];
 var fieldType = z.enum(FIELD_TYPES);
 var fieldObject = z.object({
   type: fieldType,
@@ -506,6 +508,12 @@ var entityRateLimit = z.object({
   update: rateLimitRule.optional(),
   delete: rateLimitRule.optional()
 }).strict().refine((value) => Object.keys(value).length > 0, { message: "add at least one of read, create, update, or delete" });
+var entityAdmin = z.object({
+  group: z.string().trim().min(1).max(40).optional(),
+  order: z.number().int().min(-1000).max(1000).optional(),
+  icon: z.string().trim().min(1).refine((value) => [...value].length <= 2, { message: "use 1 or 2 characters, like PO or a single emoji" }).optional(),
+  hidden: z.boolean().optional()
+}).strict();
 var entityObject = z.object({
   label: z.string().optional(),
   plural: z.string().optional(),
@@ -522,7 +530,8 @@ var entityObject = z.object({
     delete: policyValue.optional()
   }).strict().optional(),
   rateLimit: entityRateLimit.optional(),
-  realtime: z.union([z.boolean(), z.enum(["full", "ids"])]).optional()
+  realtime: z.union([z.boolean(), z.enum(["full", "ids"])]).optional(),
+  admin: entityAdmin.optional()
 }).strict();
 var webhookObject = z.object({
   entity: z.union([ident, z.literal("*")]),
@@ -577,6 +586,15 @@ var brandingObject = z.object({
 }).strict().refine((value) => Object.keys(value).length > 0, {
   message: "add at least one of name, primaryColor, accentColor, logo, or favicon, or remove branding"
 });
+var jobItem = z.object({
+  name: ident,
+  cron: z.string().min(1),
+  handler: ident.optional(),
+  timezone: z.string().min(1).optional(),
+  dryRun: z.boolean().optional(),
+  timeoutSeconds: z.number().int().min(1).max(86400).optional(),
+  enabled: z.boolean().optional()
+}).strict();
 var appYamlSchema = z.object({
   app: z.object({
     name: z.string().min(1),
@@ -653,6 +671,9 @@ var appYamlSchema = z.object({
     }).strict().optional(),
     mail: z.object({
       retainDays: z.number().int().min(1).max(3650).optional()
+    }).strict().optional(),
+    jobs: z.object({
+      retainDays: z.number().int().min(1).max(3650).optional()
     }).strict().optional()
   }).strict().optional(),
   auth: z.object({
@@ -668,7 +689,8 @@ var appYamlSchema = z.object({
     message: "at least one entity is required"
   }),
   webhooks: z.array(webhookObject).optional(),
-  mail: z.array(mailRuleObject).optional()
+  mail: z.array(mailRuleObject).optional(),
+  jobs: z.array(jobItem).optional()
 }).strict();
 
 // src/format-schema.ts
@@ -1059,7 +1081,7 @@ function pluralize(name) {
   }
   return `${name}s`;
 }
-var RESERVED_ENTITY_NAMES = ["auth", "audit", "backups", "docs", "files", "mail", "realtime", "status", "webhooks", "_meta"];
+var RESERVED_ENTITY_NAMES = ["auth", "audit", "backups", "docs", "files", "jobs", "mail", "realtime", "status", "webhooks", "_meta"];
 function assertEntityRouteFree(name) {
   if (RESERVED_ENTITY_NAMES.includes(name.toLowerCase())) {
     throw new SchemaError(`entity name "${name}" is reserved because /api/v1/${name.toLowerCase()} is a built in route. Rename the entity, for example to "${name}_items" or a more specific name.`);
@@ -1106,6 +1128,477 @@ function compileEntityRateLimit(raw) {
     }
   }
   return out;
+}
+
+// src/cron.ts
+class CronError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "CronError";
+  }
+}
+var MONTHS = {
+  jan: 1,
+  feb: 2,
+  mar: 3,
+  apr: 4,
+  may: 5,
+  jun: 6,
+  jul: 7,
+  aug: 8,
+  sep: 9,
+  oct: 10,
+  nov: 11,
+  dec: 12
+};
+var WEEKDAYS = {
+  sun: 0,
+  mon: 1,
+  tue: 2,
+  wed: 3,
+  thu: 4,
+  fri: 5,
+  sat: 6
+};
+var RANGES = {
+  minute: { min: 0, max: 59 },
+  hour: { min: 0, max: 23 },
+  day: { min: 1, max: 31 },
+  month: { min: 1, max: 12 },
+  dow: { min: 0, max: 7 }
+};
+var DOW_FROM_NAME = {
+  sun: 0,
+  mon: 1,
+  tue: 2,
+  wed: 3,
+  thu: 4,
+  fri: 5,
+  sat: 6
+};
+function parseCron(source) {
+  const trimmed = source.trim();
+  const parts = trimmed.split(/\s+/);
+  if (parts.length !== 5) {
+    throw new CronError(`Cron expression must have 5 fields (minute hour day month weekday), got ${parts.length}.`);
+  }
+  const [minuteSrc, hourSrc, daySrc, monthSrc, dowSrc] = parts;
+  const minute = parseField(minuteSrc, "minute");
+  const hour = parseField(hourSrc, "hour");
+  const day = parseField(daySrc, "day");
+  const month = parseField(monthSrc, "month");
+  const dowRaw = parseField(dowSrc, "dow");
+  const dow = new Set;
+  for (const value of dowRaw) {
+    dow.add(value === 7 ? 0 : value);
+  }
+  return {
+    source: trimmed,
+    minute,
+    hour,
+    day,
+    month,
+    dow,
+    dayRestricted: daySrc !== "*",
+    dowRestricted: dowSrc !== "*"
+  };
+}
+function parseField(src, field) {
+  const { min, max } = RANGES[field];
+  const out = new Set;
+  for (const item of src.split(",")) {
+    if (!item) {
+      throw new CronError(`Empty item in ${field} field.`);
+    }
+    const slash = item.indexOf("/");
+    const rangePart = slash === -1 ? item : item.slice(0, slash);
+    const stepPart = slash === -1 ? undefined : item.slice(slash + 1);
+    const step = stepPart === undefined ? 1 : parseIntStrict(stepPart, field);
+    if (step <= 0) {
+      throw new CronError(`Step in ${field} must be a positive integer.`);
+    }
+    let start;
+    let end;
+    if (rangePart === "*") {
+      start = min;
+      end = max;
+    } else if (rangePart.includes("-")) {
+      const bits = rangePart.split("-");
+      if (bits.length !== 2 || !bits[0] || !bits[1]) {
+        throw new CronError(`Invalid range "${item}" in ${field}.`);
+      }
+      start = parseNameOrNumber(bits[0], field);
+      end = parseNameOrNumber(bits[1], field);
+      if (start > end) {
+        throw new CronError(`Range start is after end in ${field}: "${item}".`);
+      }
+    } else {
+      start = parseNameOrNumber(rangePart, field);
+      end = start;
+    }
+    if (start < min || end > max) {
+      const sunday = field === "dow" ? ", or 7 for Sunday" : "";
+      throw new CronError(`Value out of range in ${field}: "${item}" (allowed ${min}-${max}${sunday}).`);
+    }
+    for (let n = start;n <= end; n += step) {
+      out.add(n);
+    }
+  }
+  if (out.size === 0) {
+    throw new CronError(`No values produced for ${field} field "${src}".`);
+  }
+  return out;
+}
+function parseIntStrict(raw, field) {
+  if (!/^\d+$/.test(raw)) {
+    throw new CronError(`Invalid number "${raw}" in ${field}.`);
+  }
+  return Number(raw);
+}
+function parseNameOrNumber(raw, field) {
+  const key = raw.toLowerCase();
+  if (field === "month" && key in MONTHS) {
+    return MONTHS[key];
+  }
+  if (field === "dow" && key in WEEKDAYS) {
+    return WEEKDAYS[key];
+  }
+  return parseIntStrict(raw, field);
+}
+function isValidTimeZone(timeZone) {
+  try {
+    Intl.DateTimeFormat("en-US", { timeZone });
+    return true;
+  } catch {
+    return false;
+  }
+}
+function zonedParts(date, timeZone) {
+  const fmt = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    weekday: "short",
+    hourCycle: "h23"
+  });
+  const map = {};
+  for (const part of fmt.formatToParts(date)) {
+    if (part.type !== "literal") {
+      map[part.type] = part.value;
+    }
+  }
+  return {
+    year: Number(map.year),
+    month: Number(map.month),
+    day: Number(map.day),
+    hour: Number(map.hour),
+    minute: Number(map.minute),
+    second: Number(map.second),
+    dow: DOW_FROM_NAME[map.weekday.slice(0, 3).toLowerCase()] ?? 0
+  };
+}
+function zonedToUtc(timeZone, year, month, day, hour, minute, second = 0) {
+  const guess = Date.UTC(year, month - 1, day, hour, minute, second);
+  const parts = zonedParts(new Date(guess), timeZone);
+  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  const instant = new Date(guess + (guess - asUtc));
+  const check = zonedParts(instant, timeZone);
+  if (check.year !== year || check.month !== month || check.day !== day || check.hour !== hour || check.minute !== minute || check.second !== second) {
+    return null;
+  }
+  return instant;
+}
+function matchesCron(expr, date, timeZone) {
+  const parts = zonedParts(date, timeZone);
+  return matchesParts(expr, parts);
+}
+function matchesParts(expr, parts) {
+  if (!expr.minute.has(parts.minute) || !expr.hour.has(parts.hour) || !expr.month.has(parts.month)) {
+    return false;
+  }
+  const dayOk = expr.day.has(parts.day);
+  const dowOk = expr.dow.has(parts.dow);
+  if (expr.dayRestricted && expr.dowRestricted) {
+    return dayOk || dowOk;
+  }
+  if (expr.dayRestricted) {
+    return dayOk;
+  }
+  if (expr.dowRestricted) {
+    return dowOk;
+  }
+  return true;
+}
+function daysInMonth(year, month) {
+  return new Date(Date.UTC(year, month, 0)).getUTCDate();
+}
+function weekdayOf(timeZone, year, month, day) {
+  const at = zonedToUtc(timeZone, year, month, day, 12, 0) ?? zonedToUtc(timeZone, year, month, day, 3, 0) ?? zonedToUtc(timeZone, year, month, day, 0, 0);
+  return at ? zonedParts(at, timeZone).dow : null;
+}
+function dayMatches(expr, timeZone, year, month, day) {
+  const dim = daysInMonth(year, month);
+  if (day < 1 || day > dim) {
+    return false;
+  }
+  const dow = weekdayOf(timeZone, year, month, day);
+  const dayOk = !expr.dayRestricted || expr.day.has(day);
+  const dowOk = !expr.dowRestricted || dow !== null && expr.dow.has(dow);
+  if (expr.dayRestricted && expr.dowRestricted) {
+    return dayOk || dowOk;
+  }
+  return dayOk && dowOk;
+}
+function normalizeDate(year, month, day) {
+  if (month > 12) {
+    month -= 12;
+    year += 1;
+  }
+  if (month < 1) {
+    month += 12;
+    year -= 1;
+  }
+  if (year < 1970 || year > 2100) {
+    return null;
+  }
+  return { year, month, day };
+}
+function nextCronOccurrence(expr, from, timeZone, horizonMs = 4 * 365 * 24 * 60 * 60 * 1000) {
+  const parts = zonedParts(from, timeZone);
+  let year = parts.year;
+  let month = parts.month;
+  let day = parts.day;
+  let hour = parts.hour;
+  let minute = parts.minute + 1;
+  let guard = 0;
+  while (guard++ < 50000) {
+    while (minute > 59) {
+      minute -= 60;
+      hour += 1;
+    }
+    while (hour > 23) {
+      hour -= 24;
+      day += 1;
+    }
+    while (day > daysInMonth(year, month)) {
+      day -= daysInMonth(year, month);
+      month += 1;
+      if (month > 12) {
+        month = 1;
+        year += 1;
+      }
+    }
+    const normalized = normalizeDate(year, month, day);
+    if (!normalized) {
+      return null;
+    }
+    year = normalized.year;
+    month = normalized.month;
+    day = normalized.day;
+    const candidate = zonedToUtc(timeZone, year, month, day, hour, minute);
+    if (candidate && candidate.getTime() - from.getTime() > horizonMs) {
+      return null;
+    }
+    if (!expr.month.has(month)) {
+      month += 1;
+      day = 1;
+      hour = 0;
+      minute = 0;
+      continue;
+    }
+    if (!dayMatches(expr, timeZone, year, month, day)) {
+      day += 1;
+      hour = 0;
+      minute = 0;
+      continue;
+    }
+    if (!expr.hour.has(hour)) {
+      const nextHour = nextInSet(expr.hour, hour + 1, 23) ?? null;
+      if (nextHour === null) {
+        day += 1;
+        hour = 0;
+        minute = 0;
+      } else {
+        hour = nextHour;
+        minute = 0;
+      }
+      continue;
+    }
+    if (!expr.minute.has(minute)) {
+      const nextMinute = nextInSet(expr.minute, minute, 59);
+      if (nextMinute === null) {
+        hour += 1;
+        minute = 0;
+      } else {
+        minute = nextMinute;
+      }
+      continue;
+    }
+    if (!candidate) {
+      minute += 1;
+      continue;
+    }
+    return candidate;
+  }
+  return null;
+}
+function latestCronOccurrenceAtOrBefore(expr, at, timeZone, horizonMs = 4 * 365 * 24 * 60 * 60 * 1000) {
+  const parts = zonedParts(at, timeZone);
+  let year = parts.year;
+  let month = parts.month;
+  let day = parts.day;
+  let hour = parts.hour;
+  let minute = parts.minute;
+  let guard = 0;
+  while (guard++ < 50000) {
+    while (minute < 0) {
+      minute += 60;
+      hour -= 1;
+    }
+    while (hour < 0) {
+      hour += 24;
+      day -= 1;
+    }
+    while (day < 1) {
+      month -= 1;
+      if (month < 1) {
+        month = 12;
+        year -= 1;
+      }
+      day += daysInMonth(year, month);
+    }
+    const normalized = normalizeDate(year, month, day);
+    if (!normalized) {
+      return null;
+    }
+    year = normalized.year;
+    month = normalized.month;
+    day = normalized.day;
+    const candidate = zonedToUtc(timeZone, year, month, day, hour, minute);
+    if (candidate && at.getTime() - candidate.getTime() > horizonMs) {
+      return null;
+    }
+    if (!expr.month.has(month)) {
+      month -= 1;
+      if (month < 1) {
+        month = 12;
+        year -= 1;
+      }
+      day = daysInMonth(year, month);
+      hour = 23;
+      minute = 59;
+      continue;
+    }
+    if (!dayMatches(expr, timeZone, year, month, day)) {
+      day -= 1;
+      hour = 23;
+      minute = 59;
+      continue;
+    }
+    if (!expr.hour.has(hour)) {
+      const prevHour = prevInSet(expr.hour, hour - 1, 0);
+      if (prevHour === null) {
+        day -= 1;
+        hour = 23;
+        minute = 59;
+      } else {
+        hour = prevHour;
+        minute = 59;
+      }
+      continue;
+    }
+    if (!expr.minute.has(minute)) {
+      const prevMinute = prevInSet(expr.minute, minute, 0);
+      if (prevMinute === null) {
+        hour -= 1;
+        minute = 59;
+      } else {
+        minute = prevMinute;
+      }
+      continue;
+    }
+    if (!candidate) {
+      minute -= 1;
+      continue;
+    }
+    if (candidate.getTime() > at.getTime()) {
+      minute -= 1;
+      continue;
+    }
+    return candidate;
+  }
+  return null;
+}
+function nextInSet(set, current, max) {
+  for (let n = current;n <= max; n++) {
+    if (set.has(n)) {
+      return n;
+    }
+  }
+  return null;
+}
+function prevInSet(set, current, min) {
+  for (let n = current;n >= min; n--) {
+    if (set.has(n)) {
+      return n;
+    }
+  }
+  return null;
+}
+
+// src/compile-jobs.ts
+function compileJobs(doc) {
+  const raw = doc.jobs ?? [];
+  const jobs = [];
+  const seen = new Set;
+  raw.forEach((item, index) => {
+    const label = item.name ? `job "${item.name}"` : `job #${index + 1}`;
+    const name = (item.name ?? "").trim();
+    if (!isIdent(name)) {
+      throw new SchemaError(`${label}: name must be a letter or underscore, then letters, digits, or underscores`);
+    }
+    if (seen.has(name)) {
+      throw new SchemaError(`${label}: duplicate job name`);
+    }
+    seen.add(name);
+    const handlerRaw = (item.handler ?? "").trim();
+    const handler = handlerRaw || name;
+    if (!isIdent(handler)) {
+      throw new SchemaError(`${label}: handler must be a letter or underscore, then letters, digits, or underscores`);
+    }
+    const cronSrc = (item.cron ?? "").trim();
+    if (!cronSrc) {
+      throw new SchemaError(`${label}: cron is required`);
+    }
+    try {
+      parseCron(cronSrc);
+    } catch (error) {
+      const message = error instanceof CronError ? error.message : String(error);
+      throw new SchemaError(`${label}: ${message}`);
+    }
+    const timezone = (item.timezone ?? "UTC").trim() || "UTC";
+    if (!isValidTimeZone(timezone)) {
+      throw new SchemaError(`${label}: timezone ${JSON.stringify(timezone)} is not a valid IANA time zone`);
+    }
+    const timeoutSeconds = item.timeoutSeconds ?? JOB_DEFAULT_TIMEOUT_SECONDS;
+    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 86400) {
+      throw new SchemaError(`${label}: timeoutSeconds must be an integer from 1 to 86400`);
+    }
+    jobs.push({
+      name,
+      cron: cronSrc,
+      handler,
+      timezone,
+      dryRun: item.dryRun ?? false,
+      timeoutSeconds,
+      enabled: item.enabled ?? true
+    });
+  });
+  return jobs;
 }
 
 // src/compile-mail.ts
@@ -1395,6 +1888,7 @@ function compileRuntime(yaml, production, env) {
     appUrl: parseAppUrl(env, parsePort(runtime.port, env)),
     webhooksRetainDays: parseWebhookRetainDays(runtime.webhooks?.retainDays, env),
     mailRetainDays: parseMailRetainDays(runtime.mail?.retainDays, env),
+    jobsRetainDays: parseJobsRetainDays(runtime.jobs?.retainDays, env),
     alerts: parseAlerts(runtime.alerts, env),
     trustProxy: parseTrustProxy(runtime.trustProxy, env),
     realtime: parseRealtime(runtime.realtime, env, dialect),
@@ -1529,6 +2023,14 @@ function parseMailRetainDays(yamlValue, env) {
   const value = fromEnv ? Number(fromEnv) : yamlValue ?? MAIL_DEFAULT_RETAIN_DAYS;
   if (!Number.isInteger(value) || value < 1 || value > 3650) {
     throw new SchemaError("runtime.mail.retainDays must be an integer from 1 to 3650");
+  }
+  return value;
+}
+function parseJobsRetainDays(yamlValue, env) {
+  const fromEnv = firstEnv(env, ["BAKORIN_JOBS_RETAIN_DAYS"]);
+  const value = fromEnv ? Number(fromEnv) : yamlValue ?? JOB_DEFAULT_RETAIN_DAYS;
+  if (!Number.isInteger(value) || value < 1 || value > 3650) {
+    throw new SchemaError("runtime.jobs.retainDays must be an integer from 1 to 3650");
   }
   return value;
 }
@@ -1673,6 +2175,10 @@ function deserializeAst(raw) {
     parsed.runtime.mailRetainDays = MAIL_DEFAULT_RETAIN_DAYS;
   }
   parsed.mail = parsed.mail ?? [];
+  parsed.jobs = parsed.jobs ?? [];
+  if (parsed.runtime && parsed.runtime.jobsRetainDays === undefined) {
+    parsed.runtime.jobsRetainDays = 30;
+  }
   for (const hook of parsed.webhooks ?? []) {
     hook.maxAttempts = hook.maxAttempts ?? WEBHOOK_DEFAULT_MAX_ATTEMPTS;
     hook.timeoutMs = hook.timeoutMs ?? WEBHOOK_DEFAULT_TIMEOUT_MS;
@@ -1732,7 +2238,8 @@ function compileAppYaml(source, options = {}) {
       ...raw.renameFrom ? { renameFrom: raw.renameFrom } : {},
       ...raw.rateLimit ? { rateLimit: compileEntityRateLimit(raw.rateLimit) } : {},
       ...raw.realtime === true || raw.realtime === "full" ? { realtime: "full" } : {},
-      ...raw.realtime === "ids" ? { realtime: "ids" } : {}
+      ...raw.realtime === "ids" ? { realtime: "ids" } : {},
+      ...raw.admin && Object.keys(raw.admin).length > 0 ? { admin: { ...raw.admin } } : {}
     };
   });
   const entityMap = Object.fromEntries(entities.map((entity) => [entity.name, entity]));
@@ -1760,6 +2267,7 @@ function compileAppYaml(source, options = {}) {
     };
   });
   const mail = compileMailRules(yaml, entityMap);
+  const jobs = compileJobs(yaml);
   return {
     version: SCHEMA_AST_VERSION,
     appName: yaml.app.name,
@@ -1772,7 +2280,8 @@ function compileAppYaml(source, options = {}) {
     order,
     auth,
     webhooks,
-    mail
+    mail,
+    jobs
   };
 }
 // src/diff.ts
@@ -2329,12 +2838,15 @@ export {
   BRANDING_MAX_FILE_BYTES,
   BRANDING_SURFACES,
   BakorinError,
+  CronError,
   DEFAULT_ALLOWED_MIME_TYPES,
   DEV_JWT_SECRET,
   DestructiveChangeError,
   DiffAbortError,
   FIELD_TYPES,
   IdentError,
+  JOB_DEFAULT_RETAIN_DAYS,
+  JOB_DEFAULT_TIMEOUT_SECONDS,
   MAIL_DEFAULT_MAX_ATTEMPTS,
   MAIL_DEFAULT_RETAIN_DAYS,
   MAX_LINKS_PER_FIELD,
@@ -2375,10 +2887,15 @@ export {
   isHexColor,
   isIdent,
   isManyField,
+  isValidTimeZone,
   joinTableName,
+  latestCronOccurrenceAtOrBefore,
   manyFields,
+  matchesCron,
   needsConfirmation,
+  nextCronOccurrence,
   normalizeHex,
+  parseCron,
   parsePolicies,
   parsePolicy,
   parseTrustProxy,
@@ -2393,5 +2910,7 @@ export {
   topologicalOrder,
   touchesExistingData,
   weakJwtSecretReason,
-  webhooksForEntity
+  webhooksForEntity,
+  zonedParts,
+  zonedToUtc
 };

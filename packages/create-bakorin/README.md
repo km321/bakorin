@@ -2,7 +2,14 @@
 
 Scaffold a Bakorin backend (and optional Astro or Next.js starter) in one command.
 
-From a Bakorin checkout (until npm publish):
+With Bun:
+
+```bash
+bun create bakorin@beta my-app
+bun create bakorin@beta my-app --frontend astro --schema todo --yes
+```
+
+From a Bakorin checkout:
 
 ```bash
 bun install
@@ -10,14 +17,14 @@ bun run create my-app --frontend astro --schema todo --yes
 bun run create --help
 ```
 
-After publish:
+Or with npm:
 
 ```bash
-npx create-bakorin my-app
-npx create-bakorin my-app --frontend astro --schema todo --yes
-npx create-bakorin my-app --frontend astro --schema todo --mail resend --yes
-npx create-bakorin my-app --frontend next --schema auth-only --yes
-npx create-bakorin api-only --frontend none --schema blank --yes
+npx create-bakorin@beta my-app
+npx create-bakorin@beta my-app --frontend astro --schema todo --yes
+npx create-bakorin@beta my-app --frontend astro --schema todo --mail resend --yes
+npx create-bakorin@beta my-app --frontend next --schema auth-only --yes
+npx create-bakorin@beta api-only --frontend none --schema blank --yes
 ```
 
 Flags:
@@ -34,11 +41,11 @@ Flags:
 
 `--mail resend` writes `MAIL_DRIVER=resend`, a `MAIL_FROM` example on `your-domain.com`, and an empty `RESEND_API_KEY=` placeholder. Never commit a real key.
 
-From a checkout, the generated `web/package.json` points `@bakorin/sdk` at this repo's `packages/sdk` via a `file:` path, and the Dockerfile vendors `.bakorin/` so the image can start without npm. After publish, `--sdk npm` (the default outside a checkout) uses `@bakorin/sdk@^0.0.1` and `bunx bakorin`.
+From a checkout, the generated `web/package.json` points `@bakorin/sdk` at this repo's `packages/sdk` via a `file:` path, and the Dockerfile vendors `.bakorin/` so the image can start without npm. With `--sdk npm` (the default outside a checkout), the project gets a `package.json` with `@bakorin/server` and `web/package.json` gets `@bakorin/sdk`, both at `^` this create-bakorin version (for example `^0.1.0-beta.0`). Run `bun install` and `bun run dev`.
 
 Every generated project has a `branding/` folder with notes. Add a `branding:` section to `app.yaml` (name, `primaryColor`, `accentColor`, `logo`, `favicon`) to white label the admin, `/docs`, and system emails. Without it the project looks like stock Bakorin. The Dockerfile copies `branding/` into the image.
 
-This package is publish-ready on the npm `beta` tag. Do not `npm publish` until you intend a public beta. See `PUBLISHING.md`.
+Published on the npm `beta` tag. See `RELEASING.md` in the repo root.
 
 ## License
 

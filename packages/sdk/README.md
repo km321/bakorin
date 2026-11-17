@@ -48,7 +48,7 @@ const api = createAstroClient({
 });
 ```
 
-This package is published on the npm `beta` tag. See `PUBLISHING.md` in the repo root. Do not `npm publish` until you intend a public beta.
+This package is published on the npm `beta` tag. See `RELEASING.md` in the repo root.
 
 ## Components and helpers
 

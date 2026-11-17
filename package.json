@@ -24,7 +24,10 @@
     "restore-drill": "bun scripts/restore-drill.ts",
     "build:sdk": "bun run --filter @bakorin/sdk build",
     "build:create": "bun run --filter create-bakorin build",
-    "load:realtime": "bun scripts/realtime-load/run.ts"
+    "load:realtime": "bun scripts/realtime-load/run.ts",
+    "changeset": "changeset",
+    "version-packages": "changeset version && bun install",
+    "release:publish": "bun scripts/publish-packages.ts"
   },
   "repository": {
     "type": "git",
@@ -36,6 +39,7 @@
   "license": "AGPL-3.0-only",
   "author": "Melton Studios",
   "devDependencies": {
+    "@changesets/cli": "^2.31.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "axe-core": "^4.14.1",

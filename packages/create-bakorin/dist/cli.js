@@ -3,6 +3,7 @@ import { createRequire } from "node:module";
 var __require = /* @__PURE__ */ createRequire(import.meta.url);
 
 // src/cli.ts
+import { readFileSync } from "node:fs";
 import { cp, mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { createInterface } from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
@@ -12,7 +13,9 @@ var ROOT = dirname(fileURLToPath(import.meta.url));
 var TEMPLATES = join(ROOT, "..", "templates");
 var CHECKOUT_ROOT = resolve(ROOT, "../../..");
 var CHECKOUT_SDK = resolve(ROOT, "../../sdk");
-var NPM_SDK = "^0.0.1";
+var BAKORIN_VERSION = JSON.parse(readFileSync(join(ROOT, "..", "package.json"), "utf8")).version;
+var NPM_RANGE = `^${BAKORIN_VERSION}`;
+var NPM_SDK = NPM_RANGE;
 var USAGE = `create-bakorin [name] [options]
 
 Scaffold a Bakorin backend and an optional Astro or Next.js starter.
@@ -35,7 +38,8 @@ Options:
   --mail, --email         log | resend | smtp (default: log)
   --sdk                   local | npm
                           local: file: path to this checkout's packages/sdk
-                          npm: @bakorin/sdk@^0.0.1 (after publish)
+                          npm: @bakorin/server and @bakorin/sdk from npm, at this
+                          create-bakorin version
                           Default: local when run from a Bakorin checkout, else npm
   --force                 Write into a non-empty existing folder
   --yes, -y               Skip prompts
@@ -203,8 +207,23 @@ ENV BAKORIN_ENV=production
 ENV BAKORIN_DATA_DIR=/data
 EXPOSE 4371
 HEALTHCHECK --interval=10s --timeout=3s --start-period=5s CMD bun -e "fetch('http://127.0.0.1:'+(process.env.PORT||4371)+'/health').then(r=>process.exit(r.ok?0:1))"
-RUN bun add @bakorin/server@0.0.1
-CMD ["bunx", "--bun", "bakorin", "start"]
+COPY package.json ./
+RUN bun install --production
+CMD ["bun", "run", "start"]
+`;
+}
+function projectPackageJson(appName) {
+  return `${JSON.stringify({
+    name: appName,
+    private: true,
+    type: "module",
+    scripts: {
+      dev: "bakorin dev",
+      start: "bakorin start",
+      typegen: "bakorin typegen"
+    },
+    dependencies: { "@bakorin/server": NPM_RANGE }
+  }, null, 2)}
 `;
 }
 function dockerignore() {
@@ -420,7 +439,8 @@ function projectReadme(appName, options, sdk) {
    \`\`\`
 
    Or, from this folder after \`bun install\` in the checkout: \`bun ../../packages/server/src/cli.ts dev --dir .\`` : `\`\`\`bash
-   bunx bakorin dev
+   bun install
+   bun run dev
    \`\`\``;
   return `# ${appName}
 
@@ -498,6 +518,8 @@ async function run(options) {
   await writeFile(join(dest, "branding", "README.md"), BRANDING_NOTES);
   if (sdk === "local") {
     await vendorRuntime(dest);
+  } else {
+    await writeFile(join(dest, "package.json"), projectPackageJson(appName));
   }
   if (options.frontend !== "none") {
     const webDir = join(dest, "web");
@@ -507,7 +529,7 @@ async function run(options) {
   }
   console.log(`Created ${dest}`);
   console.log(`Schema: ${options.schema}   Frontend: ${options.frontend}   Mail: ${options.mail}   SDK: ${sdk}`);
-  console.log("Next: copy .env.example to .env, then start Bakorin with bun run dev -- --dir <folder>");
+  console.log(sdk === "local" ? "Next: copy .env.example to .env, then start Bakorin with bun run dev -- --dir <folder>" : `Next: cd ${options.directory}, copy .env.example to .env, then bun install and bun run dev`);
   if (SEEDED.has(options.schema)) {
     console.log("Example data: with the API running and the admin login in .env, run bun seed.ts in the project folder.");
   }
@@ -560,6 +582,7 @@ if (__require.main == __require.module) {
   });
 }
 export {
+  BAKORIN_VERSION,
   USAGE,
   detectCheckoutSdk,
   envExample,

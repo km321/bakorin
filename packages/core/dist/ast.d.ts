@@ -78,6 +78,20 @@ export interface EntityAST {
      * carry only the id and operation, for heavy tables; clients refetch.
      */
     realtime?: RealtimeMode;
+    /** Admin sidebar placement (app.yaml admin:). Left out when the entity sets none. */
+    admin?: EntityAdminAST;
+}
+/**
+ * Where an entity shows in the admin sidebar. group: a heading to list it under.
+ * order: its position in that list (lower first; unset keeps app.yaml order, after
+ * the ordered ones). icon: 1 or 2 characters for its badge. hidden: leave it out of
+ * the sidebar (it still opens by link and shows on the Schema page).
+ */
+export interface EntityAdminAST {
+    group?: string;
+    order?: number;
+    icon?: string;
+    hidden?: boolean;
 }
 export type RealtimeMode = "full" | "ids";
 /**
@@ -122,6 +136,8 @@ export interface WebhookAST {
 }
 export declare const MAIL_DEFAULT_MAX_ATTEMPTS = 8;
 export declare const MAIL_DEFAULT_RETAIN_DAYS = 30;
+export declare const JOB_DEFAULT_RETAIN_DAYS = 30;
+export declare const JOB_DEFAULT_TIMEOUT_SECONDS = 300;
 export type MailScalar = string | number | boolean | null;
 export interface MailConditionAST {
     field: string;
@@ -144,6 +160,15 @@ export interface MailRuleAST {
     changed: string[];
     expand: string[];
     maxAttempts: number;
+}
+export interface JobAST {
+    name: string;
+    cron: string;
+    handler: string;
+    timezone: string;
+    dryRun: boolean;
+    timeoutSeconds: number;
+    enabled: boolean;
 }
 export interface FilesRuntimeAST {
     driver: FileDriver;
@@ -192,6 +217,7 @@ export interface RuntimeAST {
     appUrl: string;
     webhooksRetainDays: number;
     mailRetainDays: number;
+    jobsRetainDays: number;
     alerts: AlertsRuntimeAST;
     /** How to find the client IP behind proxies. See TrustProxyAST. */
     trustProxy: TrustProxyAST;
@@ -241,6 +267,7 @@ export interface SchemaAST {
     auth: AuthAST;
     webhooks: WebhookAST[];
     mail: MailRuleAST[];
+    jobs: JobAST[];
 }
 export type ChangeOp = "create" | "update" | "delete";
 export interface ChangeEvent {

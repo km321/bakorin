@@ -37,14 +37,18 @@
   "bugs": {
     "url": "https://github.com/km321/bakorin/issues"
   },
-  "homepage": "https://github.com/km321/bakorin/tree/main/packages/core#readme",
+  "homepage": "https://bakorin-preview.pages.dev/docs/",
   "engines": {
     "node": ">=18"
   },
   "keywords": [
     "bakorin",
     "baas",
-    "schema"
+    "backend",
+    "schema",
+    "yaml",
+    "compiler",
+    "migrations"
   ],
   "dependencies": {
     "yaml": "^2.7.1",

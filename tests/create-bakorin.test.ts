@@ -234,9 +234,14 @@ describe("create-bakorin", () => {
     const code = await proc.exited;
     expect(code).toBe(0);
     const pkg = (await Bun.file(join(dir, "web/package.json")).json()) as { dependencies: { "@bakorin/sdk": string } };
-    expect(pkg.dependencies["@bakorin/sdk"]).toBe("^0.0.1");
+    const version = ((await Bun.file(join(import.meta.dir, "../packages/create-bakorin/package.json")).json()) as { version: string }).version;
+    expect(pkg.dependencies["@bakorin/sdk"]).toBe(`^${version}`);
+    const root = (await Bun.file(join(dir, "package.json")).json()) as { scripts: Record<string, string>; dependencies: Record<string, string> };
+    expect(root.dependencies["@bakorin/server"]).toBe(`^${version}`);
+    expect(root.scripts.dev).toBe("bakorin dev");
     const dockerfile = await Bun.file(join(dir, "Dockerfile")).text();
-    expect(dockerfile).toContain("bunx");
+    expect(dockerfile).toContain("RUN bun install --production");
+    expect(dockerfile).toContain('CMD ["bun", "run", "start"]');
     expect(dockerfile).toContain("COPY branding ./branding");
     expect(dockerfile).toContain("COPY mail ./mail");
     expect(await Bun.file(join(dir, ".bakorin/package.json")).exists()).toBe(false);

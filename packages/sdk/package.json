@@ -89,13 +89,16 @@
   "bugs": {
     "url": "https://github.com/km321/bakorin/issues"
   },
-  "homepage": "https://github.com/km321/bakorin/tree/main/packages/sdk#readme",
+  "homepage": "https://bakorin-preview.pages.dev/docs/",
   "engines": {
     "node": ">=18"
   },
   "keywords": [
     "bakorin",
+    "baas",
     "sdk",
+    "client",
+    "auth",
     "astro",
     "astro-component",
     "next",

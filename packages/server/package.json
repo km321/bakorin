@@ -40,18 +40,25 @@
   "bugs": {
     "url": "https://github.com/km321/bakorin/issues"
   },
-  "homepage": "https://github.com/km321/bakorin/tree/main/packages/server#readme",
+  "homepage": "https://bakorin-preview.pages.dev/docs/",
   "engines": {
     "bun": ">=1.1.0"
   },
   "keywords": [
     "bakorin",
     "baas",
+    "backend",
+    "api",
+    "rest",
+    "auth",
     "sqlite",
-    "postgres"
+    "postgres",
+    "hono",
+    "bun",
+    "self-hosted"
   ],
   "dependencies": {
-    "@bakorin/core": "workspace:*",
+    "@bakorin/core": "workspace:^",
     "hono": "^4.7.4",
     "jose": "^6.0.10",
     "kysely": "^0.28.2",

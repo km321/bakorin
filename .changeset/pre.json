@@ -1,0 +1,12 @@
+{
+  "mode": "pre",
+  "tag": "beta",
+  "initialVersions": {
+    "@bakorin/admin-ui": "0.0.1",
+    "@bakorin/core": "0.0.1",
+    "create-bakorin": "0.0.1",
+    "@bakorin/sdk": "0.0.1",
+    "@bakorin/server": "0.0.1"
+  },
+  "changesets": []
+}

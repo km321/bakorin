@@ -1,6 +1,6 @@
 import { z } from "zod";
 export declare const FIELD_TYPES: readonly ["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"];
-export declare const APP_YAML_TOP_LEVEL_KEYS: readonly ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail"];
+export declare const APP_YAML_TOP_LEVEL_KEYS: readonly ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail", "jobs"];
 declare const fieldObject: z.ZodObject<{
     type: z.ZodEnum<{
         number: "number";
@@ -40,6 +40,13 @@ declare const fieldObject: z.ZodObject<{
 }, z.core.$strict>;
 /** A window like 30s, 10m, 1h, 1d, or a number of seconds. */
 export declare const RATE_WINDOW_PATTERN: RegExp;
+/** How an entity shows in the admin sidebar. Every key is optional. */
+declare const entityAdmin: z.ZodObject<{
+    group: z.ZodOptional<z.ZodString>;
+    order: z.ZodOptional<z.ZodNumber>;
+    icon: z.ZodOptional<z.ZodString>;
+    hidden: z.ZodOptional<z.ZodBoolean>;
+}, z.core.$strict>;
 declare const entityObject: z.ZodObject<{
     label: z.ZodOptional<z.ZodString>;
     plural: z.ZodOptional<z.ZodString>;
@@ -141,6 +148,12 @@ declare const entityObject: z.ZodObject<{
         full: "full";
         ids: "ids";
     }>]>>;
+    admin: z.ZodOptional<z.ZodObject<{
+        group: z.ZodOptional<z.ZodString>;
+        order: z.ZodOptional<z.ZodNumber>;
+        icon: z.ZodOptional<z.ZodString>;
+        hidden: z.ZodOptional<z.ZodBoolean>;
+    }, z.core.$strict>>;
 }, z.core.$strict>;
 declare const brandingObject: z.ZodObject<{
     name: z.ZodOptional<z.ZodString>;
@@ -247,6 +260,9 @@ export declare const appYamlSchema: z.ZodObject<{
             retainDays: z.ZodOptional<z.ZodNumber>;
         }, z.core.$strict>>;
         mail: z.ZodOptional<z.ZodObject<{
+            retainDays: z.ZodOptional<z.ZodNumber>;
+        }, z.core.$strict>>;
+        jobs: z.ZodOptional<z.ZodObject<{
             retainDays: z.ZodOptional<z.ZodNumber>;
         }, z.core.$strict>>;
     }, z.core.$strict>>;
@@ -364,6 +380,12 @@ export declare const appYamlSchema: z.ZodObject<{
             full: "full";
             ids: "ids";
         }>]>>;
+        admin: z.ZodOptional<z.ZodObject<{
+            group: z.ZodOptional<z.ZodString>;
+            order: z.ZodOptional<z.ZodNumber>;
+            icon: z.ZodOptional<z.ZodString>;
+            hidden: z.ZodOptional<z.ZodBoolean>;
+        }, z.core.$strict>>;
     }, z.core.$strict>>;
     webhooks: z.ZodOptional<z.ZodArray<z.ZodObject<{
         entity: z.ZodUnion<readonly [z.ZodString, z.ZodLiteral<"*">]>;
@@ -402,9 +424,19 @@ export declare const appYamlSchema: z.ZodObject<{
         expand: z.ZodOptional<z.ZodArray<z.ZodString>>;
         maxAttempts: z.ZodOptional<z.ZodNumber>;
     }, z.core.$strict>>>;
+    jobs: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        name: z.ZodString;
+        cron: z.ZodString;
+        handler: z.ZodOptional<z.ZodString>;
+        timezone: z.ZodOptional<z.ZodString>;
+        dryRun: z.ZodOptional<z.ZodBoolean>;
+        timeoutSeconds: z.ZodOptional<z.ZodNumber>;
+        enabled: z.ZodOptional<z.ZodBoolean>;
+    }, z.core.$strict>>>;
 }, z.core.$strict>;
 export type AppYaml = z.infer<typeof appYamlSchema>;
 export type RawEntity = z.infer<typeof entityObject>;
+export type RawEntityAdmin = z.infer<typeof entityAdmin>;
 export type RawField = z.infer<typeof fieldObject>;
 export type RawBrandingYaml = z.infer<typeof brandingObject>;
 export {};

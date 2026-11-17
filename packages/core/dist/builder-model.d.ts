@@ -43,7 +43,17 @@ export interface EntityDraft {
     rateLimit: Record<PolicyAction, RateLimitDraft>;
     /** Realtime change events: off (empty), full records, or ids only. */
     realtime: "" | "full" | "ids";
+    /** Admin sidebar placement. Empty strings and false mean "not set". */
+    admin: EntityAdminDraft;
 }
+export interface EntityAdminDraft {
+    group: string;
+    /** As typed. Empty means app.yaml order. */
+    order: string;
+    icon: string;
+    hidden: boolean;
+}
+export declare function emptyEntityAdmin(): EntityAdminDraft;
 export interface RateLimitDraft {
     /** Requests allowed per window, as typed. Empty means no limit. */
     limit: string;
@@ -72,6 +82,18 @@ export interface MailDraft {
     changed: string[];
     expand: string[];
     maxAttempts: string;
+}
+export interface JobDraft {
+    name: string;
+    cron: string;
+    /** Empty means use the job name. */
+    handler: string;
+    /** Empty means UTC. */
+    timezone: string;
+    dryRun: boolean;
+    /** Empty means the server default (300). */
+    timeoutSeconds: string;
+    enabled: boolean;
 }
 export interface AuthDraft {
     entity: string;
@@ -107,6 +129,7 @@ export interface BuilderConfig {
     /** Webhooks are not edited by the builder but are preserved on import. */
     webhooks: unknown[];
     mail: MailDraft[];
+    jobs: JobDraft[];
 }
 export interface BuilderIssue {
     /** Form location, e.g. "entities.1.fields.0.to", "auth.role", "mail.0.template", or "" for general. */
@@ -129,6 +152,7 @@ export declare function emptyField(name?: string, type?: BuilderFieldType): Fiel
 export declare function emptyPolicies(): Record<PolicyAction, string[]>;
 export declare function emptyEntity(name?: string): EntityDraft;
 export declare function emptyMailRule(entity?: string): MailDraft;
+export declare function emptyJob(name?: string): JobDraft;
 export declare function defaultAuth(): AuthDraft;
 export declare function cloneConfig(config: BuilderConfig): BuilderConfig;
 export declare function entityIndex(config: BuilderConfig, name: string): number;

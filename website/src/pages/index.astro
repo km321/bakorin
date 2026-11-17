@@ -165,6 +165,7 @@ const faqs = [
   {
     q: "How is it licensed?",
     a: "Open source with a split license: the server (server, core, and admin UI) is AGPL-3.0, and the SDK, create-bakorin, and the starters are MIT. Commercial licenses for the server are available from Melton Studios.",
+    link: { href: "https://meltonstudios.com/contact/", label: "Contact Melton Studios" },
   },
   {
     q: "Many to many relations?",
@@ -412,7 +413,7 @@ const faqs = [
         {faqs.map((f) => (
           <details>
             <summary>{f.q}</summary>
-            <p>{f.a}</p>
+            <p>{f.a}{f.link && <> <a href={f.link.href}>{f.link.label}</a>.</>}</p>
           </details>
         ))}
       </div>

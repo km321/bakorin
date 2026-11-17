@@ -14,7 +14,7 @@ export declare function pluralize(name: string): string;
  * true for one hop, or a list of proxy CIDRs. The env var wins so a host can set it.
  */
 /** API prefixes Bakorin mounts under /api/v1. An entity with one of these names would be shadowed. */
-export declare const RESERVED_ENTITY_NAMES: readonly ["auth", "audit", "backups", "docs", "files", "mail", "realtime", "status", "webhooks", "_meta"];
+export declare const RESERVED_ENTITY_NAMES: readonly ["auth", "audit", "backups", "docs", "files", "jobs", "mail", "realtime", "status", "webhooks", "_meta"];
 export declare function assertEntityRouteFree(name: string): void;
 export declare function compileIndexes(entityName: string, fieldMap: Record<string, {
     name: string;
