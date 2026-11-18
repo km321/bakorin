@@ -4,8 +4,11 @@ import {
   createBrowserClient2
 } from "./chunks/index-03nmywvj.js";
 import {
+  sanitizeRichText2
+} from "./chunks/index-2p7b6gjp.js";
+import {
   createAuth2
-} from "./chunks/index-knjdaz0z.js";
+} from "./chunks/index-f3hk1tdw.js";
 import {
   fieldLabel2,
   formFields2,
@@ -18,7 +21,7 @@ import {
   createCollection2,
   formatBytes2,
   createUpload2
-} from "./chunks/index-csqk23qj.js";
+} from "./chunks/index-dyakva2e.js";
 
 // src/react/context.tsx
 import { createContext, useContext, useMemo } from "react";
@@ -204,10 +207,11 @@ function Field({ field, value, error, label, hint, onChange, options, autoComple
         }, choice.value))
       ]
     });
-  } else if (field.multiline && field.type === "text") {
+  } else if (field.multiline && field.type === "text" || field.type === "json" || field.type === "richtext") {
     control = /* @__PURE__ */ jsx2("textarea", {
       ...common,
-      className: "bk-input bk-textarea",
+      className: cx("bk-input bk-textarea", field.type === "json" && "bk-textarea--code"),
+      spellCheck: field.type === "json" ? false : undefined,
       rows: 6,
       required: field.required && field.defaultValue === undefined,
       value: inputValue2(field, value),
@@ -265,6 +269,14 @@ function FormAlert({ message, tone = "error" }) {
     className: cx("bk-alert", message && `bk-alert--${tone}`),
     role: tone === "error" ? "alert" : "status",
     children: message ?? ""
+  });
+}
+// src/react/richtext.tsx
+import { createElement } from "react";
+function RichText({ html, as = "div", className }) {
+  return createElement(as, {
+    className: className ? `bk-richtext ${className}` : "bk-richtext",
+    dangerouslySetInnerHTML: { __html: sanitizeRichText2(html ?? "") }
   });
 }
 // src/react/auth.tsx
@@ -1169,6 +1181,7 @@ export {
   Pager,
   RecordForm,
   ResetPasswordForm,
+  RichText,
   SignInForm,
   SignUpForm,
   UserMenu,

@@ -13,7 +13,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 
 const root = join(import.meta.dir, "..");
-const entries = ["index", "astro", "next", "browser", "proxy", "headless", "react", "elements", "astro-render"].map((name) => join(root, "src", `${name}.ts`));
+const entries = ["index", "astro", "next", "browser", "proxy", "headless", "react", "elements", "astro-render", "richtext"].map((name) => join(root, "src", `${name}.ts`));
 
 rmSync(join(root, "dist"), { recursive: true, force: true });
 const result = await Bun.build({

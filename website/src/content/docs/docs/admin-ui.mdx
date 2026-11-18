@@ -87,6 +87,7 @@ Each entity appears under **Data** in the sidebar.
 - Tables are sortable and searchable, with pagination.
 - Relation columns show the related row's `display` field instead of a raw id. Many to many columns list the first few labels and a "+N more" count.
 - **New** and **Edit** open a side drawer with a field for each column, using each field's `description` as help text. Enums become selects, relations become searchable pickers, many to many relations become a multi select with removable chips, and `file` fields show the current file (thumbnail or type, name, and size) with Open, Download, Replace, and Remove. File columns show the file name with a small preview.
+- `json` fields open in a monospace editor with **Format** and **Validate**. It checks the JSON as you type, points at the line and column of a mistake, and will not save JSON that does not parse. `richtext` fields get a formatting toolbar (headings, bold, italic, underline, strikethrough, code, lists, quotes, code blocks, dividers, links, and images by address). The drawer widens when an entity has either type. In tables, JSON shows as one compact line and rich text as plain text.
 - Deletes ask for confirmation.
 - On the auth entity, **Invite user** sends an invite email, and unverified users get a **Resend verification** action.
 

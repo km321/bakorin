@@ -8,6 +8,7 @@
 export { BakorinProvider, useBakorin, type BakorinContextValue, type BakorinProviderProps } from "./context.tsx";
 export { useAuth, useCollection, useLiveList, useRecordForm, useRelationOptions, useStore, useUpload, type UseCollectionOptions, type UseRecordFormOptions, } from "./hooks.ts";
 export { Field, FormAlert, type FieldProps } from "./field.tsx";
+export { RichText, type RichTextProps } from "./richtext.tsx";
 export { AuthButton, ForgotPasswordForm, Gate, ResetPasswordForm, SignInForm, SignUpForm, UserMenu, type AuthButtonProps, type GateProps, type SignInFormProps, type SignUpFormProps, type UserMenuProps, } from "./auth.tsx";
 export { DataTable, LiveList, Pager, type CollectionHandle, type Column, type DataTableProps, type LiveListProps } from "./data.tsx";
 export { RecordForm, type RecordFormProps } from "./record-form.tsx";

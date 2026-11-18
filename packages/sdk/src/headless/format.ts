@@ -1,9 +1,16 @@
 import type { FieldSchema } from "./schema.ts";
+import { richTextToPlain } from "../richtext.ts";
 
 /** Plain text for a table cell or list row. */
 export function formatValue(field: Pick<FieldSchema, "type" | "relation"> | undefined, value: unknown, locale?: string): string {
   if (value === null || value === undefined || value === "") {
     return "";
+  }
+  if (field?.type === "json") {
+    return JSON.stringify(value);
+  }
+  if (field?.type === "richtext") {
+    return richTextToPlain(String(value), 160);
   }
   if (field?.type === "boolean") {
     return value ? "Yes" : "No";

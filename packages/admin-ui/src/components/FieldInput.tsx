@@ -1,6 +1,8 @@
 import type { MetaEntity } from "../lib/api.ts";
 import { listRelated } from "../lib/api.ts";
 import { FileField } from "./FileField.tsx";
+import { JsonField } from "./JsonField.tsx";
+import { RichTextField } from "./RichTextField.tsx";
 import { relatedLabel } from "../lib/label.ts";
 import { SearchSelect } from "./SearchSelect.tsx";
 import { MultiSelect } from "./MultiSelect.tsx";
@@ -111,6 +113,10 @@ export function FieldInput({ field, value, invalid, saved, onChange }: Props) {
           ))}
         </select>
       );
+    case "json":
+      return <JsonField name={field.name} value={value} invalid={invalid} describedBy={describedBy} onChange={onChange} />;
+    case "richtext":
+      return <RichTextField name={field.name} value={value} invalid={invalid} describedBy={describedBy} onChange={onChange} />;
     case "file":
       return (
         <FileField

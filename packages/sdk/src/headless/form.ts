@@ -7,6 +7,29 @@ export type FormValues = Record<string, unknown>;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * What a json input holds when its text does not parse. validateField reports it,
+ * and inputValue gives the text back so nothing the user typed is lost.
+ */
+export class InvalidJson {
+  constructor(
+    readonly text: string,
+    readonly message: string,
+  ) {}
+}
+
+/** Parses JSON typed into a form. Empty text is null; text that does not parse is an InvalidJson. */
+export function parseJsonInput(text: string): unknown {
+  if (text.trim() === "") {
+    return null;
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch (error) {
+    return new InvalidJson(text, error instanceof Error ? error.message : "invalid JSON");
+  }
+}
+
 function isEmpty(value: unknown): boolean {
   return value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0);
 }
@@ -22,6 +45,10 @@ export function coerceValue(field: FieldSchema, raw: unknown): unknown {
   }
   if (field.relation?.many) {
     return Array.isArray(raw) ? raw.filter((item) => item !== "") : isEmpty(raw) ? [] : [String(raw)];
+  }
+  if (field.type === "json") {
+    // A json input is text; a value set in code (an object, a list) is used as is.
+    return typeof raw === "string" ? parseJsonInput(raw) : raw === undefined ? null : raw;
   }
   if (isEmpty(raw)) {
     return null;
@@ -46,6 +73,9 @@ export function inputValue(field: FieldSchema, value: unknown): string {
   if (value === null || value === undefined) {
     return "";
   }
+  if (field.type === "json") {
+    return value instanceof InvalidJson ? value.text : JSON.stringify(value, null, 2);
+  }
   if (field.type === "datetime") {
     const date = new Date(String(value));
     if (Number.isNaN(date.getTime())) {
@@ -60,6 +90,9 @@ export function inputValue(field: FieldSchema, value: unknown): string {
 /** The same checks the server runs, so most mistakes show before a round trip. */
 export function validateField(field: FieldSchema, value: unknown, mode: "create" | "update" = "create"): string | undefined {
   const label = fieldLabel(field.name);
+  if (value instanceof InvalidJson) {
+    return `${label} must be valid JSON (${value.message})`;
+  }
   if (isEmpty(value) || (field.type === "boolean" && value === undefined)) {
     const hasDefault = field.defaultValue !== undefined;
     if (field.required && !(mode === "create" && hasDefault && value === undefined) && field.type !== "boolean") {
@@ -67,7 +100,7 @@ export function validateField(field: FieldSchema, value: unknown, mode: "create"
     }
     return undefined;
   }
-  if (field.minLength && field.type !== "password" && String(value).length < field.minLength) {
+  if (field.minLength && field.type !== "password" && field.type !== "json" && String(value).length < field.minLength) {
     return `${label} must be at least ${field.minLength} characters`;
   }
   switch (field.type) {

@@ -92,9 +92,14 @@ function columnSql(dialect: DialectName, field: FieldAST): string {
     parts.push("not null");
   }
   if (field.defaultValue !== undefined && field.type !== "relation") {
-    parts.push(`default ${literal(dialect, field.defaultValue)}`);
+    parts.push(`default ${literal(dialect, defaultLiteral(field))}`);
   }
   return parts.join(" ");
+}
+
+/** JSON defaults are stored as their JSON text (jsonb on Postgres reads the quoted literal). */
+function defaultLiteral(field: FieldAST): unknown {
+  return field.type === "json" ? JSON.stringify(field.defaultValue) : field.defaultValue;
 }
 
 function literal(dialect: DialectName, value: unknown): string {
@@ -223,7 +228,7 @@ async function applyAuto(db: BakorinDb, dialect: DialectName, plan: DiffPlan): P
         }
         const extra =
           change.field.required && change.field.defaultValue !== undefined
-            ? ` not null default ${literal(dialect, change.field.defaultValue)}`
+            ? ` not null default ${literal(dialect, defaultLiteral(change.field))}`
             : "";
         await sql
           .raw(

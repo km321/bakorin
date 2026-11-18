@@ -13,7 +13,9 @@ export type FieldTypeName =
   | "date"
   | "datetime"
   | "relation"
-  | "file";
+  | "file"
+  | "json"
+  | "richtext";
 
 export interface FieldSchema {
   name: string;

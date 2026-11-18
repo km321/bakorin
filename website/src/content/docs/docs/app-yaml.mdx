@@ -201,7 +201,7 @@ entities:
 
 ### Field types
 
-`text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`.
+`text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`, `json`, `richtext`.
 
 A field can be a bare type (`title: text`) or an object:
 
@@ -223,6 +223,40 @@ A field can be a bare type (`title: text`) or an object:
 | `private` | Returned only to the row's own user and to admins. On by default for the auth entity's identity, role, and `emailVerified` fields |
 | `description` | Help text in the admin UI and OpenAPI |
 | `renameFrom` | Rename a column without losing data |
+
+### JSON fields
+
+`type: json` holds any JSON value: an object, a list, a string, a number, a boolean, or `null` to clear it. Postgres stores it as `jsonb`; SQLite stores the JSON text and Bakorin checks it before every write. Values come back exactly as they were sent, so a JSON string stays a string.
+
+```yaml
+products:
+  fields:
+    specs: { type: json }
+    badges: { type: json, default: ["new"] }
+```
+
+- A value can be up to 1,000,000 characters of JSON, nested up to 64 levels.
+- JSON fields cannot be `unique` or `index`, and they cannot be sorted.
+- List filters: `filter[specs][isnull]=true|false` and `filter[specs][like]=text` (a case insensitive match on the JSON text). Equality and comparisons are ignored on JSON fields because SQLite and Postgres compare JSON differently. For lookups by a value inside the JSON, copy that value into its own field in a [hook](/docs/hooks/).
+- Generated types use `JsonValue`. Narrow it with a type guard or cast it to your own type.
+- The admin UI edits it in a monospace editor that checks the JSON as you type, with **Format**. It will not save JSON that does not parse.
+
+### Rich text fields
+
+`type: richtext` holds formatted text as HTML. The server cleans every write against an allowlist, so HTML from a browser is never trusted:
+
+- Kept: `p`, `br`, `h1` to `h6`, `strong`, `b`, `em`, `i`, `u`, `s`, `del`, `sub`, `sup`, `a`, `ul`, `ol`, `li`, `blockquote`, `code`, `pre`, `hr`, `img`.
+- Kept attributes: `href`, `title`, and `target="_blank"` on links (Bakorin adds `rel="noopener noreferrer"`), `src`, `alt`, `title`, `width`, and `height` on images, `start` on `ol`, and a `language-*` class on `code` and `pre`. Every other attribute, including `style`, `class`, and all event handlers, is removed.
+- Links must be relative or use `http`, `https`, `mailto`, or `tel`. Images must be relative or use `http` or `https`. Anything else (`javascript:`, `data:`) is removed.
+- `script`, `style`, `iframe`, `svg`, forms, and similar tags are removed with their content. Other unknown tags are removed and their text is kept.
+
+```yaml
+posts:
+  fields:
+    body: { type: richtext, required: true }
+```
+
+A required rich text field must still have content after cleaning. Rich text can be up to 1,000,000 characters and cannot be `unique`. Filters work like `text`, for example `filter[body][like]=harbor`. The admin UI edits it with a toolbar for headings, bold, italic, underline, strikethrough, inline code, lists, quotes, code blocks, dividers, links, and images by address. Render it with [`RichText`](/docs/sdk/#rich-text), which cleans the HTML again on the way out.
 
 ### Write locks
 

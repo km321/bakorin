@@ -2,6 +2,7 @@ import"./chunks/index-kvbz0pj9.js";
 import {
   createBrowserClient2
 } from "./chunks/index-03nmywvj.js";
+import"./chunks/index-2p7b6gjp.js";
 import {
   escapeHtml2,
   renderTableBody2,
@@ -9,7 +10,7 @@ import {
   renderPager2,
   renderLiveStatus2,
   renderListItems2
-} from "./chunks/index-3frn3qj3.js";
+} from "./chunks/index-f24s06zt.js";
 import {
   coerceValue2,
   validateRecord2,
@@ -17,7 +18,7 @@ import {
   createCollection2,
   formatBytes2,
   createUpload2
-} from "./chunks/index-csqk23qj.js";
+} from "./chunks/index-dyakva2e.js";
 
 // src/elements/index.ts
 var Base = typeof HTMLElement === "undefined" ? class {

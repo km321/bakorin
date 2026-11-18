@@ -2,7 +2,7 @@
  * The shape of the bakorinSchema constant that `bakorin types` writes next to the
  * entity interfaces. RecordForm and DataTable read it to build fields and columns.
  */
-export type FieldTypeName = "text" | "email" | "password" | "number" | "integer" | "boolean" | "enum" | "date" | "datetime" | "relation" | "file";
+export type FieldTypeName = "text" | "email" | "password" | "number" | "integer" | "boolean" | "enum" | "date" | "datetime" | "relation" | "file" | "json" | "richtext";
 export interface FieldSchema {
     name: string;
     type: FieldTypeName;

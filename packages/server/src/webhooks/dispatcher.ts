@@ -326,6 +326,12 @@ export function sampleTestEvent(ast: SchemaAST, hook: WebhookAST): ChangeEvent {
         case "enum":
           after[field.name] = field.enumValues?.[0] ?? "Webhook test";
           break;
+        case "json":
+          after[field.name] = { test: true };
+          break;
+        case "richtext":
+          after[field.name] = "<p>Webhook test</p>";
+          break;
         case "text":
         case "password":
         case "date":

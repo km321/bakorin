@@ -46,6 +46,15 @@ export function compileField(entityName: string, name: string, raw: RawField): F
   if (raw.values && type !== "enum") {
     throw new SchemaError(`${entityName}.${name} has values: but is not an enum`);
   }
+  if (type === "json" && (raw.unique === true || raw.index === true)) {
+    throw new SchemaError(`${entityName}.${name} is a json field and cannot be unique or indexed`);
+  }
+  if (type === "richtext" && raw.unique === true) {
+    throw new SchemaError(`${entityName}.${name} is a richtext field and cannot be unique`);
+  }
+  if (type === "richtext" && raw.default !== undefined && typeof raw.default !== "string") {
+    throw new SchemaError(`${entityName}.${name} is a richtext field, so its default must be a string of HTML`);
+  }
   for (const value of raw.values ?? []) {
     assertIdent(value, "enum");
   }

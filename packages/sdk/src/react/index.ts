@@ -18,6 +18,7 @@ export {
   type UseRecordFormOptions,
 } from "./hooks.ts";
 export { Field, FormAlert, type FieldProps } from "./field.tsx";
+export { RichText, type RichTextProps } from "./richtext.tsx";
 export {
   AuthButton,
   ForgotPasswordForm,

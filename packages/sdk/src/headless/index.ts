@@ -38,7 +38,9 @@ export {
   createForm,
   fieldErrorsFrom,
   inputValue,
+  InvalidJson,
   isRequestError,
+  parseJsonInput,
   validateField,
   validateRecord,
   type CreateFormOptions,
@@ -60,3 +62,4 @@ export {
 } from "./schema.ts";
 export { loadBrandingTheme, themeFromBrandingCss } from "./theme.ts";
 export { formatValue } from "./format.ts";
+export { isRichTextEmpty, richTextToPlain, sanitizeRichText } from "../richtext.ts";

@@ -5,7 +5,7 @@ import {
   formatValue2,
   pageInfo2,
   formatBytes2
-} from "./index-csqk23qj.js";
+} from "./index-dyakva2e.js";
 
 // src/elements/render.ts
 function escapeHtml2(value) {
@@ -37,8 +37,9 @@ function renderField2(field, options) {
     const many = Boolean(field.relation?.many);
     const selected = new Set(many ? options.value ?? [] : [inputValue2(field, options.value)]);
     control = `<select${common} class="bk-input bk-select"${attr("required", field.required)}${attr("multiple", many)}>${many ? "" : `<option value="">${field.required ? "Choose one" : "None"}</option>`}${choices.map((choice) => `<option${attr("value", choice.value)}${attr("selected", selected.has(choice.value))}>${escapeHtml2(choice.label)}</option>`).join("")}</select>`;
-  } else if (field.multiline && field.type === "text") {
-    control = `<textarea${common} class="bk-input bk-textarea" rows="6"${attr("required", field.required && field.defaultValue === undefined)}>${escapeHtml2(inputValue2(field, options.value))}</textarea>`;
+  } else if (field.multiline && field.type === "text" || field.type === "json" || field.type === "richtext") {
+    const code = field.type === "json";
+    control = `<textarea${common} class="bk-input bk-textarea${code ? " bk-textarea--code" : ""}" rows="6"${attr("spellcheck", code ? "false" : undefined)}${attr("required", field.required && field.defaultValue === undefined)}>${escapeHtml2(inputValue2(field, options.value))}</textarea>`;
   } else if (field.type === "file") {
     control = renderDropzone2({ idPrefix: base, inputId, describedBy, name: field.name, value: options.value, accept: options.accept });
   } else {

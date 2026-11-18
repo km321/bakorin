@@ -51,7 +51,7 @@ GET /api/v1/tasks?filter[done]=false&filter[dueOn][lte]=2026-12-01
 GET /api/v1/leads?filter[status][in]=new,qualified
 ```
 
-Unknown fields, secret fields, and unknown operators are ignored.
+Unknown fields, secret fields, and unknown operators are ignored. `json` fields take only `isnull` and `like` (see [JSON fields](/docs/app-yaml/#json-fields)), and they cannot be used in `sort`.
 
 ## Expanding relations
 

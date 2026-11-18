@@ -12,6 +12,9 @@ export function sqlType(dialect: DialectName, field: FieldAST): string {
       return dialect === "postgres" ? "date" : "text";
     case "datetime":
       return dialect === "postgres" ? "timestamptz" : "text";
+    case "json":
+      // SQLite has no JSON column type: the text is checked as JSON before it is written.
+      return dialect === "postgres" ? "jsonb" : "text";
     default:
       return "text";
   }
@@ -40,6 +43,9 @@ export function encodeValue(dialect: DialectName, field: FieldAST | undefined, v
     case "datetime":
     case "date":
       return typeof value === "string" ? value : new Date(String(value)).toISOString();
+    case "json":
+      // The JSON text on both dialects. Postgres casts the parameter to jsonb.
+      return JSON.stringify(value);
     default:
       return value;
   }
@@ -54,6 +60,18 @@ export function decodeValue(field: FieldAST | undefined, value: unknown): unknow
   }
   if (field.type === "integer" || field.type === "number") {
     return Number(value);
+  }
+  if (field.type === "json") {
+    // Both dialects hand back the JSON text (the pg jsonb parser is turned off in
+    // dialects.ts), so a stored JSON string is never confused with an object.
+    if (typeof value !== "string") {
+      return value;
+    }
+    try {
+      return JSON.parse(value) as unknown;
+    } catch {
+      return value;
+    }
   }
   return value;
 }

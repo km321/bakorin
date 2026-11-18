@@ -18,6 +18,8 @@ import { Pool, types as pgTypes } from "pg";
 pgTypes.setTypeParser(1082, (value) => value);
 pgTypes.setTypeParser(1114, (value) => value);
 pgTypes.setTypeParser(1184, (value) => value);
+// jsonb comes back as text, the same as SQLite, and decodeValue parses it.
+pgTypes.setTypeParser(3802, (value) => value);
 
 export type BakorinDb = Kysely<Record<string, Record<string, unknown>>>;
 

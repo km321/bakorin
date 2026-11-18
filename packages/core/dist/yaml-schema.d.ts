@@ -1,5 +1,5 @@
 import { z } from "zod";
-export declare const FIELD_TYPES: readonly ["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation"];
+export declare const FIELD_TYPES: readonly ["text", "email", "password", "number", "integer", "boolean", "date", "datetime", "enum", "file", "relation", "json", "richtext"];
 export declare const APP_YAML_TOP_LEVEL_KEYS: readonly ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail", "jobs"];
 declare const fieldObject: z.ZodObject<{
     type: z.ZodEnum<{
@@ -14,6 +14,8 @@ declare const fieldObject: z.ZodObject<{
         enum: "enum";
         file: "file";
         relation: "relation";
+        json: "json";
+        richtext: "richtext";
     }>;
     required: z.ZodOptional<z.ZodBoolean>;
     unique: z.ZodOptional<z.ZodBoolean>;
@@ -66,6 +68,8 @@ declare const entityObject: z.ZodObject<{
         enum: "enum";
         file: "file";
         relation: "relation";
+        json: "json";
+        richtext: "richtext";
     }>, z.ZodObject<{
         type: z.ZodEnum<{
             number: "number";
@@ -79,6 +83,8 @@ declare const entityObject: z.ZodObject<{
             enum: "enum";
             file: "file";
             relation: "relation";
+            json: "json";
+            richtext: "richtext";
         }>;
         required: z.ZodOptional<z.ZodBoolean>;
         unique: z.ZodOptional<z.ZodBoolean>;
@@ -298,6 +304,8 @@ export declare const appYamlSchema: z.ZodObject<{
             enum: "enum";
             file: "file";
             relation: "relation";
+            json: "json";
+            richtext: "richtext";
         }>, z.ZodObject<{
             type: z.ZodEnum<{
                 number: "number";
@@ -311,6 +319,8 @@ export declare const appYamlSchema: z.ZodObject<{
                 enum: "enum";
                 file: "file";
                 relation: "relation";
+                json: "json";
+                richtext: "richtext";
             }>;
             required: z.ZodOptional<z.ZodBoolean>;
             unique: z.ZodOptional<z.ZodBoolean>;

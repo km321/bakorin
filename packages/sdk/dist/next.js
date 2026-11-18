@@ -9,6 +9,11 @@ import {
   createProxyHandler2
 } from "./chunks/index-gynvv190.js";
 import {
+  sanitizeRichText2,
+  richTextToPlain2,
+  isRichTextEmpty2
+} from "./chunks/index-2p7b6gjp.js";
+import {
   isProtected2,
   refreshUrl2,
   hasRole,
@@ -88,9 +93,12 @@ export {
   createNextProxy,
   createProxyHandler2 as createProxyHandler,
   isProtected2 as isProtected,
+  isRichTextEmpty2 as isRichTextEmpty,
   isSameSiteRequest2 as isSameSiteRequest,
   loadBrandingTheme2 as loadBrandingTheme,
   refreshUrl2 as refreshUrl,
   requireUser,
-  rightmostForwardedFor2 as rightmostForwardedFor
+  richTextToPlain2 as richTextToPlain,
+  rightmostForwardedFor2 as rightmostForwardedFor,
+  sanitizeRichText2 as sanitizeRichText
 };

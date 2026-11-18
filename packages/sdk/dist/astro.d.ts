@@ -5,6 +5,7 @@ export { isProtected, refreshUrl, type GuardOptions, type ProtectRule } from "./
 import { type FieldErrors, type FormValues } from "./headless/form.ts";
 import type { FieldSchema } from "./headless/schema.ts";
 export { loadBrandingTheme } from "./headless/theme.ts";
+export { isRichTextEmpty, richTextToPlain, sanitizeRichText } from "./richtext.ts";
 export { createProxyHandler, isSameSiteRequest, rightmostForwardedFor, type ProxyOptions } from "./proxy.ts";
 /** The default pass through route. The refresh cookie lives on this path. */
 export declare const DEFAULT_PROXY_PREFIX = "/api/bakorin";

@@ -1,4 +1,10 @@
 import { MAX_LINKS_PER_FIELD, type EntityAST, type FieldAST, type SchemaAST } from "@bakorin/core";
+import { sanitizeRichText } from "@bakorin/sdk/richtext";
+
+/** Largest JSON or rich text value one field accepts, measured as text. */
+export const MAX_DOCUMENT_CHARS = 1_000_000;
+/** Deepest nesting a JSON value may have. */
+export const MAX_JSON_DEPTH = 64;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -14,6 +20,54 @@ export class InputError extends Error {
 
 function asString(value: unknown): string {
   return String(value);
+}
+
+function jsonDepth(value: unknown, depth = 0): number {
+  if (depth > MAX_JSON_DEPTH) {
+    return depth;
+  }
+  if (Array.isArray(value)) {
+    return value.reduce<number>((max, item) => Math.max(max, jsonDepth(item, depth + 1)), depth + 1);
+  }
+  if (value && typeof value === "object") {
+    return Object.values(value).reduce<number>((max, item) => Math.max(max, jsonDepth(item, depth + 1)), depth + 1);
+  }
+  return depth;
+}
+
+/**
+ * A json field takes any JSON value as is: an object, a list, a string, a number, or
+ * a boolean (null clears it). A string is stored as a JSON string, not parsed.
+ */
+function validateJson(field: FieldAST, value: unknown): unknown {
+  let text: string | undefined;
+  try {
+    text = JSON.stringify(value);
+  } catch {
+    text = undefined;
+  }
+  if (text === undefined || (typeof value === "number" && !Number.isFinite(value))) {
+    throw new InputError(field.name, `${field.name} must be valid JSON`);
+  }
+  if (text.length > MAX_DOCUMENT_CHARS) {
+    throw new InputError(field.name, `${field.name} is too large (at most ${MAX_DOCUMENT_CHARS} characters of JSON)`);
+  }
+  if (jsonDepth(value) > MAX_JSON_DEPTH) {
+    throw new InputError(field.name, `${field.name} is nested too deeply (at most ${MAX_JSON_DEPTH} levels)`);
+  }
+  // A plain copy: no prototypes, no undefined values, the same shape it will be read back in.
+  return JSON.parse(text) as unknown;
+}
+
+/** Rich text is HTML, cleaned against the allowlist on every write. Clients are never trusted. */
+function validateRichText(field: FieldAST, value: unknown): string {
+  if (typeof value !== "string") {
+    throw new InputError(field.name, `${field.name} must be a string of HTML`);
+  }
+  if (value.length > MAX_DOCUMENT_CHARS) {
+    throw new InputError(field.name, `${field.name} is too large (at most ${MAX_DOCUMENT_CHARS} characters)`);
+  }
+  return sanitizeRichText(value);
 }
 
 export function validateValue(field: FieldAST, value: unknown, writing: boolean): unknown {
@@ -108,6 +162,15 @@ export function validateValue(field: FieldAST, value: unknown, writing: boolean)
       }
       return new Date(time).toISOString();
     }
+    case "json":
+      return validateJson(field, value);
+    case "richtext": {
+      const html = validateRichText(field, value);
+      if (field.required && html.trim() === "") {
+        throw new InputError(field.name, `${field.name} is required`);
+      }
+      return html;
+    }
     case "password":
     case "text":
     case "file":
@@ -137,7 +200,8 @@ export function parseBody(
         throw new InputError(field.name, `${field.name} is required`);
       }
       if (mode === "create" && field.defaultValue !== undefined) {
-        out[field.name] = field.defaultValue;
+        out[field.name] =
+          field.type === "richtext" || field.type === "json" ? validateValue(field, field.defaultValue, true) : field.defaultValue;
       }
       continue;
     }
