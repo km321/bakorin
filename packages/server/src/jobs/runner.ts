@@ -35,7 +35,7 @@ export interface RunJobOptions {
 function isUniqueConstraint(error: unknown): boolean {
   const code = error && typeof error === "object" && "code" in error ? String((error as { code?: unknown }).code ?? "") : "";
   const message = error instanceof Error ? error.message : "";
-  return code === "23505" || /UNIQUE|constraint failed/i.test(`${code} ${message}`);
+  return code === "23505" || code === "ER_DUP_ENTRY" || /UNIQUE|constraint failed/i.test(`${code} ${message}`);
 }
 
 function serializeData(data: unknown): string | null {

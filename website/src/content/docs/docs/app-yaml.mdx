@@ -19,7 +19,7 @@ The [app.yaml builder](/builder/) lets you start from a starter, add entities, f
 app:
   name: my-app
 runtime:
-  dialect: sqlite          # or postgres
+  dialect: sqlite          # or postgres, mysql, mariadb
   sqlite:
     path: ./data/app.db
   postgres:
@@ -107,11 +107,13 @@ Optional white label for the admin, `/docs`, and system emails. Leave it out to 
 
 | Key | Default | Notes |
 |---|---|---|
-| `dialect` | `sqlite` | `sqlite` or `postgres` |
+| `dialect` | `sqlite` | `sqlite`, `postgres`, `mysql`, or `mariadb` |
 | `host` | `0.0.0.0` | Listen address |
 | `port` | `4371` | The `PORT` environment variable wins |
 | `sqlite.path` | `./data/app.db` | Moves under `BAKORIN_DATA_DIR` when that is set |
 | `postgres.url` | | Usually `${DATABASE_URL}` |
+| `mysql.url` | | A `mysql://` or `mariadb://` URL, usually `${DATABASE_URL}` |
+| `mariadb.url` | | Alias for `mysql.url` |
 | `jwt.secret` | `JWT_SECRET` | Usually left out so `JWT_SECRET` is used. Required outside `bakorin dev`, 32 or more random characters |
 | `jwt.accessTtlSeconds` | `900` | Access token lifetime (15 minutes) |
 | `jwt.refreshTtlSeconds` | `2592000` | Refresh token lifetime (30 days) |
@@ -227,7 +229,7 @@ A field can be a bare type (`title: text`) or an object:
 
 ### JSON fields
 
-`type: json` holds any JSON value: an object, a list, a string, a number, a boolean, or `null` to clear it. Postgres stores it as `jsonb`; SQLite stores the JSON text and Bakorin checks it before every write. Values come back exactly as they were sent, so a JSON string stays a string.
+`type: json` holds any JSON value: an object, a list, a string, a number, a boolean, or `null` to clear it. MySQL and MariaDB store it as validated `JSON`, Postgres stores it as `jsonb`; SQLite stores the JSON text and Bakorin checks it before every write. Values come back exactly as they were sent, so a JSON string stays a string.
 
 ```yaml
 products:

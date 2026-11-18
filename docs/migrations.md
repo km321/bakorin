@@ -90,4 +90,7 @@ The same goes for making a field required: give it a `default`, or fill every ro
 
 ## Several servers
 
-Each migration runs in one transaction with a lock (a transaction scoped advisory lock on Postgres, `begin immediate` on SQLite), so only one instance applies a change and the plan is checked again inside the lock. If any statement fails, every change in the plan and the stored schema roll back together, on both databases.
+On SQLite and Postgres, each schema change runs in one transaction with a lock (a transaction scoped advisory lock on Postgres, `begin immediate` on SQLite), so only one instance applies a change and the plan is checked again inside the lock. If any statement fails, every change in the plan and the stored schema roll back together, on both databases.
+
+
+On MySQL and MariaDB, a session `GET_LOCK` serializes schema sync, but DDL implicitly commits and cannot roll back as one transaction. A failure may leave newly added tables or columns in place. Fix the cause and rerun: create and add operations are idempotent, and the stored schema advances only after the plan succeeds. See [MySQL and MariaDB](mysql.md).

@@ -2,7 +2,8 @@ import type { BrandingAST } from "./branding.ts";
 
 export const SCHEMA_AST_VERSION = 1 as const;
 
-export type DialectName = "sqlite" | "postgres";
+/** mysql covers MySQL 8.0+ and MariaDB 10.11+ (both through the mysql2 driver). */
+export type DialectName = "sqlite" | "postgres" | "mysql";
 export type FileDriver = "local" | "s3";
 export type FieldTypeName =
   | "text"
@@ -16,7 +17,7 @@ export type FieldTypeName =
   | "enum"
   | "file"
   | "relation"
-  /** Any JSON value: TEXT checked as JSON on SQLite, jsonb on Postgres. */
+  /** Any JSON value: TEXT checked as JSON on SQLite, jsonb on Postgres, JSON on MySQL and MariaDB. */
   | "json"
   /** Rich text: HTML the server sanitizes against an allowlist before it is stored. */
   | "richtext";
@@ -248,6 +249,10 @@ export interface RuntimeAST {
   port: number;
   sqlitePath: string;
   postgresUrl?: string;
+  /** mysql:// or mariadb:// connection URL, when dialect is mysql. */
+  mysqlUrl?: string;
+  /** Which server the mysql dialect was configured for. Informational: both use the same SQL. */
+  mysqlFlavor?: "mysql" | "mariadb";
   jwtSecret: string;
   jwtSecretPrevious?: string;
   accessTtlSeconds: number;

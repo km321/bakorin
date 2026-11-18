@@ -6,7 +6,7 @@ One file describes the app, runtime, auth, entities, policies, webhooks, and job
 app:
   name: my-app
 runtime:
-  dialect: sqlite          # or postgres
+  dialect: sqlite          # or postgres, mysql, mariadb
   sqlite:
     path: ./data/app.db
   postgres:
@@ -109,7 +109,7 @@ jobs:
 
 Types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`, `json`, `richtext`.
 
-`json` holds any JSON value (jsonb on Postgres, checked text on SQLite). It cannot be unique or indexed, and list filters support `isnull` and `like` only. `richtext` holds HTML that the server cleans against an allowlist on every write; render it with `RichText` from the SDK.
+`json` holds any JSON value (JSON on MySQL/MariaDB, jsonb on Postgres, checked text on SQLite). It cannot be unique or indexed, and list filters support `isnull` and `like` only. `richtext` holds HTML that the server cleans against an allowlist on every write; render it with `RichText` from the SDK.
 
 Optional flags: `required`, `unique`, `index`, `default`, `values` (enum), `to` / `onDelete` (relation), `writable: admin|none`, `secret`, `private` (only the row's own user and admins see it; on by default for the auth entity's identity, role, and `emailVerified`), `description`, `renameFrom`.
 
@@ -159,6 +159,9 @@ entities:
 - **Filter** with `has`: `?filter[tagIds]=<id>` or `?filter[tagIds][has]=<id1>,<id2>` matches records linked to any of them.
 - **Permissions.** Every linked id must exist and be readable by the caller under the target's `read` policy, or the write gets 400. On reads, links to records the caller cannot read are left out. A PATCH from someone who cannot see some links keeps those links.
 - **Deletes.** Deleting either side removes the links. Linked records themselves are never deleted, so `onDelete` does not apply to many fields.
-- **Storage.** Links live in a hidden join table (`_bakorin_link_<entity>_<field>`) with foreign keys on both sides, created and renamed by migrations on SQLite and Postgres and included in backups.
+- **Storage.** Links live in a hidden join table (`_bakorin_link_<entity>_<field>`) with foreign keys on both sides, created and renamed by schema sync on SQLite, Postgres, MySQL and MariaDB and included in backups.
 - **Realtime** events include the field only when the linked entity is publicly readable. Otherwise refetch the record to see its links.
 - Many fields cannot be `unique`, indexed, sorted on, or given a `default`. Switching a field between one and many is refused by `bakorin migrate`: add a new field instead.
+
+
+For MySQL or MariaDB, set `runtime.dialect: mysql` (or `mariadb`) and `runtime.mysql.url: ${DATABASE_URL}`. The driver accepts `mysql://` and `mariadb://`. Without an explicit dialect or database block, either URL scheme in `DATABASE_URL` selects the MySQL driver. See [MySQL and MariaDB](mysql.md).

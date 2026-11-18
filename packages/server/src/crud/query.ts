@@ -1,9 +1,10 @@
 import { FILES_TABLE } from "../db/system.ts";
 import { fileInfo, type FileInfo, type SignedFile } from "../files/refs.ts";
 import { sql, type SelectQueryBuilder } from "kysely";
-import { joinTableName, quoteChecked, type EntityAST, type FieldAST } from "@bakorin/core";
+import { joinTableName, quoteChecked, type DialectName, type EntityAST, type FieldAST } from "@bakorin/core";
 import { decodeValue, encodeValue } from "../db/types.ts";
 import type { BakorinDb } from "../db/dialects.ts";
+import { likeEscape, textCast } from "../db/ddl.ts";
 import type { AccessDecision } from "./policies-sql.ts";
 
 /** `%text%` with LIKE wildcards in the text escaped, lowercased for a case insensitive match. */
@@ -80,7 +81,7 @@ export function applyFilters(
   qb: QB,
   entity: EntityAST,
   query: ListQuery,
-  dialect: "sqlite" | "postgres",
+  dialect: DialectName,
 ): QB {
   let next = qb;
   for (const filter of query.filters) {
@@ -120,9 +121,11 @@ export function applyFilters(
         next = next.where(filter.field, "<=", encoded);
         break;
       case "like":
-        // Same on SQLite and Postgres: a case insensitive substring match where
+        // Same on every dialect: a case insensitive substring match where
         // % and _ in the search text are literal characters.
-        next = next.where(sql<boolean>`lower(cast(${sql.ref(filter.field)} as text)) like ${likePattern(String(filter.value))} escape '\\'`);
+        next = next.where(
+          sql<boolean>`lower(cast(${sql.ref(filter.field)} as ${textCast(dialect)})) like ${likePattern(String(filter.value))} ${likeEscape(dialect)}`,
+        );
         break;
       case "in":
         next = next.where(filter.field, "in", encoded as unknown[]);

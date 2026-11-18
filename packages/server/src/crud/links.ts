@@ -9,6 +9,7 @@ import {
   type SchemaAST,
 } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
+import { createIndex, keyTextType, tableExists, tableOptions } from "../db/ddl.ts";
 import type { Actor } from "../context.ts";
 import { decideAccess } from "./policies-sql.ts";
 import { applyAccess } from "./query.ts";
@@ -20,14 +21,8 @@ import { applyAccess } from "./query.ts";
  * either record is deleted; deletes also clear them explicitly.
  */
 
-function tableExistsSql(dialect: DialectName, name: string) {
-  return dialect === "sqlite"
-    ? sql<{ name: string }>`select name from sqlite_master where type = 'table' and name = ${name}`
-    : sql<{ name: string }>`select table_name as name from information_schema.tables where table_schema = 'public' and table_name = ${name}`;
-}
-
 export async function linkTableExists(db: BakorinDb, dialect: DialectName, name: string): Promise<boolean> {
-  return (await tableExistsSql(dialect, name).execute(db)).rows.length > 0;
+  return tableExists(db, dialect, name);
 }
 
 /** Creates any missing join tables. Safe to run on every boot. */
@@ -36,19 +31,22 @@ export async function ensureLinkTables(db: BakorinDb, ast: SchemaAST): Promise<v
     for (const field of manyFields(entity)) {
       const table = joinTableName(entity.name, field.name);
       const target = field.relation!.to;
+      const dialect = ast.runtime.dialect;
+      const id = keyTextType(dialect);
+      // Inline "references" is ignored by MySQL and MariaDB, so the foreign keys are table constraints.
       await sql
         .raw(
           `create table if not exists ${quoteChecked(table)} (
-  source_id text not null references ${quoteChecked(entity.name)} (id) on delete cascade,
-  target_id text not null references ${quoteChecked(target)} (id) on delete cascade,
+  source_id ${id} not null,
+  target_id ${id} not null,
   position integer not null default 0,
-  primary key (source_id, target_id)
-)`,
+  primary key (source_id, target_id),
+  foreign key (source_id) references ${quoteChecked(entity.name)} (id) on delete cascade,
+  foreign key (target_id) references ${quoteChecked(target)} (id) on delete cascade
+)${tableOptions(dialect)}`,
         )
         .execute(db);
-      await sql
-        .raw(`create index if not exists ${quoteChecked(`${table}_target`)} on ${quoteChecked(table)} (target_id)`)
-        .execute(db);
+      await createIndex(db, dialect, { name: `${table}_target`, table, columns: ["target_id"] });
     }
   }
 }

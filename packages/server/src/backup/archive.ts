@@ -2,6 +2,7 @@ import { cp, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promi
 import { join, resolve } from "node:path";
 import { sql } from "kysely";
 import { BRANDING_DIR, joinTableName, manyFields, serializeAst, type SchemaAST } from "@bakorin/core";
+import type { DialectName } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
 import {
   AUDIT_TABLE,
@@ -141,6 +142,9 @@ export async function exportPortable(options: {
         await sql`set transaction read only`.execute(trx);
         await dumpAll(trx);
       });
+  } else if (dialect === "mysql") {
+    // InnoDB repeatable read: every select in the transaction reads one snapshot.
+    await options.db.transaction().setIsolationLevel("repeatable read").execute(dumpAll);
   } else {
     // SQLite: one transaction on the shared connection gives the same snapshot.
     await options.db.transaction().execute(dumpAll);
@@ -163,21 +167,38 @@ export function linkTables(ast: SchemaAST): string[] {
   return ast.order.flatMap((name) => manyFields(ast.entityMap[name]!).map((field) => joinTableName(name, field.name)));
 }
 
+async function mysqlOrder(db: BakorinDb, table: string) {
+  const result = await sql<{ name: string; pk: string | null }>`
+    select column_name as name, column_key as pk from information_schema.columns
+    where table_schema = database() and table_name = ${table}
+    order by ordinal_position
+  `.execute(db);
+  const keys = result.rows.filter((row) => row.pk === "PRI").map((row) => row.name);
+  const columns = keys.length > 0 ? keys : result.rows.map((row) => row.name);
+  return columns.map((name) => sql.ref(String(name)));
+}
+
 /** Rows per batch when exporting, so large tables are never held in memory at once. */
 export const EXPORT_BATCH_ROWS = 1000;
 
 async function dumpTable(
   db: BakorinDb,
-  dialect: "sqlite" | "postgres",
+  dialect: DialectName,
   table: string,
   path: string,
   map: (row: Record<string, unknown>) => Record<string, unknown>,
 ): Promise<void> {
   const writer = Bun.file(path).writer();
-  const order = dialect === "postgres" ? sql`ctid` : sql`rowid`;
+  // MySQL has no row id: pages follow the primary key, or every column for the
+  // few system tables without one, so offsets are stable inside the snapshot.
+  const order = dialect === "postgres" ? [sql`ctid`] : dialect === "mysql" ? await mysqlOrder(db, table) : [sql`rowid`];
   try {
     for (let offset = 0; ; offset += EXPORT_BATCH_ROWS) {
-      const rows = await db.selectFrom(table).selectAll().orderBy(order).limit(EXPORT_BATCH_ROWS).offset(offset).execute();
+      let query = db.selectFrom(table).selectAll();
+      for (const item of order) {
+        query = query.orderBy(item);
+      }
+      const rows = await query.limit(EXPORT_BATCH_ROWS).offset(offset).execute();
       for (const row of rows) {
         writer.write(`${JSON.stringify(map(row as Record<string, unknown>))}\n`);
       }
@@ -245,8 +266,7 @@ export async function importPortable(options: {
       systemTables.push({ name: table, rows: await readNdjson(path) });
     }
   }
-  // One transaction: a failed import leaves the database as it was.
-  await options.db.transaction().execute(async (trx) => {
+  const writeAll = async (trx: BakorinDb) => {
     for (const { name } of links) {
       await trx.deleteFrom(name).execute();
     }
@@ -271,6 +291,23 @@ export async function importPortable(options: {
       for (const row of rows) {
         await trx.insertInto(name).values(row).execute();
       }
+    }
+  };
+  const mysql = dialect === "mysql";
+  // One transaction: a failed import leaves the database as it was.
+  await options.db.transaction().execute(async (trx) => {
+    if (!mysql) {
+      await writeAll(trx);
+      return;
+    }
+    // MySQL checks foreign keys row by row, so self references and cycles would
+    // fail halfway through the deletes and inserts. The rows come from one
+    // consistent export. Checks are back on before the connection is reused.
+    await sql`set foreign_key_checks = 0`.execute(trx);
+    try {
+      await writeAll(trx);
+    } finally {
+      await sql`set foreign_key_checks = 1`.execute(trx);
     }
   });
   const filesDir = join(src, "files");

@@ -19,7 +19,7 @@ Bakorin reads `app.yaml` for structure and the environment for secrets and deplo
 | `TRUST_PROXY` | Behind a proxy | How many proxies to trust for the client IP, or a comma separated list of proxy CIDRs. Unset trusts none. Use `1` on Railway |
 | `BAKORIN_PROXY_SECRET` | With an Astro or Next site | 32 or more random characters, the same on the site and the server. The site's pass through route and server calls send it with the visitor IP, so lockouts and rate limits apply per visitor |
 | `BAKORIN_DATA_DIR` | Recommended | SQLite at `$BAKORIN_DATA_DIR/app.db`. Local uploads and backups live here when S3 is not configured |
-| `DATABASE_URL` | Postgres only | Used when `runtime.dialect` is `postgres` |
+| `DATABASE_URL` | Remote database | Postgres URL via `runtime.postgres.url`; MySQL and MariaDB via `runtime.mysql.url` or URL auto detection |
 | `CORS_ORIGINS` | Production | Comma separated origins. Overrides `runtime.cors.origins`. Credentials and `Authorization` are allowed |
 | `BAKORIN_ALLOW_ANY_ORIGIN` | Optional | Must be `true` to start in production with CORS `*`. Logs a warning |
 | `APP_URL` or `BAKORIN_APP_URL` | Recommended | Front end base URL for email links. Defaults to `http://127.0.0.1:$PORT` |
@@ -117,3 +117,6 @@ BAKORIN_ADMIN_NAME=
 MAIL_DRIVER=log
 MAIL_FROM=
 ```
+
+
+For MySQL or MariaDB, set `runtime.dialect: mysql` (or `mariadb`) and `runtime.mysql.url: ${DATABASE_URL}`. The driver accepts `mysql://` and `mariadb://`. Without an explicit dialect or database block, either URL scheme in `DATABASE_URL` selects the MySQL driver. See [MySQL and MariaDB](/docs/mysql/).

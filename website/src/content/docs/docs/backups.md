@@ -43,7 +43,7 @@ Without `--dry-run`, restore:
 1. Verifies the backup and stops on any mismatch.
 2. Copies the backup's `branding/` folder into the project.
 3. Takes a safety backup of the current data (reason `pre-restore`). Skip it with `--no-backup`.
-4. Restores. A SQLite snapshot into a SQLite project replaces the database file and uploads. Anything else (Postgres, or a SQLite backup into Postgres) imports the portable copy in one transaction, so a failed import leaves the database as it was.
+4. Restores. A SQLite snapshot into a SQLite project replaces the database file and uploads. Anything else (Postgres, MySQL, MariaDB, or a SQLite backup into a remote database) imports the portable copy in one transaction, so a failed import leaves the database as it was.
 5. Checks the mail and webhook queues. Deliveries that were still pending in the backup are sent when the server starts, and restore prints how many there are. Pass `--discard-pending` to mark them discarded instead, for example when you restore production into staging. They stay in the delivery logs as discarded.
 
 Stop the server before restoring SQLite. Restore is a command line action on purpose: it replaces data, and it should not be one click away in a browser.
@@ -93,7 +93,7 @@ Bakorin also takes a backup automatically before a schema change that renames or
 
 ## Tested in CI
 
-The test suite backs up a project, wipes it, restores it, and checks records, users, file metadata and contents, the outbox, the audit log, and branding. It runs on SQLite and on Postgres, from a backup folder and from a downloaded `.tar.gz`, and checks that a tampered backup is refused.
+The test suite backs up a project, wipes it, restores it, and checks records, users, file metadata and contents, the outbox, the audit log, and branding. It runs on SQLite, Postgres, MySQL and MariaDB, from a backup folder and from a downloaded `.tar.gz`, and checks that a tampered backup is refused.
 
 ```bash
 bun scripts/restore-drill.ts

@@ -81,7 +81,7 @@ runtime:
 
 Environment overrides: `BAKORIN_REALTIME_BROKER`, `BAKORIN_REALTIME_MAX_CONNECTIONS`, `BAKORIN_REALTIME_MAX_PER_USER`.
 
-The broker tells other instances that new events exist. `auto` picks Postgres `LISTEN/NOTIFY` on Postgres and in memory on SQLite. Events themselves always come from the log table, so a missed notification only delays delivery, and the broker never carries record data.
+The broker tells other instances that new events exist. `auto` picks Postgres `LISTEN/NOTIFY` on Postgres and in memory on SQLite, MySQL and MariaDB. Events themselves always come from the log table, so a missed notification only delays delivery, and the broker never carries record data.
 
 ## Monitoring
 

@@ -34,6 +34,7 @@ function redactRuntime(runtime: RuntimeAST): RuntimeAST {
     jwtSecret: REDACTED,
     ...(runtime.jwtSecretPrevious ? { jwtSecretPrevious: REDACTED } : {}),
     ...(runtime.postgresUrl ? { postgresUrl: redactUrl(runtime.postgresUrl) } : {}),
+    ...(runtime.mysqlUrl ? { mysqlUrl: redactUrl(runtime.mysqlUrl) } : {}),
     files: {
       ...runtime.files,
       ...(runtime.files.accessKey ? { accessKey: REDACTED } : {}),

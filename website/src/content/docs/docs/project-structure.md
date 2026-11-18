@@ -18,7 +18,7 @@ client/
   bakorin.gen.ts    generated types
 ```
 
-The same `app.yaml` drives SQLite or Postgres, and local files or S3 and R2.
+The same `app.yaml` drives SQLite, Postgres, MySQL or MariaDB, and local files or S3 and R2.
 
 ## What create-bakorin adds
 

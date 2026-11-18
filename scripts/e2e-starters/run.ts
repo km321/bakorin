@@ -23,7 +23,7 @@ const flag = (name: string, fallback?: string) => {
   return index >= 0 ? args[index + 1] : fallback;
 };
 const frontend = flag("--frontend", "astro") as "astro" | "next";
-const dialect = flag("--dialect", "sqlite") as "sqlite" | "postgres";
+const dialect = flag("--dialect", "sqlite") as "sqlite" | "postgres" | "mysql" | "mariadb";
 const shots = flag("--screenshots");
 const keep = args.includes("--keep");
 const children: ChildProcess[] = [];
@@ -191,7 +191,17 @@ async function main() {
     const url = await createPostgresDatabase(adminUrl, database);
     cleanups.push(() => dropPostgresDatabase(adminUrl, database).catch(() => undefined));
     yaml = yaml.replace("dialect: sqlite", "dialect: postgres").replace("  sqlite:\n    path: ./data/app.db\n", `  postgres:\n    url: "${url}"\n`);
+  }  if (dialect === "mysql" || dialect === "mariadb") {
+    // DATABASE_URL is a mysql:// or mariadb:// admin URL; the runner makes its own database.
+    const adminUrl = process.env.DATABASE_URL;
+    check(adminUrl && /^m(ysql|ariadb):/.test(adminUrl), "DATABASE_URL (mysql:// or mariadb://) is needed for mysql and mariadb");
+    const { createMysqlDatabase, dropMysqlDatabase } = await import("@bakorin/server");
+    const database = `e2e${crypto.randomUUID().replaceAll("-", "").slice(0, 10)}`;
+    const url = await createMysqlDatabase(adminUrl!, database);
+    cleanups.push(() => dropMysqlDatabase(adminUrl!, database).catch(() => undefined));
+    yaml = yaml.replace("dialect: sqlite", `dialect: ${dialect}`).replace("  sqlite:\n    path: ./data/app.db\n", `  mysql:\n    url: "${url}"\n`);
   }
+
   await writeFile(join(project, "app.yaml"), yaml);
   await writeFile(join(project, "hooks.ts"), "export default { entities: {} };\n");
   const apiPort = await freePort();

@@ -2,7 +2,7 @@
 
 import { SchemaError } from "./errors.ts";
 import type { AppYaml } from "./yaml-schema.ts";
-import { type AlertsRuntimeAST, JOB_DEFAULT_RETAIN_DAYS, MAIL_DEFAULT_RETAIN_DAYS, MCP_DEFAULTS, type McpRuntimeAST, REALTIME_DEFAULTS, type RealtimeRuntimeAST, type RuntimeAST, type TrustProxyAST, WEBHOOK_DEFAULT_RETAIN_DAYS } from "./ast.ts";
+import { type AlertsRuntimeAST, type DialectName, JOB_DEFAULT_RETAIN_DAYS, MAIL_DEFAULT_RETAIN_DAYS, MCP_DEFAULTS, type McpRuntimeAST, REALTIME_DEFAULTS, type RealtimeRuntimeAST, type RuntimeAST, type TrustProxyAST, WEBHOOK_DEFAULT_RETAIN_DAYS } from "./ast.ts";
 import { compileRateLimit } from "./compile-entity.ts";
 import { assertStrongJwtSecret, DEV_JWT_SECRET } from "./compile-secrets.ts";
 
@@ -76,9 +76,77 @@ function parseVirtualHostedStyle(
   return false;
 }
 
+/** The URL scheme of a database URL, lowercased, without the colon. */
+function urlScheme(url: string | undefined): string {
+  const match = /^([a-z][a-z0-9+.-]*):\/\//i.exec(url?.trim() ?? "");
+  return match ? match[1]!.toLowerCase() : "";
+}
+
+const MYSQL_SCHEMES = new Set(["mysql", "mariadb"]);
+const POSTGRES_SCHEMES = new Set(["postgres", "postgresql"]);
+
+/**
+ * runtime.dialect, or the dialect implied by the configured URL. mariadb is an
+ * alias of mysql: both use the same SQL and the same mysql2 driver.
+ */
+function resolveDialect(runtime: NonNullable<AppYaml["runtime"]>): {
+  dialect: DialectName;
+  mysqlUrl?: string;
+  mysqlFlavor?: "mysql" | "mariadb";
+} {
+  const mysqlBlockUrl = runtime.mysql?.url ?? runtime.mariadb?.url;
+  const postgresUrl = runtime.postgres?.url;
+  let requested = runtime.dialect;
+  if (!requested) {
+    if (mysqlBlockUrl) {
+      requested = urlScheme(mysqlBlockUrl) === "mariadb" || (runtime.mariadb?.url && !runtime.mysql?.url) ? "mariadb" : "mysql";
+    } else if (postgresUrl && MYSQL_SCHEMES.has(urlScheme(postgresUrl))) {
+      // DATABASE_URL pointed at MySQL or MariaDB from a postgres block.
+      requested = urlScheme(postgresUrl) === "mariadb" ? "mariadb" : "mysql";
+    } else {
+      requested = postgresUrl ? "postgres" : "sqlite";
+    }
+  }
+  if (requested === "postgres") {
+    if (!postgresUrl) {
+      throw new SchemaError("runtime.postgres.url is required when dialect is postgres");
+    }
+    if (MYSQL_SCHEMES.has(urlScheme(postgresUrl))) {
+      throw new SchemaError("runtime.postgres.url is a MySQL or MariaDB URL: set runtime.dialect to mysql and use runtime.mysql.url");
+    }
+    return { dialect: "postgres" };
+  }
+  if (requested === "mysql" || requested === "mariadb") {
+    const url = mysqlBlockUrl ?? (postgresUrl && MYSQL_SCHEMES.has(urlScheme(postgresUrl)) ? postgresUrl : undefined);
+    if (!url) {
+      throw new SchemaError(`runtime.mysql.url is required when dialect is ${requested}`);
+    }
+    const scheme = urlScheme(url);
+    if (POSTGRES_SCHEMES.has(scheme)) {
+      throw new SchemaError("runtime.mysql.url is a Postgres URL: set runtime.dialect to postgres and use runtime.postgres.url");
+    }
+    if (!MYSQL_SCHEMES.has(scheme)) {
+      throw new SchemaError("runtime.mysql.url must start with mysql:// or mariadb://");
+    }
+    const flavor = requested === "mariadb" || scheme === "mariadb" ? "mariadb" : "mysql";
+    return { dialect: "mysql", mysqlUrl: url, mysqlFlavor: flavor };
+  }
+  return { dialect: "sqlite" };
+}
+
 export function compileRuntime(yaml: AppYaml, production: boolean, env: Record<string, string | undefined>): RuntimeAST {
-  const runtime = yaml.runtime ?? {};
-  const dialect = runtime.dialect ?? (runtime.postgres?.url ? "postgres" : "sqlite");
+  let runtime = yaml.runtime ?? {};
+  // A mysql:// or mariadb:// DATABASE_URL is enough on its own (Railway's MySQL
+  // and MariaDB templates set one). An explicit SQLite or Postgres setting wins.
+  const databaseUrl = firstEnv(env, ["DATABASE_URL"]);
+  if (databaseUrl && MYSQL_SCHEMES.has(urlScheme(databaseUrl))) {
+    const explicitOther =
+      runtime.dialect === "sqlite" || runtime.dialect === "postgres" || (!runtime.dialect && (Boolean(runtime.sqlite) || Boolean(runtime.postgres)));
+    if (!explicitOther && !runtime.mysql?.url && !runtime.mariadb?.url) {
+      runtime = { ...runtime, mysql: { url: databaseUrl } };
+    }
+  }
+  const { dialect, mysqlUrl, mysqlFlavor } = resolveDialect(runtime);
   const jwtSecret = runtime.jwt?.secret || env.JWT_SECRET || (production ? "" : DEV_JWT_SECRET);
   const jwtSecretPrevious = firstEnv(env, ["JWT_SECRET_PREVIOUS"]);
   if (production) {
@@ -86,9 +154,6 @@ export function compileRuntime(yaml: AppYaml, production: boolean, env: Record<s
     if (jwtSecretPrevious) {
       assertStrongJwtSecret(jwtSecretPrevious, "JWT_SECRET_PREVIOUS");
     }
-  }
-  if (dialect === "postgres" && !runtime.postgres?.url) {
-    throw new SchemaError("runtime.postgres.url is required when dialect is postgres");
   }
   const dataDir = firstEnv(env, ["BAKORIN_DATA_DIR"]);
   const bucket = runtime.files?.bucket ?? firstEnv(env, ["S3_BUCKET", "BUCKET"]);
@@ -123,6 +188,7 @@ export function compileRuntime(yaml: AppYaml, production: boolean, env: Record<s
     port: parsePort(runtime.port, env),
     sqlitePath,
     postgresUrl: runtime.postgres?.url,
+    ...(mysqlUrl ? { mysqlUrl, mysqlFlavor } : {}),
     jwtSecret,
     jwtSecretPrevious,
     accessTtlSeconds: runtime.jwt?.accessTtlSeconds ?? 900,

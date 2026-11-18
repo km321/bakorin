@@ -153,6 +153,6 @@ export function startAlertWorker(ctx: AppContext, monitor: Monitor): () => void 
   }, everyMs);
   return () => {
     clearInterval(timer);
-    void releaseLease(ctx.db, "alerts", holder);
+    void releaseLease(ctx.db, "alerts", holder).catch(() => undefined);
   };
 }

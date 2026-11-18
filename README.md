@@ -83,7 +83,7 @@ client/
   bakorin.gen.ts    generated types
 ```
 
-The same `app.yaml` drives SQLite or Postgres, local files or S3/R2. The production Docker image ships SQLite on a volume plus S3 for files and backups.
+The same `app.yaml` drives SQLite, Postgres, MySQL or MariaDB, local files or S3/R2. The production Docker image ships SQLite on a volume plus S3 for files and backups.
 
 ## Client workflow
 
@@ -100,7 +100,7 @@ The same `app.yaml` drives SQLite or Postgres, local files or S3/R2. The product
 app:
   name: studio-leads
 runtime:
-  dialect: sqlite          # or postgres
+  dialect: sqlite          # or postgres, mysql, mariadb
   sqlite:
     path: ./data/app.db
   postgres:
@@ -244,7 +244,7 @@ bakorin export ./portable               # dialect-agnostic NDJSON + files + app.
 bakorin import ./portable               # load that archive into the current dialect
 ```
 
-SQLite backups are a consistent `VACUUM INTO` copy of `app.db`, plus `app.yaml`, `hooks.ts`, `branding/`, uploads, and a portable export. Postgres backups use the portable NDJSON format (entities, users, file metadata, the mail and webhook outbox, job run history, the audit log, schema, uploads). Every backup has a `manifest.json` with a sha256 per file, and restore refuses a backup that does not match. Sessions and one-time tokens are left out; users sign in again after a restore. Admins can download any backup from the **Backups** page as a `.tar.gz` (short-lived signed link, streamed from disk or S3). Details: `docs/backups.md`.
+SQLite backups are a consistent `VACUUM INTO` copy of `app.db`, plus `app.yaml`, `hooks.ts`, `branding/`, uploads, and a portable export. Postgres, MySQL and MariaDB backups use the portable NDJSON format (entities, users, file metadata, the mail and webhook outbox, job run history, the audit log, schema, uploads). Every backup has a `manifest.json` with a sha256 per file, and restore refuses a backup that does not match. Sessions and one-time tokens are left out; users sign in again after a restore. Admins can download any backup from the **Backups** page as a `.tar.gz` (short-lived signed link, streamed from disk or S3). Details: `docs/backups.md`.
 
 ## Schema changes
 
@@ -323,7 +323,7 @@ Railway volume snapshots are a second copy, not a substitute for `bakorin backup
 | `BAKORIN_ADMIN_EMAIL` | optional | First-boot admin identity |
 | `BAKORIN_ADMIN_PASSWORD` | optional | First-boot admin password (min 8 chars). Ignored once an admin exists |
 | `BAKORIN_ADMIN_NAME` | optional | Defaults to `Admin` |
-| `DATABASE_URL` | Postgres only | Used when `runtime.dialect` is `postgres` |
+| `DATABASE_URL` | Remote database | Postgres URL via `runtime.postgres.url`; MySQL and MariaDB via `runtime.mysql.url` or URL auto detection |
 | `CORS_ORIGINS` | production | Comma-separated allowed origins. Overrides `runtime.cors.origins`. Credentials and `Authorization` are allowed. |
 | `BAKORIN_ALLOW_ANY_ORIGIN` | optional | Must be `true` to start in production with CORS `*`. Logs a warning. |
 | `APP_URL` or `BAKORIN_APP_URL` | recommended | Front-end base URL for links in emails. Defaults to `http://127.0.0.1:$PORT` |
@@ -444,7 +444,9 @@ bun run test:postgres    # BAKORIN_TEST_DIALECT=postgres bun test
 
 With `DATABASE_URL` set, the Postgres specific tests also run in a normal `bun test`. Tests about SQLite files themselves (snapshots, `app.db` downloads) stay on SQLite.
 
-GitHub Actions (`.github/workflows/ci.yml`) runs typecheck and the full suite in a matrix on SQLite and on a `postgres:16` service, then a blocking `bun audit` and a gitleaks scan.
+For MySQL and MariaDB, see [connection settings, behavior and tests](docs/mysql.md). Run `bun run test:mysql` or `bun run test:mariadb` with `MYSQL_TEST_URL` set to a disposable server.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs typecheck and the full suite in a matrix on SQLite, Postgres 16, MySQL 8.0 and MariaDB 10.11 services, then a blocking `bun audit` and a gitleaks scan.
 
 Load baseline (measured, SQLite): `bench/baseline.md` via `bun scripts/bench-sqlite.ts`. Restore drill: `bun scripts/restore-drill.ts`.
 
@@ -458,7 +460,7 @@ bun run release    # linux-x64, linux-arm64, darwin-arm64 in ./release
 
 ## Status of this v0.1
 
-Works: schema compiler, 3-tier diff, SQLite and Postgres migrators (including `indexes:`), CRUD with filters/sort/expand (relations and file fields), policies, auth (signup, login, forgot/reset, verify, invites, lockout), DB-backed rate limits, JWT rotation, signed file URLs, audit log, leases for backups and webhooks, admin UI with Files, Backups, Audit, and Webhooks, SDK with file uploads, create-bakorin, Astro and Next starters, backup/restore/export/import including S3 retention, hooks, generated OpenAPI, compiled binary, Docker, Railway template files.
+Works: schema compiler, 3-tier diff, SQLite, Postgres, MySQL and MariaDB schema sync (including `indexes:`), CRUD with filters/sort/expand (relations and file fields), policies, auth (signup, login, forgot/reset, verify, invites, lockout), DB-backed rate limits, JWT rotation, signed file URLs, audit log, leases for backups and webhooks, admin UI with Files, Backups, Audit, and Webhooks, SDK with file uploads, create-bakorin, Astro and Next starters, backup/restore/export/import including S3 retention, hooks, generated OpenAPI, compiled binary, Docker, Railway template files.
 
 ## Roadmap
 

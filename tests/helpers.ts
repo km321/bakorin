@@ -51,8 +51,17 @@ export async function tempProject(yaml = MINI_YAML, hooks = "export default { en
   return dir;
 }
 
+/** Admin URL of the Postgres server the postgres only tests use, when one is configured. */
+export const POSTGRES_URL =
+  process.env.POSTGRES_TEST_URL ?? (/^postgres(ql)?:/.test(process.env.DATABASE_URL ?? "") ? process.env.DATABASE_URL : undefined);
+
+/** Admin URL of the MySQL or MariaDB server the mysql only tests use, when one is configured. */
+export const MYSQL_URL = process.env.MYSQL_TEST_URL ?? (/^m(ysql|ariadb):/.test(process.env.DATABASE_URL ?? "") ? process.env.DATABASE_URL : undefined);
+
 /** Set by the CI matrix: run every boot() based test on Postgres too. */
-export const TEST_DIALECT = process.env.BAKORIN_TEST_DIALECT === "postgres" ? "postgres" : "sqlite";
+export const TEST_DIALECT = ["postgres", "mysql", "mariadb"].includes(process.env.BAKORIN_TEST_DIALECT ?? "")
+  ? (process.env.BAKORIN_TEST_DIALECT as "postgres" | "mysql" | "mariadb")
+  : "sqlite";
 
 const SQLITE_BLOCK = `  sqlite:\n    path: ./data/app.db\n`;
 
@@ -62,8 +71,8 @@ export async function boot(
   options: { workers?: boolean } = {},
 ): Promise<RuntimeHandles & { dir: string }> {
   const source = yaml ?? MINI_YAML;
-  if (TEST_DIALECT === "postgres" && source.includes("dialect: sqlite") && source.includes(SQLITE_BLOCK)) {
-    return bootOnPostgres(source, hooks, options);
+  if (TEST_DIALECT !== "sqlite" && source.includes("dialect: sqlite") && source.includes(SQLITE_BLOCK)) {
+    return TEST_DIALECT === "postgres" ? bootOnPostgres(source, hooks, options) : bootOnMysql(source, hooks, options);
   }
   return bootAs(source, hooks, options);
 }
@@ -95,9 +104,9 @@ export async function bootPostgres(hooks?: string, base = MINI_YAML): Promise<Ru
 }
 
 async function bootOnPostgres(base: string, hooks?: string, options: { workers?: boolean } = {}): Promise<RuntimeHandles & { dir: string; database: string }> {
-  const adminUrl = process.env.DATABASE_URL;
+  const adminUrl = POSTGRES_URL;
   if (!adminUrl) {
-    throw new Error("DATABASE_URL is required for postgres tests");
+    throw new Error("DATABASE_URL (postgres://) or POSTGRES_TEST_URL is required for postgres tests");
   }
   const { createPostgresDatabase, dropPostgresDatabase } = await import("@bakorin/server");
   const database = `b${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
@@ -168,4 +177,36 @@ export async function signupAndLogin(
     headers: init.headers,
     body: JSON.stringify({ email: body.email, password: body.password }),
   });
+}
+
+/** Same isolated database per test as Postgres, using mysql2 for MySQL or MariaDB. */
+export async function bootMysql(hooks?: string, base = MINI_YAML): Promise<RuntimeHandles & { dir: string; database: string }> {
+  return bootOnMysql(base, hooks);
+}
+
+export function mysqlYaml(url: string, base = MINI_YAML): string {
+  return base.replace("dialect: sqlite", "dialect: mysql").replace(SQLITE_BLOCK, `  mysql:\n    url: "${url}"\n`);
+}
+
+async function bootOnMysql(base: string, hooks?: string, options: { workers?: boolean } = {}): Promise<RuntimeHandles & { dir: string; database: string }> {
+  const adminUrl = MYSQL_URL;
+  if (!adminUrl) {
+    throw new Error("MYSQL_TEST_URL or DATABASE_URL (mysql:// or mariadb://) is required for mysql tests");
+  }
+  const { createMysqlDatabase, dropMysqlDatabase } = await import("@bakorin/server");
+  const database = `b${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+  const url = await createMysqlDatabase(adminUrl, database);
+  let runtime: Awaited<ReturnType<typeof bootAs>>;
+  try {
+    runtime = await bootAs(mysqlYaml(url, base), hooks, options);
+  } catch (error) {
+    await dropMysqlDatabase(adminUrl, database);
+    throw error;
+  }
+  const originalClose = runtime.close.bind(runtime);
+  runtime.close = async () => {
+    await originalClose();
+    await dropMysqlDatabase(adminUrl, database);
+  };
+  return Object.assign(runtime, { database });
 }

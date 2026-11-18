@@ -135,6 +135,6 @@ export function startBackupScheduler(
   );
   return () => {
     clearInterval(timer);
-    void releaseLease(options.db, "backup-scheduler", holder);
+    void releaseLease(options.db, "backup-scheduler", holder).catch(() => undefined);
   };
 }

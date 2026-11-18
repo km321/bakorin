@@ -70,3 +70,17 @@ Or `docker compose up --build` using the generated `docker-compose.yml`.
 ## Moving an existing service off railway.json
 
 Railway stops reading `railway.json` and `railway.toml` on 2026-12-01. For a service that still uses them: add `.railway/railway.ts` (copy it from a new `create-bakorin` project, or run `railway config migrate --show`), delete the two old files, run `railway config plan`, and apply only when the plan shows no volume or variable deletes. `railway config migrate status` shows which services still read the old files.
+
+
+## MySQL or MariaDB on Railway
+
+Attach a MySQL or MariaDB service and reference its private connection URL as `DATABASE_URL`. Use the private hostname so database traffic stays inside the project. Set the database, user and password in Railway's secret variables, not in committed YAML.
+
+```yaml
+runtime:
+  dialect: mysql
+  mysql:
+    url: ${DATABASE_URL}
+```
+
+Both `mysql://` and `mariadb://` work. Keep a `/data` volume for local uploads, or use S3. Do not scale realtime subscriptions past one API instance: cross instance fan out currently needs the Postgres broker. See [MySQL and MariaDB](mysql.md) for TLS, schema sync and storage behavior.
