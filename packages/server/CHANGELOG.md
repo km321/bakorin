@@ -1,5 +1,19 @@
 # @bakorin/server
 
+## 0.1.0-beta.2
+
+### Minor Changes
+
+- 0bc060f: Add MySQL 8.0+ and MariaDB 10.11+ support through mysql2 and Kysely's MysqlDialect, including schema sync, fields, relations, auth, files, mail, jobs and portable backups. Add database matrix coverage for unit and starter/template browser tests.
+
+### Patch Changes
+
+- 77c1c7d: The admin UI renews access tokens automatically, revokes the refresh token on every sign-out, and can sign out after an optional idle timeout (`runtime.admin.idleTimeoutMinutes`).
+- Updated dependencies [77c1c7d]
+- Updated dependencies [0bc060f]
+  - @bakorin/core@0.1.0-beta.2
+  - @bakorin/sdk@0.1.0-beta.2
+
 ## 0.1.0-beta.1
 
 ### Minor Changes

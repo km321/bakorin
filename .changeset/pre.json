@@ -9,8 +9,10 @@
     "@bakorin/server": "0.0.1"
   },
   "changesets": [
+    "admin-session",
     "first-public-beta",
     "json-and-richtext-fields",
+    "mysql-and-mariadb",
     "stripe-starters"
   ]
 }
