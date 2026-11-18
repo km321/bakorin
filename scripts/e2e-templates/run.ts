@@ -17,7 +17,7 @@ import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { deflateSync } from "node:zlib";
 import { navReport } from "../e2e-shared/nav.ts";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Locator, type Page } from "playwright";
 
 const ROOT = resolve(import.meta.dir, "../..");
 const args = process.argv.slice(2);
@@ -78,6 +78,19 @@ async function run(command: string[], cwd: string, env: Record<string, string | 
     throw new Error(`${command.join(" ")} failed with ${code}`);
   }
   return lines;
+}
+
+/**
+ * Server rendered pages show a hook's background work only after a reload.
+ * Reload until the locator is visible, then wait for it as usual.
+ */
+async function reloadUntil(page: Page, locator: Locator, timeoutMs = 30_000) {
+  const until = Date.now() + timeoutMs;
+  while (Date.now() < until && (await locator.count()) === 0) {
+    await Bun.sleep(300);
+    await page.reload();
+  }
+  await locator.first().waitFor({ timeout: 5_000 });
 }
 
 async function waitFor(url: string, what: string, logs: string[], timeoutMs = 90_000) {
@@ -712,11 +725,9 @@ async function storeFlow(newContext: NewContext) {
   await shot(page, "cart");
   await page.getByRole("button", { name: "Place order" }).click();
   await page.waitForURL(/\/checkout\/[^/]+$/);
-  for (let i = 0; i < 10 && (await page.getByText("Adding up your order").count()) > 0; i++) {
-    await Bun.sleep(300);
-    await page.reload();
-  }
-  await page.getByText(/Some items have no price yet, so this order cannot be paid/).waitFor();
+  // afterCreate writes the totals and then the note in two updates, so keep
+  // reloading until the note is there, not only until the totals are.
+  await reloadUntil(page, page.getByText(/Some items have no price yet, so this order cannot be paid/));
   check((await page.getByRole("link", { name: /with Stripe/ }).count()) === 0, "an unpriced order gets no Stripe link");
   await page.getByRole("cell", { name: "Example product: Canvas tote" }).waitFor();
   await axe(page, "checkout");
@@ -748,10 +759,8 @@ async function storeFlow(newContext: NewContext) {
   await page.getByText("Total: $30.00").waitFor();
   await page.getByRole("button", { name: "Place order" }).click();
   await page.waitForURL(/\/checkout\/[^/]+$/);
-  for (let i = 0; i < 10 && (await page.getByText("Adding up your order").count()) > 0; i++) {
-    await Bun.sleep(300);
-    await page.reload();
-  }
+  // The hook writes totals before it calls Stripe and saves checkoutUrl.
+  await reloadUntil(page, page.getByRole("link", { name: "Pay $30.00 with Stripe" }));
   await page.getByText("Total: $30.00").waitFor();
   const cheat = await apiStatus(shopperContext, "POST", "orders", { status: "paid", totalCents: 1, lines: "[]" });
   check(cheat.status === 403, `shoppers cannot set an order's status or total, got ${cheat.status}`);
@@ -765,6 +774,7 @@ async function storeFlow(newContext: NewContext) {
   await page.getByText("We are confirming your payment with Stripe").waitFor();
   check((await adminApi("GET", `orders/${latest.id}`)).status === "pending_payment", "the success page never marks an order paid");
   await page.goto(`/checkout/${latest.id}`);
+  await reloadUntil(page, page.getByRole("link", { name: "Pay $30.00 with Stripe" }));
   await axe(page, "checkout");
   await shot(page, "checkout");
   await page.getByRole("link", { name: "Pay $30.00 with Stripe" }).click();
