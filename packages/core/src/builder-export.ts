@@ -14,6 +14,12 @@ function typedDefault(field: FieldDraft): unknown {
       const value = Number(raw);
       return Number.isFinite(value) ? value : raw;
     }
+    case "json":
+      try {
+        return JSON.parse(raw) as unknown;
+      } catch {
+        return raw;
+      }
     default:
       return field.defaultValue;
   }

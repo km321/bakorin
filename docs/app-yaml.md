@@ -107,7 +107,9 @@ jobs:
 
 ## Fields
 
-Types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`.
+Types: `text`, `email`, `password`, `number`, `integer`, `boolean`, `date`, `datetime`, `enum`, `file`, `relation`, `json`, `richtext`.
+
+`json` holds any JSON value (jsonb on Postgres, checked text on SQLite). It cannot be unique or indexed, and list filters support `isnull` and `like` only. `richtext` holds HTML that the server cleans against an allowlist on every write; render it with `RichText` from the SDK.
 
 Optional flags: `required`, `unique`, `index`, `default`, `values` (enum), `to` / `onDelete` (relation), `writable: admin|none`, `secret`, `private` (only the row's own user and admins see it; on by default for the auth entity's identity, role, and `emailVerified`), `description`, `renameFrom`.
 

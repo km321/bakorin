@@ -12,6 +12,12 @@ export function likePattern(value: string): string {
 }
 
 const OPS = new Set(["eq", "neq", "gt", "gte", "lt", "lte", "like", "in", "isnull", "has"]);
+/**
+ * json fields filter with isnull (set or not) and like (a case insensitive match on
+ * the JSON text). Equality and ordering on JSON differ between SQLite and Postgres,
+ * so they are not offered, and json fields cannot be sorted.
+ */
+const JSON_OPS = new Set(["isnull", "like"]);
 
 export interface ListQuery {
   limit: number;
@@ -35,6 +41,7 @@ export function parseListQuery(entity: EntityAST, search: URLSearchParams, optio
       !entity.fieldMap[field] ||
       entity.fieldMap[field]?.secret ||
       entity.fieldMap[field]?.relation?.many ||
+      entity.fieldMap[field]?.type === "json" ||
       (!privateAllowed && entity.fieldMap[field]?.private)
     ) {
       continue;
@@ -55,7 +62,7 @@ export function parseListQuery(entity: EntityAST, search: URLSearchParams, optio
     const many = Boolean(field.relation?.many);
     // Many to many fields filter with has (one id, or a comma list for any of them).
     const op = match[2] ?? (many ? "has" : "eq");
-    if (!OPS.has(op) || (many ? op !== "has" : op === "has")) {
+    if (!OPS.has(op) || (many ? op !== "has" : op === "has") || (field.type === "json" && !JSON_OPS.has(op))) {
       continue;
     }
     filters.push({ field: fieldName, op, value: op === "in" || op === "has" ? value.split(",").filter(Boolean) : value });

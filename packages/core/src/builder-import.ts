@@ -28,7 +28,12 @@ function fieldFromRaw(name: string, raw: unknown, warnings: string[], where: str
   field.required = obj.required === true || (obj.default !== undefined && obj.required !== false);
   field.unique = obj.unique === true;
   field.index = obj.index === true;
-  field.defaultValue = obj.default === undefined || obj.default === null ? "" : str(obj.default);
+  field.defaultValue =
+    obj.default === undefined || (obj.default === null && field.type !== "json")
+      ? ""
+      : field.type === "json"
+        ? JSON.stringify(obj.default)
+        : str(obj.default);
   field.values = strList(obj.values);
   field.to = str(obj.to);
   field.onDelete = (ON_DELETE as readonly string[]).includes(str(obj.onDelete)) ? (str(obj.onDelete) as FieldDraft["onDelete"]) : "";

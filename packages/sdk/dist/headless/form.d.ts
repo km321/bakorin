@@ -4,6 +4,17 @@ import { type Store } from "./store.ts";
 export type FieldErrors = Record<string, string>;
 export type FormValues = Record<string, unknown>;
 /**
+ * What a json input holds when its text does not parse. validateField reports it,
+ * and inputValue gives the text back so nothing the user typed is lost.
+ */
+export declare class InvalidJson {
+    readonly text: string;
+    readonly message: string;
+    constructor(text: string, message: string);
+}
+/** Parses JSON typed into a form. Empty text is null; text that does not parse is an InvalidJson. */
+export declare function parseJsonInput(text: string): unknown;
+/**
  * Turns what an input holds (always a string, or a boolean for checkboxes) into
  * the value the API expects. Empty optional inputs become null on update and are
  * left out on create, which matches how the server treats them.

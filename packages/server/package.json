@@ -59,6 +59,7 @@
   ],
   "dependencies": {
     "@bakorin/core": "workspace:^",
+    "@bakorin/sdk": "workspace:^",
     "hono": "^4.7.4",
     "jose": "^6.0.10",
     "kysely": "^0.28.2",

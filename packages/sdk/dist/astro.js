@@ -9,6 +9,11 @@ import {
   createProxyHandler2
 } from "./chunks/index-gynvv190.js";
 import {
+  sanitizeRichText2,
+  richTextToPlain2,
+  isRichTextEmpty2
+} from "./chunks/index-2p7b6gjp.js";
+import {
   isProtected2,
   refreshUrl2,
   hasRole,
@@ -19,13 +24,13 @@ import {
 } from "./chunks/index-n603vnp4.js";
 import {
   signInFields2
-} from "./chunks/index-3frn3qj3.js";
+} from "./chunks/index-f24s06zt.js";
 import {
   coerceValue2,
   validateRecord2,
   changedFields2,
   fieldErrorsFrom2
-} from "./chunks/index-csqk23qj.js";
+} from "./chunks/index-dyakva2e.js";
 // src/astro.ts
 var DEFAULT_PROXY_PREFIX = "/api/bakorin";
 function createAstroClient(options) {
@@ -178,9 +183,12 @@ export {
   handleAuthForm,
   handleRecordForm,
   isProtected2 as isProtected,
+  isRichTextEmpty2 as isRichTextEmpty,
   isSameSiteRequest2 as isSameSiteRequest,
   loadBrandingTheme2 as loadBrandingTheme,
   refreshUrl2 as refreshUrl,
   requireAuth,
-  rightmostForwardedFor2 as rightmostForwardedFor
+  richTextToPlain2 as richTextToPlain,
+  rightmostForwardedFor2 as rightmostForwardedFor,
+  sanitizeRichText2 as sanitizeRichText
 };

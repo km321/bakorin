@@ -40,6 +40,18 @@ export function builderIssues(config: BuilderConfig): BuilderIssue[] {
         const def = field.defaultValue.trim();
         if (def && !field.values.includes(def)) error(`${at}.defaultValue`, `Default must be one of ${field.values.join(", ") || "the values"}.`);
       }
+      if (field.type === "json") {
+        if (field.unique || field.index) error(`${at}.type`, "JSON fields cannot be unique or indexed.");
+        const def = field.defaultValue.trim();
+        if (def) {
+          try {
+            JSON.parse(def);
+          } catch {
+            error(`${at}.defaultValue`, "Default must be valid JSON, for example {} or [].");
+          }
+        }
+      }
+      if (field.type === "richtext" && field.unique) error(`${at}.type`, "Rich text fields cannot be unique.");
       if (field.type === "relation" && !field.to) error(`${at}.to`, "Pick the entity this field points to.");
       if ((field.type === "number" || field.type === "integer") && field.defaultValue.trim()) {
         const value = Number(field.defaultValue);

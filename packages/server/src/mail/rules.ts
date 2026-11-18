@@ -194,6 +194,12 @@ export function sampleRecord(entity: EntityAST): Record<string, unknown> {
       case "text":
         out[field.name] = `Sample ${field.name}`;
         break;
+      case "richtext":
+        out[field.name] = `<p>Sample ${field.name}</p>`;
+        break;
+      case "json":
+        out[field.name] = { sample: true };
+        break;
       default:
         out[field.name] = null;
     }

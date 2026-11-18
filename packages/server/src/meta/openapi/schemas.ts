@@ -40,6 +40,13 @@ export function jsonSchemaForField(field: FieldAST, write: boolean): Record<stri
     case "text":
       schema = { type: "string" };
       break;
+    case "json":
+      // Any JSON value. Filters: isnull and like only.
+      schema = {};
+      break;
+    case "richtext":
+      schema = { type: "string", contentMediaType: "text/html", description: "HTML, sanitized by the server against an allowlist" };
+      break;
     default: {
       const exhaustive: never = field.type;
       return exhaustive;
@@ -115,7 +122,7 @@ export function pascal(name: string): string {
 
 export function listParameters(entity: EntityAST): unknown[] {
   const relations = entity.fields.filter((field) => field.relation || field.type === "file").map((field) => field.name);
-  const sortable = entity.fields.filter((field) => !field.secret).map((field) => field.name);
+  const sortable = entity.fields.filter((field) => !field.secret && field.type !== "json").map((field) => field.name);
   const params: unknown[] = [
     {
       name: "limit",
@@ -155,6 +162,15 @@ export function listParameters(entity: EntityAST): unknown[] {
         in: "query",
         description: `${detail}. Records linked to this ${field.relation.to} id (or any of a comma separated list).`,
         schema: { type: "string" },
+      });
+      continue;
+    }
+    if (field.type === "json") {
+      params.push({
+        name: `filter[${field.name}][isnull]`,
+        in: "query",
+        description: `${detail}. true for records where it is not set, false for records where it is. filter[${field.name}][like] matches the JSON text.`,
+        schema: { type: "boolean" },
       });
       continue;
     }

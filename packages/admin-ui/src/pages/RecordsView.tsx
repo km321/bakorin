@@ -49,6 +49,19 @@ function fileCell(row: Record<string, unknown>, fieldName: string): ComponentChi
   );
 }
 
+function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 3).trimEnd()}...` : text;
+}
+
+/** The text of a rich text value. DOMParser builds an inert document: nothing in it runs or loads. */
+function htmlToText(value: unknown): string {
+  if (typeof value !== "string" || value === "") return "";
+  // A space after each block so "Title</h2><p>Text" reads "Title Text".
+  const spaced = value.replace(/<\/(p|h[1-6]|li|blockquote|pre)>|<br\s*\/?>/gi, "$& ");
+  const doc = new DOMParser().parseFromString(spaced, "text/html");
+  return (doc.body.textContent ?? "").replace(/\s+/g, " ").trim();
+}
+
 function cell(row: Record<string, unknown>, field: MetaEntity["fields"][number]): ComponentChildren {
   if (field.relation) {
     return relationCell(row, field.name, field.relation.display);
@@ -63,6 +76,10 @@ function cell(row: Record<string, unknown>, field: MetaEntity["fields"][number])
       return formatDateTime(value);
     case "file":
       return fileCell(row, field.name);
+    case "json":
+      return value === null || value === undefined ? "" : <code class="json-cell">{truncate(JSON.stringify(value), 80)}</code>;
+    case "richtext":
+      return truncate(htmlToText(value), 120);
     default:
       if (value === null || value === undefined) {
         return "";

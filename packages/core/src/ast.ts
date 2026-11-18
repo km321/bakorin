@@ -15,7 +15,11 @@ export type FieldTypeName =
   | "datetime"
   | "enum"
   | "file"
-  | "relation";
+  | "relation"
+  /** Any JSON value: TEXT checked as JSON on SQLite, jsonb on Postgres. */
+  | "json"
+  /** Rich text: HTML the server sanitizes against an allowlist before it is stored. */
+  | "richtext";
 
 export type PolicyKind = "public" | "authenticated" | "admin" | "owner" | "role";
 

@@ -4,6 +4,7 @@ export { createProxyHandler, isSameSiteRequest, rightmostForwardedFor, type Prox
 import { forbidden, hasRole, isProtected, refreshUrl, type GuardOptions } from "./guard.ts";
 export { isProtected, refreshUrl, type GuardOptions, type ProtectRule } from "./guard.ts";
 export { loadBrandingTheme } from "./headless/theme.ts";
+export { isRichTextEmpty, richTextToPlain, sanitizeRichText } from "./richtext.ts";
 
 /** The default pass through route. The refresh cookie lives on this path. */
 export const DEFAULT_PROXY_PREFIX = "/api/bakorin";

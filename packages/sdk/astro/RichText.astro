@@ -1,0 +1,19 @@
+---
+/**
+ * Renders a richtext field. The HTML is cleaned again with the same allowlist the
+ * server uses before it reaches the page.
+ *
+ *   <RichText html={post.body} />
+ */
+import { sanitizeRichText } from "../dist/richtext.js";
+
+interface Props {
+  html: string | null | undefined;
+  as?: "div" | "section" | "article" | "span";
+  class?: string;
+}
+const { html, as: Tag = "div", class: className } = Astro.props;
+const clean = sanitizeRichText(html ?? "");
+---
+
+<Tag class:list={["bk-richtext", className]} set:html={clean} />

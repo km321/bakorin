@@ -75,11 +75,12 @@ export function Field({ field, value, error, label, hint, onChange, options, aut
         ))}
       </select>
     );
-  } else if (field.multiline && field.type === "text") {
+  } else if ((field.multiline && field.type === "text") || field.type === "json" || field.type === "richtext") {
     control = (
       <textarea
         {...common}
-        className="bk-input bk-textarea"
+        className={cx("bk-input bk-textarea", field.type === "json" && "bk-textarea--code")}
+        spellCheck={field.type === "json" ? false : undefined}
         rows={6}
         required={field.required && field.defaultValue === undefined}
         value={inputValue(field, value)}

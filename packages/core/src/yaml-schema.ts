@@ -21,6 +21,8 @@ export const FIELD_TYPES = [
   "enum",
   "file",
   "relation",
+  "json",
+  "richtext",
 ] as const;
 
 export const APP_YAML_TOP_LEVEL_KEYS = ["app", "branding", "runtime", "auth", "entities", "webhooks", "mail", "jobs"] as const;

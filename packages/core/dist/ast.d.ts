@@ -2,7 +2,11 @@ import type { BrandingAST } from "./branding.ts";
 export declare const SCHEMA_AST_VERSION: 1;
 export type DialectName = "sqlite" | "postgres";
 export type FileDriver = "local" | "s3";
-export type FieldTypeName = "text" | "email" | "password" | "number" | "integer" | "boolean" | "date" | "datetime" | "enum" | "file" | "relation";
+export type FieldTypeName = "text" | "email" | "password" | "number" | "integer" | "boolean" | "date" | "datetime" | "enum" | "file" | "relation"
+/** Any JSON value: TEXT checked as JSON on SQLite, jsonb on Postgres. */
+ | "json"
+/** Rich text: HTML the server sanitizes against an allowlist before it is stored. */
+ | "richtext";
 export type PolicyKind = "public" | "authenticated" | "admin" | "owner" | "role";
 /** Who may set this field on generic CRUD create/update. Auth roleField is always "admin". */
 export type FieldWritable = "any" | "admin" | "none";

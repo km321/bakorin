@@ -63,8 +63,9 @@ export function renderField(field: FieldSchema, options: RenderFieldOptions): st
     }${choices
       .map((choice) => `<option${attr("value", choice.value)}${attr("selected", selected.has(choice.value))}>${escapeHtml(choice.label)}</option>`)
       .join("")}</select>`;
-  } else if (field.multiline && field.type === "text") {
-    control = `<textarea${common} class="bk-input bk-textarea" rows="6"${attr("required", field.required && field.defaultValue === undefined)}>${escapeHtml(
+  } else if ((field.multiline && field.type === "text") || field.type === "json" || field.type === "richtext") {
+    const code = field.type === "json";
+    control = `<textarea${common} class="bk-input bk-textarea${code ? " bk-textarea--code" : ""}" rows="6"${attr("spellcheck", code ? "false" : undefined)}${attr("required", field.required && field.defaultValue === undefined)}>${escapeHtml(
       inputValue(field, options.value),
     )}</textarea>`;
   } else if (field.type === "file") {

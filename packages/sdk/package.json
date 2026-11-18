@@ -62,6 +62,12 @@
       "bun": "./src/astro-render.ts",
       "default": "./dist/astro-render.js"
     },
+    "./richtext": {
+      "types": "./dist/richtext.d.ts",
+      "import": "./dist/richtext.js",
+      "bun": "./src/richtext.ts",
+      "default": "./dist/richtext.js"
+    },
     "./astro/*": "./astro/*",
     "./styles.css": "./styles.css"
   },
@@ -123,5 +129,8 @@
     "astro": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "htmlparser2": "^10.1.0"
   }
 }

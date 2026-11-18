@@ -1,4 +1,7 @@
 import {
+  richTextToPlain2
+} from "./index-2p7b6gjp.js";
+import {
   BakorinRequestError2
 } from "./index-kvbz0pj9.js";
 
@@ -62,6 +65,25 @@ function createStore2(initial) {
 
 // src/headless/form.ts
 var EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+class InvalidJson2 {
+  text;
+  message;
+  constructor(text, message) {
+    this.text = text;
+    this.message = message;
+  }
+}
+function parseJsonInput2(text) {
+  if (text.trim() === "") {
+    return null;
+  }
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    return new InvalidJson2(text, error instanceof Error ? error.message : "invalid JSON");
+  }
+}
 function isEmpty(value) {
   return value === undefined || value === null || value === "" || Array.isArray(value) && value.length === 0;
 }
@@ -71,6 +93,9 @@ function coerceValue2(field, raw) {
   }
   if (field.relation?.many) {
     return Array.isArray(raw) ? raw.filter((item) => item !== "") : isEmpty(raw) ? [] : [String(raw)];
+  }
+  if (field.type === "json") {
+    return typeof raw === "string" ? parseJsonInput2(raw) : raw === undefined ? null : raw;
   }
   if (isEmpty(raw)) {
     return null;
@@ -92,6 +117,9 @@ function inputValue2(field, value) {
   if (value === null || value === undefined) {
     return "";
   }
+  if (field.type === "json") {
+    return value instanceof InvalidJson2 ? value.text : JSON.stringify(value, null, 2);
+  }
   if (field.type === "datetime") {
     const date = new Date(String(value));
     if (Number.isNaN(date.getTime())) {
@@ -104,6 +132,9 @@ function inputValue2(field, value) {
 }
 function validateField2(field, value, mode = "create") {
   const label = fieldLabel2(field.name);
+  if (value instanceof InvalidJson2) {
+    return `${label} must be valid JSON (${value.message})`;
+  }
   if (isEmpty(value) || field.type === "boolean" && value === undefined) {
     const hasDefault = field.defaultValue !== undefined;
     if (field.required && !(mode === "create" && hasDefault && value === undefined) && field.type !== "boolean") {
@@ -111,7 +142,7 @@ function validateField2(field, value, mode = "create") {
     }
     return;
   }
-  if (field.minLength && field.type !== "password" && String(value).length < field.minLength) {
+  if (field.minLength && field.type !== "password" && field.type !== "json" && String(value).length < field.minLength) {
     return `${label} must be at least ${field.minLength} characters`;
   }
   switch (field.type) {
@@ -269,6 +300,12 @@ function createForm2(options) {
 function formatValue2(field, value, locale) {
   if (value === null || value === undefined || value === "") {
     return "";
+  }
+  if (field?.type === "json") {
+    return JSON.stringify(value);
+  }
+  if (field?.type === "richtext") {
+    return richTextToPlain2(String(value), 160);
   }
   if (field?.type === "boolean") {
     return value ? "Yes" : "No";
@@ -617,4 +654,4 @@ function siteFileUrl2(link, options) {
   return link;
 }
 
-export { fieldLabel2, formFields2, columnFields2, createStore2, coerceValue2, inputValue2, validateField2, validateRecord2, changedFields2, isRequestError2, fieldErrorsFrom2, createForm2, formatValue2, pageInfo2, applyChange2, createCollection2, acceptsType2, checkFile2, formatBytes2, uploadFile2, createUpload2, signedFileUrl2, clientFileUrl2, siteFileUrl2 };
+export { fieldLabel2, formFields2, columnFields2, createStore2, InvalidJson2, parseJsonInput2, coerceValue2, inputValue2, validateField2, validateRecord2, changedFields2, isRequestError2, fieldErrorsFrom2, createForm2, formatValue2, pageInfo2, applyChange2, createCollection2, acceptsType2, checkFile2, formatBytes2, uploadFile2, createUpload2, signedFileUrl2, clientFileUrl2, siteFileUrl2 };

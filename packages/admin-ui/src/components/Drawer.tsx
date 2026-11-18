@@ -5,6 +5,7 @@ import { fieldLabel } from "../lib/label.ts";
 import { pushToast } from "../lib/toast.ts";
 import { FieldInput } from "./FieldInput.tsx";
 import { changedValues } from "../lib/record-form.ts";
+import { JsonDraft, checkJson } from "../lib/json-draft.ts";
 
 interface Props {
   entity: MetaEntity;
@@ -56,6 +57,14 @@ export function Drawer({ entity, record, onClose, onSaved }: Props) {
   function validate(body: Record<string, unknown>): Record<string, string> {
     const next: Record<string, string> = {};
     for (const field of fields) {
+      if (field.type === "json" && body[field.name] instanceof JsonDraft) {
+        const check = checkJson((body[field.name] as JsonDraft).text);
+        if (!check.ok) {
+          next[field.name] = check.line ? `Fix the JSON on line ${check.line} before saving.` : "Fix the JSON before saving.";
+          continue;
+        }
+        body[field.name] = check.value;
+      }
       const value = body[field.name];
       if (field.required && isEmpty(value) && !(record && field.secret)) {
         next[field.name] = `${fieldLabel(field.name)} is required`;
@@ -84,7 +93,15 @@ export function Drawer({ entity, record, onClose, onSaved }: Props) {
         if (field.name in form) {
           values[field.name] = form[field.name];
         }
-        if (field.type === "file" || field.type === "boolean" || field.type === "number" || field.type === "integer" || field.relation?.many) {
+        if (
+          field.type === "file" ||
+          field.type === "boolean" ||
+          field.type === "number" ||
+          field.type === "integer" ||
+          field.type === "json" ||
+          field.type === "richtext" ||
+          field.relation?.many
+        ) {
           continue;
         }
         const raw = data.get(field.name);
@@ -112,7 +129,9 @@ export function Drawer({ entity, record, onClose, onSaved }: Props) {
   return (
     <>
       <div class="drawer-backdrop" onClick={onClose} />
-      <form class="drawer" id="bakorin-drawer" onSubmit={submit} aria-labelledby="drawer-title">
+      <form
+        class={fields.some((field) => field.type === "json" || field.type === "richtext") ? "drawer wide" : "drawer"}
+        id="bakorin-drawer" onSubmit={submit} aria-labelledby="drawer-title">
         <h2 id="drawer-title">{record ? `Edit ${entity.label}` : `New ${entity.label}`}</h2>
         {error ? <div class="banner">{error}</div> : null}
         {fields.map((field) => {

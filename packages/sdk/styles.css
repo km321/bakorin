@@ -122,6 +122,32 @@ select.bk-input[multiple] {
   line-height: 1.5;
 }
 
+.bk-textarea--code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.875em;
+  tab-size: 2;
+}
+
+/* Rich text from a richtext field, rendered with RichText. */
+.bk-richtext > :first-child {
+  margin-top: 0;
+}
+.bk-richtext > :last-child {
+  margin-bottom: 0;
+}
+.bk-richtext img {
+  max-width: 100%;
+  height: auto;
+}
+.bk-richtext blockquote {
+  margin-inline: 0;
+  padding-inline-start: 1rem;
+  border-inline-start: 3px solid var(--bk-border-soft);
+}
+.bk-richtext pre {
+  overflow-x: auto;
+}
+
 .bk-checkbox {
   width: 1.25rem;
   height: 1.25rem;

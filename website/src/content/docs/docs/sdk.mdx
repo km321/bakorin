@@ -136,6 +136,31 @@ The output also includes `bakorinSchema`, which the [components](/docs/component
 
 Each import is its own entry, so a page only loads what it uses.
 
+## Rich text
+
+The server cleans `richtext` fields before it stores them. Render them with the SDK helpers, which clean the HTML again with the same allowlist, so HTML that reached the page some other way is still safe.
+
+Astro:
+
+```astro
+---
+import RichText from "@bakorin/sdk/astro/RichText.astro";
+---
+<RichText html={post.body} as="article" class="post-body" />
+```
+
+Next.js and React (works in Server Components):
+
+```tsx
+import { RichText } from "@bakorin/sdk/react";
+
+<RichText html={post.body} as="article" className="post-body" />
+```
+
+For your own markup, `sanitizeRichText(html)` returns clean HTML and `richTextToPlain(html, maxLength)` returns the text for excerpts. Both come from `@bakorin/sdk/astro`, `@bakorin/sdk/next`, `@bakorin/sdk/headless`, and `@bakorin/sdk/richtext`. The `.bk-richtext` class in `@bakorin/sdk/styles.css` keeps images inside their container and styles quotes and code blocks.
+
+`RecordForm` shows `json` fields as a monospace text area that must hold valid JSON, and `richtext` fields as a text area of HTML. The server cleans that HTML like any other write.
+
 ## Errors
 
 Failed calls throw `BakorinRequestError` with `status`, `code`, and, for a bad value, the `field` it belongs to.

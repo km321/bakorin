@@ -471,6 +471,8 @@ const TYPE_HELP: Record<BuilderFieldType, string> = {
   enum: "One of a list",
   file: "File upload",
   relation: "Link to another entity",
+  json: "Any JSON value",
+  richtext: "Formatted text (HTML)",
 };
 
 function fieldCard(entity: EntityDraft, i: number, field: FieldDraft, j: number): HTMLElement {
@@ -545,7 +547,16 @@ function fieldCard(entity: EntityDraft, i: number, field: FieldDraft, j: number)
       ),
     );
   } else if (field.type !== "password" && field.type !== "file") {
-    const placeholder = field.type === "date" ? "2026-01-31" : field.type === "datetime" ? "2026-01-31T09:00:00Z" : "";
+    const placeholder =
+      field.type === "date"
+        ? "2026-01-31"
+        : field.type === "datetime"
+          ? "2026-01-31T09:00:00Z"
+          : field.type === "json"
+            ? '{"theme": "light"}'
+            : field.type === "richtext"
+              ? "<p>Welcome</p>"
+              : "";
     typeSpecific.push(
       control(
         `${at}.defaultValue`,
@@ -554,6 +565,14 @@ function fieldCard(entity: EntityDraft, i: number, field: FieldDraft, j: number)
           placeholder,
           inputmode: field.type === "number" || field.type === "integer" ? "decimal" : undefined,
         }),
+        {
+          hint:
+            field.type === "json"
+              ? "Written as JSON. JSON fields cannot be unique or indexed."
+              : field.type === "richtext"
+                ? "HTML. The server cleans it against an allowlist."
+                : undefined,
+        },
       ),
     );
   }

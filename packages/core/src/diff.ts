@@ -40,6 +40,8 @@ const WIDENING: Record<FieldTypeName, FieldTypeName[]> = {
   enum: ["enum"],
   file: ["file"],
   relation: ["relation"],
+  json: ["json"],
+  richtext: ["richtext"],
 };
 
 function fieldMapByRename(entity: EntityAST): Map<string, FieldAST> {

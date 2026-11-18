@@ -6,6 +6,7 @@ import { changedFields, coerceValue, fieldErrorsFrom, validateRecord, type Field
 import type { FieldSchema } from "./headless/schema.ts";
 import { signInFields } from "./elements/render.ts";
 export { loadBrandingTheme } from "./headless/theme.ts";
+export { isRichTextEmpty, richTextToPlain, sanitizeRichText } from "./richtext.ts";
 export { createProxyHandler, isSameSiteRequest, rightmostForwardedFor, type ProxyOptions } from "./proxy.ts";
 
 /** The default pass through route. The refresh cookie lives on this path. */
