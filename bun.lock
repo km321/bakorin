@@ -34,7 +34,7 @@
     },
     "packages/core": {
       "name": "@bakorin/core",
-      "version": "0.1.0-beta.0",
+      "version": "0.1.0-beta.1",
       "dependencies": {
         "yaml": "^2.7.1",
         "zod": "^4.6.7",
@@ -42,14 +42,14 @@
     },
     "packages/create-bakorin": {
       "name": "create-bakorin",
-      "version": "0.1.0-beta.0",
+      "version": "0.1.0-beta.1",
       "bin": {
         "create-bakorin": "./dist/cli.js",
       },
     },
     "packages/sdk": {
       "name": "@bakorin/sdk",
-      "version": "0.1.0-beta.0",
+      "version": "0.1.0-beta.1",
       "dependencies": {
         "htmlparser2": "^10.1.0",
       },
@@ -64,7 +64,7 @@
     },
     "packages/server": {
       "name": "@bakorin/server",
-      "version": "0.1.0-beta.0",
+      "version": "0.1.0-beta.1",
       "bin": {
         "bakorin": "./dist/cli.js",
       },

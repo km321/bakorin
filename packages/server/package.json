@@ -1,6 +1,6 @@
 {
   "name": "@bakorin/server",
-  "version": "0.1.0-beta.0",
+  "version": "0.1.0-beta.1",
   "description": "Self-hosted Bakorin API: auth, CRUD, files, admin UI, and the bakorin CLI",
   "license": "AGPL-3.0-only",
   "author": "Melton Studios",
