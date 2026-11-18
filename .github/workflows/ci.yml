@@ -155,7 +155,11 @@ jobs:
           bun-version: "1.4.4"
       - run: bun install --frozen-lockfile
       - name: Dependency audit
-        run: bun audit
+        # GHSA-fc5q-39xc-vjpf: picomatch ReDoS (<=4.0.7). Dev and build only
+        # (vite and @changesets/cli), not in any published package, and no
+        # patched version exists yet. Remove this ignore once picomatch ships
+        # a fix.
+        run: bun audit --ignore=GHSA-fc5q-39xc-vjpf
       - name: Secret scan
         run: |
           curl -sSL https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz | tar -xz gitleaks
