@@ -17,7 +17,7 @@ import { join, resolve } from "node:path";
 import { createRequire } from "node:module";
 import { deflateSync } from "node:zlib";
 import { navReport } from "../e2e-shared/nav.ts";
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
+import { chromium, type Browser, type BrowserContext, type Locator, type Page } from "playwright";
 
 const ROOT = resolve(import.meta.dir, "../..");
 const args = process.argv.slice(2);
@@ -84,7 +84,7 @@ async function run(command: string[], cwd: string, env: Record<string, string | 
  * Server rendered pages show a hook's background work only after a reload.
  * Reload until the locator is visible, then wait for it as usual.
  */
-async function reloadUntil(page: Page, locator: ReturnType<Page["getByText"]>, timeoutMs = 30_000) {
+async function reloadUntil(page: Page, locator: Locator, timeoutMs = 30_000) {
   const until = Date.now() + timeoutMs;
   while (Date.now() < until && (await locator.count()) === 0) {
     await Bun.sleep(300);
@@ -759,7 +759,9 @@ async function storeFlow(newContext: NewContext) {
   await page.getByText("Total: $30.00").waitFor();
   await page.getByRole("button", { name: "Place order" }).click();
   await page.waitForURL(/\/checkout\/[^/]+$/);
-  await reloadUntil(page, page.getByText("Total: $30.00"));
+  // The hook writes totals before it calls Stripe and saves checkoutUrl.
+  await reloadUntil(page, page.getByRole("link", { name: "Pay $30.00 with Stripe" }));
+  await page.getByText("Total: $30.00").waitFor();
   const cheat = await apiStatus(shopperContext, "POST", "orders", { status: "paid", totalCents: 1, lines: "[]" });
   check(cheat.status === 403, `shoppers cannot set an order's status or total, got ${cheat.status}`);
   const orders = await shopperContext.request.get("/api/bakorin/orders?sort=-createdAt&limit=1");
@@ -772,6 +774,7 @@ async function storeFlow(newContext: NewContext) {
   await page.getByText("We are confirming your payment with Stripe").waitFor();
   check((await adminApi("GET", `orders/${latest.id}`)).status === "pending_payment", "the success page never marks an order paid");
   await page.goto(`/checkout/${latest.id}`);
+  await reloadUntil(page, page.getByRole("link", { name: "Pay $30.00 with Stripe" }));
   await axe(page, "checkout");
   await shot(page, "checkout");
   await page.getByRole("link", { name: "Pay $30.00 with Stripe" }).click();
