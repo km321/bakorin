@@ -11,7 +11,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dialect: [sqlite, postgres]
+        dialect: [sqlite, postgres, mysql, mariadb]
     services:
       postgres:
         image: postgres:16
@@ -26,8 +26,34 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: bakorin
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: bakorin
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
-      # Every boot() based test runs on this dialect. Postgres only tests run in both jobs.
+      # Every boot() based test uses this dialect. Server specific tests use these URLs.
+      POSTGRES_TEST_URL: postgres://postgres:postgres@127.0.0.1:5432/bakorin
+      MYSQL_TEST_URL: ${{ matrix.dialect == 'mariadb' && 'mariadb://root:root@127.0.0.1:3307/bakorin' || 'mysql://root:root@127.0.0.1:3306/bakorin' }}
       BAKORIN_TEST_DIALECT: ${{ matrix.dialect }}
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/bakorin
     steps:
@@ -51,7 +77,7 @@ jobs:
       fail-fast: false
       matrix:
         frontend: [astro, next]
-        dialect: [sqlite, postgres]
+        dialect: [sqlite, postgres, mysql, mariadb]
     services:
       postgres:
         image: postgres:16
@@ -66,9 +92,33 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: bakorin
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: bakorin
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
       # The runner creates and drops its own database on this server.
-      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/bakorin
+      DATABASE_URL: ${{ matrix.dialect == 'mysql' && 'mysql://root:root@127.0.0.1:3306/bakorin' || matrix.dialect == 'mariadb' && 'mariadb://root:root@127.0.0.1:3307/bakorin' || 'postgres://postgres:postgres@127.0.0.1:5432/bakorin' }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -108,6 +158,14 @@ jobs:
           - { template: saas, frontend: astro, dialect: postgres }
           - { template: store, frontend: next, dialect: postgres }
           - { template: membership, frontend: astro, dialect: postgres }
+          # MySQL and MariaDB: auth, JSON, richtext, files and Stripe starter tables.
+          - { template: blog, frontend: astro, dialect: mysql }
+          - { template: store, frontend: next, dialect: mysql }
+          - { template: membership, frontend: astro, dialect: mysql }
+          - { template: blog, frontend: next, dialect: mariadb }
+          - { template: saas, frontend: astro, dialect: mariadb }
+          - { template: store, frontend: astro, dialect: mariadb }
+          - { template: membership, frontend: next, dialect: mariadb }
     services:
       postgres:
         image: postgres:16
@@ -122,8 +180,32 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+          MYSQL_DATABASE: bakorin
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot --silent"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+      mariadb:
+        image: mariadb:10.11
+        env:
+          MARIADB_ROOT_PASSWORD: root
+          MARIADB_DATABASE: bakorin
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
     env:
-      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/bakorin
+      DATABASE_URL: ${{ matrix.dialect == 'mysql' && 'mysql://root:root@127.0.0.1:3306/bakorin' || matrix.dialect == 'mariadb' && 'mariadb://root:root@127.0.0.1:3307/bakorin' || 'postgres://postgres:postgres@127.0.0.1:5432/bakorin' }}
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
