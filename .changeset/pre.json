@@ -9,6 +9,8 @@
     "@bakorin/server": "0.0.1"
   },
   "changesets": [
-    "first-public-beta"
+    "first-public-beta",
+    "json-and-richtext-fields",
+    "stripe-starters"
   ]
 }
