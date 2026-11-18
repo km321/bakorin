@@ -10,7 +10,7 @@ import { compileAppYaml, generateTypes } from "@bakorin/core";
 import { join, resolve } from "node:path";
 
 const TEMPLATES = resolve(import.meta.dir, "../packages/create-bakorin/templates");
-export const SCHEMAS = ["blank", "auth", "todo", "blog", "marketing", "saas", "store"] as const;
+export const SCHEMAS = ["blank", "auth", "todo", "blog", "marketing", "saas", "store", "membership"] as const;
 
 export async function templateTypes(schema: string): Promise<string> {
   const yaml = (await Bun.file(join(TEMPLATES, "schemas", `${schema}.yaml`)).text()).replaceAll("{{APP_NAME}}", "app");

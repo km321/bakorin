@@ -1,0 +1,60 @@
+---
+import { refreshUrl } from "@bakorin/sdk/astro";
+import Layout from "../layouts/Base.astro";
+import RichText from "@bakorin/sdk/astro/RichText.astro";
+import { api } from "../lib/bakorin.ts";
+import { isMember, isPro, type Lesson, type Masterclass } from "../lib/membership.ts";
+
+// app.yaml decides who reads what: lessons need role(basic) or role(pro), masterclasses role(pro).
+// The checks here only pick the message; the API refuses everyone else.
+// A plan change shows up in the session after it renews, so a refused list offers a refresh.
+const client = api(Astro);
+const user = Astro.locals.user;
+let stale = false;
+async function load<T>(entity: "lessons" | "masterclasses", allowed: boolean): Promise<T[]> {
+  if (!allowed) return [];
+  try {
+    return (await client.entity(entity).list({ sort: "sort", limit: 50 })).data as T[];
+  } catch {
+    stale = true;
+    return [];
+  }
+}
+const lessons = await load<Lesson>("lessons", isMember(user?.role));
+const masterclasses = await load<Masterclass>("masterclasses", isPro(user?.role));
+---
+<Layout title="Members">
+  {stale ? <p class="notice" role="status">Your plan changed. <a href={refreshUrl("/members")}>Refresh your session</a> to see everything it includes.</p> : null}
+  <section class="section" aria-labelledby="lessons-heading">
+    <h1 id="lessons-heading">Lessons</h1>
+    {!isMember(user?.role) ? (
+      <p class="notice">Lessons are for members. <a href="/">Pick a plan</a> to read them.</p>
+    ) : lessons.length === 0 ? (
+      <p class="empty">No lessons yet.</p>
+    ) : (
+      lessons.map((lesson) => (
+        <article class="card">
+          <h2>{lesson.title}</h2>
+          {lesson.summary ? <p class="meta">{lesson.summary}</p> : null}
+          {lesson.body ? <RichText html={lesson.body} class="prose" /> : null}
+        </article>
+      ))
+    )}
+  </section>
+  <section class="section" aria-labelledby="masterclasses-heading">
+    <h2 id="masterclasses-heading">Masterclasses</h2>
+    {!isPro(user?.role) ? (
+      <p class="notice">Masterclasses are for Pro members. <a href="/">See the Pro plan</a>.</p>
+    ) : masterclasses.length === 0 ? (
+      <p class="empty">No masterclasses yet.</p>
+    ) : (
+      masterclasses.map((item) => (
+        <article class="card">
+          <h3>{item.title}</h3>
+          {item.summary ? <p class="meta">{item.summary}</p> : null}
+          {item.body ? <RichText html={item.body} class="prose" /> : null}
+        </article>
+      ))
+    )}
+  </section>
+</Layout>

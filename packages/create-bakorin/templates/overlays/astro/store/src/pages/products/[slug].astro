@@ -2,6 +2,7 @@
 import Layout from "../../layouts/Base.astro";
 import { api, imageOf } from "../../lib/bakorin.ts";
 import { money } from "../../lib/store.ts";
+import RichText from "@bakorin/sdk/astro/RichText.astro";
 
 const client = api(Astro);
 const { data } = await client.entity("products").list({ filter: { slug: String(Astro.params.slug), active: true }, limit: 1, expand: "image" });
@@ -38,7 +39,8 @@ const image = imageOf(product, "image");
       {image ? <img class="media" src={image} alt={product.imageAlt ?? ""} /> : null}
       <h1>{product.name}</h1>
       <p class="meta">{money(product.priceCents)}</p>
-      {product.description ? <p class="prose">{product.description}</p> : null}
+      {product.description ? <RichText html={product.description} class="prose" /> : null}
+      {product.stock !== null && product.stock !== undefined ? <p class="meta">{product.stock > 0 ? `${product.stock} in stock` : "Sold out"}</p> : null}
     </section>
     <section class="card">
       <h2>Buy</h2>

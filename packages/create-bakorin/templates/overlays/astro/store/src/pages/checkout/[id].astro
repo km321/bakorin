@@ -8,8 +8,9 @@ if (!order) {
   return new Response("Not found", { status: 404 });
 }
 const lines = orderLines(order);
-// hooks.ts fills lines and totalCents right after the order is saved.
+// hooks.ts fills lines and totalCents right after the order is saved, then opens Stripe Checkout.
 const ready = order.totalCents !== undefined && order.totalCents !== null;
+const backFromStripe = Astro.url.searchParams.get("paid") === "1";
 ---
 <Layout title={`Order ${orderNumber(order.id)}`}>
   <section class="card">
@@ -37,10 +38,22 @@ const ready = order.totalCents !== undefined && order.totalCents !== null;
 
   <section class="card" aria-labelledby="payment-heading">
     <h2 id="payment-heading">Payment</h2>
-    <div class="notice">
-      <p><strong>Payments are not connected yet.</strong> This is a placeholder. No card is charged and the order stays waiting for payment.</p>
-      <p>To take payments, connect a provider here: create a checkout session for this order on the server, and have the provider's webhook mark the order paid. Only the server should set the status and amount.</p>
-    </div>
+    {order.status === "paid" ? (
+      <p class="notice" role="status"><strong>Paid.</strong> Thank you. A receipt is on its way to {order.email}.</p>
+    ) : order.status === "cancelled" ? (
+      <p class="notice">{order.note || "This order was cancelled."}</p>
+    ) : backFromStripe ? (
+      <p class="notice" role="status">Thanks. We are confirming your payment with Stripe. <a href={Astro.url.pathname + "?paid=1"}>Refresh</a> in a moment.</p>
+    ) : order.note ? (
+      <p class="notice">{order.note}</p>
+    ) : order.checkoutUrl ? (
+      <>
+        <p>You will pay on Stripe's secure checkout page, then come back here.</p>
+        <p><a class="button" href={order.checkoutUrl}>Pay {money(order.totalCents)} with Stripe</a></p>
+      </>
+    ) : (
+      <p class="notice" role="status">Opening checkout. <a href={Astro.url.pathname}>Refresh</a> in a moment.</p>
+    )}
   </section>
   <p><a href="/orders">See all your orders</a></p>
 </Layout>

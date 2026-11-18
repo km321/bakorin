@@ -1,0 +1,49 @@
+---
+import { refreshUrl } from "@bakorin/sdk/astro";
+import Layout from "../layouts/Base.astro";
+import { api } from "../lib/bakorin.ts";
+import { isMember, settle, TIER_LABELS, type Member } from "../lib/membership.ts";
+
+// requireAuth (src/middleware.ts) protects /account. Only verified Stripe webhooks change the
+// plan (hooks.ts). The role rides in the session token, so after checkout this page renews
+// the session once to pick up the new role.
+const client = api(Astro);
+const joined = Astro.url.searchParams.get("joined");
+if (joined === "1") {
+  return Astro.redirect(refreshUrl("/account?joined=2"), 303);
+}
+let note = "";
+if (Astro.request.method === "POST") {
+  try {
+    const created = await client.entity("portalSessions").create({});
+    const portal = await settle(() => client.entity("portalSessions").get(created.id), (row) => Boolean(row.url || row.note));
+    if (portal.url) return Astro.redirect(portal.url, 303);
+    note = portal.note || "The billing portal could not be opened.";
+  } catch (err) {
+    note = err instanceof Error ? err.message : "Could not open billing";
+  }
+}
+const me = (await client.me()) as Member;
+const member = isMember(me.role);
+---
+<Layout title="Account">
+  <section class="card">
+    <h1>Your membership</h1>
+    {joined === "2" && !member ? (
+      <p class="notice" role="status">Thanks. We are confirming your payment with Stripe. <a href={refreshUrl("/account?joined=2")}>Refresh</a> in a moment.</p>
+    ) : joined === "2" ? (
+      <p class="notice" role="status">Welcome. Your membership is active. <a href="/members">Go to the members area</a>.</p>
+    ) : null}
+    {note ? <p class="notice" role="alert">{note}</p> : null}
+    <p><strong>Plan:</strong> {TIER_LABELS[String(me.role)] ?? me.role}</p>
+    <p><strong>Status:</strong> {me.subscriptionStatus ?? "No subscription"}</p>
+    {me.currentPeriodEnd ? <p><strong>Current period ends:</strong> {new Date(me.currentPeriodEnd).toLocaleDateString("en-US", { dateStyle: "medium" })}</p> : null}
+    {me.subscriptionStatus ? (
+      <form method="post">
+        <button type="submit">Manage billing</button>
+      </form>
+    ) : (
+      <p><a class="button" href="/">Pick a plan</a></p>
+    )}
+  </section>
+</Layout>

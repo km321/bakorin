@@ -7,7 +7,7 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 type Frontend = "astro" | "next" | "none";
-type Schema = "blank" | "auth" | "todo" | "blog" | "marketing" | "saas" | "store";
+type Schema = "blank" | "auth" | "todo" | "blog" | "marketing" | "saas" | "store" | "membership";
 type Mail = "log" | "resend" | "smtp";
 type SdkSource = "local" | "npm";
 
@@ -44,12 +44,13 @@ Options:
   --name <name>           Project name (defaults to the first argument)
   --dir <path>            Output directory (defaults to the project name)
   --frontend, --fw        astro | next | none (default: astro)
-  --template, --schema    blog | marketing | saas | store | todo | auth-only | blank
+  --template, --schema    blog | marketing | saas | store | membership | todo | auth-only | blank
                           (default: todo)
                           blog: posts, categories, drafts, cover images
                           marketing: page sections and a contact form
                           saas: team projects, live updates, roles
-                          store: products, cart, orders, checkout placeholder
+                          store: products, cart, orders, Stripe Checkout
+                          membership: Stripe subscriptions, plan tiers, members-only content
   --mail, --email         log | resend | smtp (default: log)
   --sdk                   local | npm
                           local: file: path to this checkout's packages/sdk
@@ -98,6 +99,9 @@ function parseSchema(value: string | undefined): Schema | undefined {
   }
   if (value === "store" || value === "shop" || value === "ecommerce" || value === "ecom") {
     return "store";
+  }
+  if (value === "membership" || value === "members" || value === "subscriptions") {
+    return "membership";
   }
   return undefined;
 }
@@ -158,7 +162,7 @@ function mailFromHeader(appName: string, mail: Mail): string {
   }
 }
 
-export function envExample(appName: string, mail: Mail): string {
+export function envExample(appName: string, mail: Mail, schema?: Schema): string {
   return `# Required for bakorin start: 32+ random characters. Generate one with: openssl rand -base64 48
 # bakorin dev works without it and prints a warning.
 JWT_SECRET=
@@ -201,6 +205,26 @@ AWS_ENDPOINT_URL=
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 AWS_DEFAULT_REGION=auto
+${schema && STRIPE_TEMPLATES.has(schema) ? stripeEnv() : ""}`;
+}
+
+/** Templates that take payments through Stripe. */
+const STRIPE_TEMPLATES = new Set<Schema>(["store", "membership"]);
+
+function stripeEnv(): string {
+  return `
+# --- Stripe (test mode) ---
+# Use test keys from https://dashboard.stripe.com/test/apikeys. Never commit a real key.
+# Without STRIPE_SECRET_KEY the app runs and checkout says payments are not set up.
+STRIPE_SECRET_KEY=
+# Signing secret of the webhook endpoint for <API URL>/stripe/webhook.
+# Local testing: stripe listen --forward-to localhost:4371/stripe/webhook prints one.
+STRIPE_WEBHOOK_SECRET=
+# Publishable key. Hosted Checkout does not need it; it is here for Stripe.js if you add it.
+STRIPE_PUBLISHABLE_KEY=
+# Where Stripe sends shoppers back to: the web app URL.
+SITE_URL=http://localhost:4321
+STORE_CURRENCY=usd
 `;
 }
 
@@ -471,9 +495,15 @@ const TEMPLATE_PAGES: Record<Schema, [string, string][]> = {
     ["/", "Products"],
     ["/products/:slug", "One product, add to cart"],
     ["/cart", "Cart and Place order"],
-    ["/checkout/:id", "Order summary and the payment placeholder"],
+    ["/checkout/:id", "Order summary and Pay with Stripe"],
     ["/orders", "Your orders"],
     ["/manage", "Admins: add and edit products"],
+  ],
+  membership: [
+    ["/", "Plans and Join"],
+    ["/join/:id", "Opens Stripe Checkout for a plan"],
+    ["/members", "Lessons for members and masterclasses for Pro"],
+    ["/account", "Your plan, status, and Manage billing (Stripe customer portal)"],
   ],
 };
 
@@ -503,7 +533,7 @@ Types and \`bakorinSchema\` in \`${typesFile}\` come from \`app.yaml\`. After yo
 }
 
 /** Templates that ship a seed.ts with example data. */
-const SEEDED = new Set<Schema>(["blog", "marketing", "saas", "store"]);
+const SEEDED = new Set<Schema>(["blog", "marketing", "saas", "store", "membership"]);
 
 function projectReadme(appName: string, options: Options, sdk: SdkSource): string {
   const apiStart =
@@ -557,11 +587,38 @@ ${
 `
 }
 
-## Branding (optional)
+${STRIPE_TEMPLATES.has(options.schema) ? stripeReadme(options.schema) : ""}## Branding (optional)
 
 Add a \`branding:\` section to \`app.yaml\` with your client's name, colors, logo, and favicon. The files go in \`branding/\`. See \`branding/README.md\`.
 
 Railway: mount a volume at \`/data\`, set \`BAKORIN_DATA_DIR=/data\` and \`JWT_SECRET\`. See the Bakorin checkout file \`docs/deploy-railway.md\`.
+`;
+}
+
+function stripeReadme(schema: Schema): string {
+  const events =
+    schema === "store"
+      ? "`checkout.session.completed` and `checkout.session.expired`"
+      : "`checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`";
+  return `## Stripe (test mode)
+
+1. Put your **test** keys in \`.env\`: \`STRIPE_SECRET_KEY\` and \`STRIPE_PUBLISHABLE_KEY\`. Never commit a real key.
+2. Forward webhooks while you develop:
+
+   \`\`\`bash
+   stripe listen --forward-to localhost:4371/stripe/webhook
+   \`\`\`
+
+   Copy the printed signing secret into \`STRIPE_WEBHOOK_SECRET\` and restart the API.
+3. In production, add an endpoint for \`<API URL>/stripe/webhook\` with ${events}, and use its signing secret.
+
+${
+  schema === "store"
+    ? "Orders are marked paid only by a verified `checkout.session.completed` webhook whose session and amount match the order. Each Stripe event is applied once, stock goes down, and a receipt email is sent. The success page never marks an order paid."
+    : "Plan tiers live in the `plans` entity: put the Stripe Price id of each plan in `stripePriceId`. Verified subscription webhooks set the member's `role` to the plan tier (`basic` or `pro`) and back to `user` when the subscription ends. app.yaml gates `lessons` to members and `masterclasses` to Pro."
+}
+Test cards: https://docs.stripe.com/testing
+
 `;
 }
 
@@ -586,7 +643,7 @@ export async function run(options: Options): Promise<void> {
     // Example data for the template, clearly labeled. See the comment at the top of seed.ts.
     await cp(seed, join(dest, "seed.ts"));
   }
-  await writeFile(join(dest, ".env.example"), envExample(appName, options.mail));
+  await writeFile(join(dest, ".env.example"), envExample(appName, options.mail, options.schema));
   await cp(join(TEMPLATES, "gitignore"), join(dest, ".gitignore"));
   const gitignore = await readFile(join(dest, ".gitignore"), "utf8");
   if (!gitignore.includes(".bakorin/node_modules")) {
@@ -653,7 +710,7 @@ async function main(): Promise<void> {
       frontend = parseFrontend(raw) ?? "astro";
     }
     if (!schema) {
-      const raw = await prompt("Template (blog | marketing | saas | store | todo | auth-only | blank)", "todo");
+      const raw = await prompt("Template (blog | marketing | saas | store | membership | todo | auth-only | blank)", "todo");
       schema = parseSchema(raw) ?? "todo";
     }
     if (!mail) {

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { api, currentUser, imageOf } from "../../../lib/bakorin.ts";
 import { money } from "../../../lib/store.ts";
+import { RichText } from "@bakorin/sdk/react";
 import { addToCart } from "../../store-actions.ts";
 
 async function findProduct(slug: string) {
@@ -24,7 +25,8 @@ export default async function ProductPage({ params, searchParams }: { params: Pr
           {image ? <img className="media" src={image} alt={product.imageAlt ?? ""} /> : null}
           <h1>{product.name}</h1>
           <p className="meta">{money(product.priceCents)}</p>
-          {product.description ? <p className="prose">{product.description}</p> : null}
+          {product.description ? <RichText html={product.description} className="prose" /> : null}
+          {product.stock !== null && product.stock !== undefined ? <p className="meta">{product.stock > 0 ? `${product.stock} in stock` : "Sold out"}</p> : null}
         </section>
         <section className="card">
           <h2>Buy</h2>

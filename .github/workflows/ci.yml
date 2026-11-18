@@ -98,7 +98,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        template: [blank, auth-only, blog, marketing, saas, store]
+        template: [blank, auth-only, blog, marketing, saas, store, membership]
         frontend: [astro, next]
         dialect: [sqlite]
         include:
@@ -107,6 +107,7 @@ jobs:
           - { template: marketing, frontend: astro, dialect: postgres }
           - { template: saas, frontend: astro, dialect: postgres }
           - { template: store, frontend: next, dialect: postgres }
+          - { template: membership, frontend: astro, dialect: postgres }
     services:
       postgres:
         image: postgres:16

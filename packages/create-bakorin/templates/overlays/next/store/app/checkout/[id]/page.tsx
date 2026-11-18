@@ -5,12 +5,13 @@ import { money, orderLines, orderNumber, STATUS_LABELS } from "../../../lib/stor
 
 export const metadata = { title: "Checkout" };
 
-export default async function CheckoutPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CheckoutPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ paid?: string }> }) {
   const { id } = await params;
+  const backFromStripe = (await searchParams).paid === "1";
   const order = await (await api()).entity("orders").get(id).catch(() => null);
   if (!order) notFound();
   const lines = orderLines(order);
-  // hooks.ts fills lines and totalCents right after the order is saved.
+  // hooks.ts fills lines and totalCents right after the order is saved, then opens Stripe Checkout.
   const ready = order.totalCents !== undefined && order.totalCents !== null;
   return (
     <>
@@ -50,15 +51,32 @@ export default async function CheckoutPage({ params }: { params: Promise<{ id: s
       </section>
       <section className="card" aria-labelledby="payment-heading">
         <h2 id="payment-heading">Payment</h2>
-        <div className="notice">
-          <p>
-            <strong>Payments are not connected yet.</strong> This is a placeholder. No card is charged and the order stays waiting for payment.
+        {order.status === "paid" ? (
+          <p className="notice" role="status">
+            <strong>Paid.</strong> Thank you. A receipt is on its way to {order.email}.
           </p>
-          <p>
-            To take payments, connect a provider here: create a checkout session for this order on the server, and have the provider&apos;s webhook mark the order paid. Only
-            the server should set the status and amount.
+        ) : order.status === "cancelled" ? (
+          <p className="notice">{order.note || "This order was cancelled."}</p>
+        ) : backFromStripe ? (
+          <p className="notice" role="status">
+            Thanks. We are confirming your payment with Stripe. <Link href={`/checkout/${order.id}?paid=1`}>Refresh</Link> in a moment.
           </p>
-        </div>
+        ) : order.note ? (
+          <p className="notice">{order.note}</p>
+        ) : order.checkoutUrl ? (
+          <>
+            <p>You will pay on Stripe&apos;s secure checkout page, then come back here.</p>
+            <p>
+              <a className="button" href={order.checkoutUrl}>
+                Pay {money(order.totalCents)} with Stripe
+              </a>
+            </p>
+          </>
+        ) : (
+          <p className="notice" role="status">
+            Opening checkout. <Link href={`/checkout/${order.id}`}>Refresh</Link> in a moment.
+          </p>
+        )}
       </section>
       <p>
         <Link href="/orders">See all your orders</Link>

@@ -15,5 +15,5 @@ export const site: SiteConfig = {
   protect: ["/cart", "/orders", "/checkout", "/manage"],
   home: "/",
   wide: true,
-  footer: "Store built with Bakorin. Payments are not connected yet.",
+  footer: "Store built with Bakorin. Payments run through Stripe Checkout in test mode until you switch keys.",
 };

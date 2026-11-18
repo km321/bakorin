@@ -115,9 +115,9 @@ await signIn();
 
 // No prices: set real ones on the Manage page. Products without a price show "Price not set".
 const products = [
-  { slug: "example-tote", name: "Example product: Canvas tote", description: "This is an example product. Replace the name, photo, and description with your own.", color: [180, 83, 9] as [number, number, number] },
-  { slug: "example-mug", name: "Example product: Mug", description: "Example product description.", color: [37, 99, 235] as [number, number, number] },
-  { slug: "example-notebook", name: "Example product: Notebook", description: "Example product description.", color: [21, 128, 61] as [number, number, number] },
+  { slug: "example-tote", name: "Example product: Canvas tote", description: "<p>This is an <strong>example product</strong>. Replace the name, photo, and description with your own.</p>", color: [180, 83, 9] as [number, number, number] },
+  { slug: "example-mug", name: "Example product: Mug", description: "<p>Example product description.</p>", color: [37, 99, 235] as [number, number, number] },
+  { slug: "example-notebook", name: "Example product: Notebook", description: "<p>Example product description.</p>", color: [21, 128, 61] as [number, number, number] },
 ];
 for (const product of products) {
   if (await findBy("products", "slug", product.slug)) continue;
