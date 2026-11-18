@@ -52,8 +52,8 @@ webhooks:
     url: \${WEBHOOK_URL}
     secret: \${WEBHOOK_SECRET}`;
 
-const heroShell = `$ bun run create my-app --frontend astro --schema todo --yes
-$ bun run dev -- --dir my-app
+const heroShell = `$ bun create bakorin@beta my-app --frontend astro --template todo --yes
+$ cd my-app && bun install && bun run dev
 [bakorin] my-app dev on http://127.0.0.1:4371
 [bakorin] admin UI http://127.0.0.1:4371/admin/`;
 
@@ -150,7 +150,7 @@ const features = [
 const faqs = [
   {
     q: "Is Bakorin available to install today?",
-    a: "Not publicly. Bakorin is in private beta, the repository is private, and the npm packages are not published yet. The install commands on this site show the intended usage.",
+    a: "Yes. Bakorin is in public beta. The packages are on npm under the beta tag, and the repository is public. Scaffold a project with bun create bakorin@beta, or add @bakorin/sdk@beta and @bakorin/server@beta to an existing app.",
   },
   {
     q: "What does it run on?",
@@ -192,7 +192,7 @@ const faqs = [
     <div class="hero-bg" aria-hidden="true"></div>
     <div class="wrap hero-grid">
       <div class="hero-copy">
-        <p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Private beta</p>
+        <p class="eyebrow"><span class="pulse" aria-hidden="true"></span>Public beta</p>
         <h1>One file.<br /><span class="accent">A whole backend.</span></h1>
         <p class="lede">
           Bakorin turns a single <code>app.yaml</code> into users, auth, data, files, permissions, webhooks, and an admin UI.
@@ -409,7 +409,7 @@ const faqs = [
           <CodeBlock code={nextSnippet} lang="ts" title="Next.js" />
         </div>
       </div>
-      <p class="note">Private beta, not yet published. <code>@bakorin/sdk</code> is linked from a checkout today. <a href="/docs/getting-started/">Getting started</a> shows the current path.</p>
+      <p class="note">Install the SDK with <code>bun add @bakorin/sdk@beta</code>. <a href="/docs/getting-started/">Getting started</a> has the full setup.</p>
     </div>
   </section>
 

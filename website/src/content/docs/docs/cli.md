@@ -29,7 +29,7 @@ Commands:
 
 Most commands accept `--dir <path>` to point at a project folder (default: the current directory). `dev` and `start` accept `--port`.
 
-From a checkout, run the CLI with `bun run bakorin <command>` or `bun packages/server/src/cli.ts <command>`. After publish it will be `bunx bakorin <command>`.
+In a project that depends on `@bakorin/server`, run `bunx --bun bakorin <command>` or `bun run dev` (the generated `package.json` scripts call the CLI). From a source checkout, use `bun run bakorin <command>` or `bun packages/server/src/cli.ts <command>`.
 
 ## init
 

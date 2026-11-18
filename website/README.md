@@ -13,7 +13,7 @@ Output is fully static (`output: "static"`), with no adapter, Functions, or serv
 
 ## Preview deploy
 
-This is a private preview. Every page sends `noindex` (meta tag plus an `X-Robots-Tag` header from `public/_headers`) and `robots.txt` disallows everything. Remove those before any public launch.
+This preview is noindexed. Every page sends `noindex` (meta tag plus an `X-Robots-Tag` header from `public/_headers`) and `robots.txt` disallows everything. Remove those before any public launch.
 
 ```bash
 npx wrangler pages deploy dist --project-name bakorin-preview --branch main

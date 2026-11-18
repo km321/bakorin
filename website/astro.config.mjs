@@ -2,7 +2,7 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
 
-// Private preview build. Fully static output for Cloudflare Pages.
+// Noindex preview build. Fully static output for Cloudflare Pages.
 export default defineConfig({
   site: "https://bakorin-preview.pages.dev",
   output: "static",
