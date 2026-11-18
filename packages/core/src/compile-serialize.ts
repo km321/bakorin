@@ -118,6 +118,9 @@ export function deserializeAst(raw: string): SchemaAST {
   if (parsed.runtime && parsed.runtime.jobsRetainDays === undefined) {
     parsed.runtime.jobsRetainDays = 30;
   }
+  if (parsed.runtime && parsed.runtime.adminIdleTimeoutMinutes === undefined) {
+    parsed.runtime.adminIdleTimeoutMinutes = null;
+  }
   for (const hook of parsed.webhooks ?? []) {
     hook.maxAttempts = hook.maxAttempts ?? WEBHOOK_DEFAULT_MAX_ATTEMPTS;
     hook.timeoutMs = hook.timeoutMs ?? WEBHOOK_DEFAULT_TIMEOUT_MS;

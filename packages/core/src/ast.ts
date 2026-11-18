@@ -267,6 +267,11 @@ export interface RuntimeAST {
   trustProxy: TrustProxyAST;
   realtime: RealtimeRuntimeAST;
   mcp: McpRuntimeAST;
+  /**
+   * Minutes of no activity before the admin UI signs out. Null means the idle
+   * timeout is off (the default).
+   */
+  adminIdleTimeoutMinutes: number | null;
 }
 
 /**

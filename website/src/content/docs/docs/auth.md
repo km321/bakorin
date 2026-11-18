@@ -62,6 +62,27 @@ When you leave it out, Bakorin follows the auth entity's `create` policy: `publi
 - Role changes and password resets revoke that user's refresh tokens.
 - Passwords are hashed with argon2id.
 
+## Admin sessions
+
+The built in admin at `/admin/` stores an access token and a refresh token in the browser.
+
+- Access tokens last 15 minutes by default (`runtime.jwt.accessTtlSeconds`). Refresh tokens last 30 days by default (`runtime.jwt.refreshTtlSeconds`) and rotate on every use, with a 30 second grace window for parallel refresh (see [Tokens](#tokens)).
+- The admin renews the access token automatically, shortly before it expires, or when a request returns 401. Concurrent requests share a single refresh.
+- File uploads and any later realtime or SSE connections use the same helper, so they also send a fresh access token.
+- If refresh fails, the admin revokes the refresh token when it can, clears the browser session, and shows "Your session expired" on the sign in screen.
+- Sign out always calls `POST /api/v1/auth/logout`, so the refresh token is revoked on the server. That includes the Sign out button and an idle timeout.
+- To sign the admin out after a period of no pointer, key, or tab activity, set `runtime.admin.idleTimeoutMinutes`. This is off by default. When the timeout is longer than 1 minute, the admin shows a warning about 1 minute before sign-out. Activity in one tab keeps the others signed in, and sign-out in one tab signs out all of them.
+- The idle timeout is enforced in the browser only. A valid access or refresh token still works if the API is called directly, so this is a safeguard for an unattended admin tab, not a server-side session limit.
+
+```yaml
+runtime:
+  jwt:
+    accessTtlSeconds: 900
+    refreshTtlSeconds: 2592000
+  admin:
+    idleTimeoutMinutes: 30
+```
+
 ## Email verification
 
 Set `auth.requireVerifiedEmail: true` to block login until `POST /auth/verify-email` succeeds. Bakorin adds an `emailVerified` boolean to the auth entity if you do not define one. Verification links expire after 24 hours.

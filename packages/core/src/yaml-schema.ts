@@ -328,6 +328,13 @@ export const appYamlSchema = z
           })
           .strict()
           .optional(),
+        admin: z
+          .object({
+            /** Sign the admin UI out after this many minutes with no pointer, key, or tab activity. Off when omitted. */
+            idleTimeoutMinutes: z.number().int().min(1).max(10_080).optional(),
+          })
+          .strict()
+          .optional(),
       })
       .strict()
       .optional(),

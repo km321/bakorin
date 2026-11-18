@@ -115,6 +115,7 @@ Optional white label for the admin, `/docs`, and system emails. Leave it out to 
 | `jwt.secret` | `JWT_SECRET` | Usually left out so `JWT_SECRET` is used. Required outside `bakorin dev`, 32 or more random characters |
 | `jwt.accessTtlSeconds` | `900` | Access token lifetime (15 minutes) |
 | `jwt.refreshTtlSeconds` | `2592000` | Refresh token lifetime (30 days) |
+| `admin.idleTimeoutMinutes` | | Minutes of no activity before the admin UI signs out and revokes the refresh token. Off when omitted. 1 to 10080 (7 days). When the timeout is longer than 1 minute, the admin warns about 1 minute before sign-out. Enforced in the browser only. See [Admin sessions](/docs/auth/#admin-sessions) |
 | `files.driver` | `local` | `local` or `s3`. A bucket in the environment switches to `s3` |
 | `files.path` | `./data/uploads` | Local upload folder |
 | `files.bucket`, `files.endpoint`, `files.accessKey`, `files.secretKey`, `files.region` | | S3 settings. Prefer environment variables |

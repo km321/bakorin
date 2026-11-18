@@ -1,5 +1,14 @@
-const TOKEN_KEY = "bakorin_access";
-const REFRESH_KEY = "bakorin_refresh";
+import {
+  REFRESH_LOCK,
+  REFRESH_SKEW_MS,
+  REFRESH_KEY,
+  TOKEN_KEY,
+  dispatchSessionEnded,
+  postSessionMessage,
+  writeSessionNotice,
+  type SessionNotice,
+} from "./session.ts";
+
 
 export interface MetaEntity {
   name: string;
@@ -43,23 +52,171 @@ export interface MetaResponse {
     requireVerifiedEmail: boolean;
     roles?: string[];
   };
+  /** Admin UI session settings. Missing on older servers; treat as no idle timeout. */
+  admin?: { idleTimeoutMinutes: number | null };
   order?: string[];
   layers?: string[][];
   webhooks?: MetaWebhook[];
   entities: MetaEntity[];
 }
 
-async function request(path: string, init: RequestInit = {}): Promise<Response> {
+export interface AccessTokenTimes {
+  expMs: number;
+  iatMs: number | null;
+}
+
+/** Access token issue and expiry times in epoch milliseconds, or null if the JWT cannot be read. */
+export function decodeAccessTokenTimes(token: string): AccessTokenTimes | null {
+  const parts = token.split(".");
+  if (parts.length < 2 || !parts[1]) {
+    return null;
+  }
+  try {
+    const padded = parts[1].replace(/-/g, "+").replace(/_/g, "/");
+    const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
+    const payload = JSON.parse(atob(padded + pad)) as { exp?: unknown; iat?: unknown; iat_ms?: unknown };
+    if (typeof payload.exp !== "number") {
+      return null;
+    }
+    const iatMs =
+      typeof payload.iat_ms === "number"
+        ? payload.iat_ms
+        : typeof payload.iat === "number"
+          ? payload.iat * 1000
+          : null;
+    return { expMs: payload.exp * 1000, iatMs };
+  } catch {
+    return null;
+  }
+}
+
+/** Access token expiry in epoch milliseconds, or null if the JWT cannot be read. */
+export function accessTokenExpiresAt(token: string): number | null {
+  return decodeAccessTokenTimes(token)?.expMs ?? null;
+}
+
+/** Refresh shortly before expiry, but never more often than 20% of the token lifetime. */
+function refreshSkewMs(times: AccessTokenTimes, skewMs = REFRESH_SKEW_MS): number {
+  const lifetime = times.iatMs !== null ? times.expMs - times.iatMs : null;
+  if (lifetime === null || lifetime <= 0) {
+    return skewMs;
+  }
+  return Math.min(skewMs, Math.max(250, Math.floor(lifetime * 0.2)));
+}
+
+function accessStillFresh(token: string | null, skewMs = REFRESH_SKEW_MS): boolean {
+  if (!token) {
+    return false;
+  }
+  const times = decodeAccessTokenTimes(token);
+  if (!times) {
+    return true;
+  }
+  const remaining = times.expMs - Date.now();
+  if (remaining <= 0) {
+    return false;
+  }
+  return remaining > refreshSkewMs(times, skewMs);
+}
+
+let refreshMutex: Promise<string | null> | null = null;
+
+async function withRefreshLock(run: () => Promise<string | null>): Promise<string | null> {
+  const locks = typeof navigator !== "undefined" ? navigator.locks : undefined;
+  if (locks?.request) {
+    try {
+      return await locks.request(REFRESH_LOCK, run);
+    } catch {
+      return run();
+    }
+  }
+  return run();
+}
+
+/**
+ * Rotate the refresh token once. Concurrent callers (and other tabs, when
+ * Web Locks are available) share a single refresh so the server's 30 second
+ * reuse grace is enough.
+ */
+export async function refreshSession(options: { force?: boolean; rejectedAccess?: string | null } = {}): Promise<string | null> {
+  if (refreshMutex) {
+    return refreshMutex;
+  }
+  refreshMutex = (async () =>
+    withRefreshLock(async () => {
+      const currentRefresh = localStorage.getItem(REFRESH_KEY);
+      if (!currentRefresh) {
+        return localStorage.getItem(TOKEN_KEY);
+      }
+      const access = localStorage.getItem(TOKEN_KEY);
+      const alreadyRotated = Boolean(options.rejectedAccess && access && access !== options.rejectedAccess);
+      if (alreadyRotated || (!options.force && accessStillFresh(access))) {
+        return access;
+      }
+      const response = await fetch("/api/v1/auth/refresh", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ refreshToken: currentRefresh }),
+      });
+      if (!response.ok) {
+        return null;
+      }
+      const json = (await response.json()) as { data?: { accessToken?: string; refreshToken?: string } };
+      if (!json.data?.accessToken || !json.data.refreshToken) {
+        return null;
+      }
+      localStorage.setItem(TOKEN_KEY, json.data.accessToken);
+      localStorage.setItem(REFRESH_KEY, json.data.refreshToken);
+      postSessionMessage({ type: "tokens" });
+      return json.data.accessToken;
+    }))().finally(() => {
+    refreshMutex = null;
+  });
+  return refreshMutex;
+}
+
+/** A valid access token, refreshed if it is missing or close to expiry. */
+export async function getAccessToken(): Promise<string | null> {
+  const refresh = localStorage.getItem(REFRESH_KEY);
+  const access = localStorage.getItem(TOKEN_KEY);
+  if (!refresh) {
+    return access;
+  }
+  if (accessStillFresh(access)) {
+    return access;
+  }
+  const next = await refreshSession({ force: false });
+  if (next) {
+    return next;
+  }
+  const expiresAt = access ? accessTokenExpiresAt(access) : null;
+  if (!access || (expiresAt !== null && expiresAt <= Date.now())) {
+    await expireSession("expired");
+    return null;
+  }
+  return access;
+}
+
+async function request(path: string, init: RequestInit = {}, retried = false): Promise<Response> {
   const headers = new Headers(init.headers);
-  const token = localStorage.getItem(TOKEN_KEY);
+  const token = retried ? localStorage.getItem(TOKEN_KEY) : await getAccessToken();
   if (token) {
     headers.set("authorization", `Bearer ${token}`);
   }
   if (init.body && !(init.body instanceof FormData) && !headers.has("content-type")) {
     headers.set("content-type", "application/json");
   }
-  return fetch(path, { ...init, headers });
+  const response = await fetch(path, { ...init, headers });
+  if (response.status === 401 && !retried && localStorage.getItem(REFRESH_KEY)) {
+    const next = await refreshSession({ force: true, rejectedAccess: token });
+    if (next && next !== token) {
+      return request(path, init, true);
+    }
+    await expireSession("expired");
+  }
+  return response;
 }
+
 
 async function storeSession(response: Response, fallback: string): Promise<void> {
   const json = (await response.json()) as {
@@ -112,16 +269,41 @@ export function logout(): void {
 }
 
 /** Revoke the refresh token on the server (best effort), then clear the local session. */
-export async function signOut(): Promise<void> {
+export async function signOut(options: { reason?: SessionNotice; broadcast?: boolean } = {}): Promise<void> {
   const refreshToken = localStorage.getItem(REFRESH_KEY);
   if (refreshToken) {
     try {
-      await request("/api/v1/auth/logout", { method: "POST", body: JSON.stringify({ refreshToken }) });
+      // Raw fetch: do not go through request(), which would try to refresh and could loop.
+      await fetch("/api/v1/auth/logout", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ refreshToken }),
+      });
     } catch {
       // Clearing the local session below is what signs this browser out.
     }
   }
   logout();
+  if (options.reason) {
+    writeSessionNotice(options.reason);
+  }
+  if (options.broadcast !== false) {
+    postSessionMessage({ type: "signout", reason: options.reason });
+  }
+  if (options.reason) {
+    dispatchSessionEnded(options.reason);
+  }
+}
+
+/** Sign out after a failed refresh or idle timeout, then send the UI to login. */
+export async function expireSession(reason: SessionNotice = "expired"): Promise<void> {
+  writeSessionNotice(reason);
+  await signOut({ reason, broadcast: true });
+}
+
+/** Reset the in-flight refresh lock between tests. */
+export function resetRefreshMutexForTests(): void {
+  refreshMutex = null;
 }
 
 /** Authenticated fetch for the admin access check. */

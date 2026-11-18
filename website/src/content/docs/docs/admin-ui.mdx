@@ -25,6 +25,24 @@ On a fresh project the admin shows **Create your first admin**. In production it
 
 <Image src={signin} alt="Bakorin admin sign in screen in light mode" />
 
+## Sessions
+
+After you sign in, the admin keeps you signed in by renewing the access token in the background. Access tokens last 15 minutes by default; the admin refreshes them shortly before they expire, or on the first 401, using the 30 day refresh token. Several requests at once share one refresh, which matches the server's rotation and 30 second grace window. See [Admin sessions](/docs/auth/#admin-sessions).
+
+If the refresh token is no longer valid, the admin signs you out, revokes that token on the server, and returns you to the sign in screen with "Your session expired."
+
+Clicking **Sign out** also revokes the refresh token on the server, instead of only clearing the browser.
+
+To sign the admin out after a period of inactivity, set `runtime.admin.idleTimeoutMinutes` (off by default):
+
+```yaml
+runtime:
+  admin:
+    idleTimeoutMinutes: 30
+```
+
+The admin tracks pointer, key, and tab visibility. When the timeout is longer than 1 minute, it warns about 1 minute before signing out, then revokes the session. Activity in one tab keeps the others alive, and signing out in one tab signs out all of them. This timeout is enforced in the browser only.
+
 ## Admins only
 
 The admin UI is only for users whose role matches `auth.adminRole` (default `admin`).

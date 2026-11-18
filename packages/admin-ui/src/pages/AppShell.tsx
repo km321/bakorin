@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
-import { deleteRecord, getMe, getMeta, getRecord, listRecords, logout, type MetaEntity, type MetaResponse } from "../lib/api.ts";
+import { deleteRecord, getMe, getMeta, getRecord, listRecords, signOut, type MetaEntity, type MetaResponse } from "../lib/api.ts";
+import { IdleSession } from "../components/IdleSession.tsx";
 import { AppHeader } from "../components/AppHeader.tsx";
 import { ConfirmDialog } from "../components/ConfirmDialog.tsx";
 import { Drawer } from "../components/Drawer.tsx";
@@ -102,8 +103,7 @@ export function AppShell({ onLogout, onForbidden }: Props) {
           if (onForbidden) {
             onForbidden();
           } else {
-            logout();
-            onLogout();
+            void signOut().then(onLogout);
           }
         }
       });
@@ -201,6 +201,7 @@ export function AppShell({ onLogout, onForbidden }: Props) {
 
   return (
     <div class="app-shell">
+      <IdleSession idleTimeoutMinutes={meta?.admin?.idleTimeoutMinutes} />
       {navOpen ? <div class="sidebar-backdrop" onClick={() => setNavOpen(false)} /> : null}
       <Sidebar
         appName={meta?.app.name}
@@ -224,8 +225,7 @@ export function AppShell({ onLogout, onForbidden }: Props) {
         userOpen={userOpen}
         onToggleUser={() => setUserOpen((open) => !open)}
         onSignOut={() => {
-          logout();
-          onLogout();
+          void signOut().then(onLogout);
         }}
       />
       <main class="main">
