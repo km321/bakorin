@@ -75,8 +75,25 @@ async function publishOne(dir: string, scratch: string): Promise<void> {
   const res = await run(args, ROOT, true);
   if (res.code !== 0) throw new Error(`npm publish failed for ${label}`);
   console.log(`${dryRun ? "dry run ok" : "published"} ${label} (tag ${distTag(pkg.version)})`);
-  // changesets/action reads this line to create the GitHub release and git tag.
-  if (!dryRun) console.log(`New tag: ${label}`);
+  if (!dryRun) {
+    // changesets/action pushes the git tag named on each "New tag:" line and
+    // creates a GitHub release for it, so the tag has to exist locally first.
+    // An existing tag is left alone: never move or recreate a release tag.
+    await tagRelease(label);
+    // changesets/action reads this line to push the tag and create the release.
+    console.log(`New tag: ${label}`);
+  }
+}
+
+/** Create the local git tag for a published package, unless it already exists. */
+async function tagRelease(tag: string): Promise<void> {
+  const exists = await run(["git", "rev-parse", "--verify", "--quiet", `refs/tags/${tag}`], ROOT, true, true);
+  if (exists.code === 0) {
+    console.log(`tag ${tag} already exists, leaving it as is`);
+    return;
+  }
+  const res = await run(["git", "tag", tag], ROOT, true);
+  if (res.code !== 0) throw new Error(`git tag failed for ${tag}`);
 }
 
 // Unreleased changesets mean the versions in package.json are stale. Version
