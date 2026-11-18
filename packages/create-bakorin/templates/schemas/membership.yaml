@@ -50,8 +50,8 @@ entities:
       role: { type: enum, values: [user, basic, pro, admin], default: user, writable: admin }
       subscriptionStatus: { type: text, writable: none, description: "Stripe subscription status, for example active or past_due." }
       currentPeriodEnd: { type: datetime, writable: none, description: "When the current paid period ends." }
-      stripeCustomerId: { type: text, writable: none, private: true, index: true }
-      stripeSubscriptionId: { type: text, writable: none, private: true }
+      stripeCustomerId: { type: text, writable: none, index: true }
+      stripeSubscriptionId: { type: text, writable: none }
     policies:
       read: [owner(id), admin]
       create: admin

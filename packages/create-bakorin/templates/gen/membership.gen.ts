@@ -226,14 +226,12 @@ export const bakorinSchema = {
         {
           "name": "stripeCustomerId",
           "type": "text",
-          "writable": "none",
-          "private": true
+          "writable": "none"
         },
         {
           "name": "stripeSubscriptionId",
           "type": "text",
-          "writable": "none",
-          "private": true
+          "writable": "none"
         },
         {
           "name": "emailVerified",
