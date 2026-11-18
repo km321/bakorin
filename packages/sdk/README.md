@@ -1,6 +1,6 @@
 # @bakorin/sdk
 
-Typed client for a Bakorin API. Generate `bakorin.gen.ts` with `bakorin typegen`, then:
+Typed client for a Bakorin API. Install it from the npm `beta` tag with `bun add @bakorin/sdk@beta` (or `npm install @bakorin/sdk@beta`). Generate `bakorin.gen.ts` with `bakorin typegen`, then:
 
 ```ts
 import { createClient } from "@bakorin/sdk";

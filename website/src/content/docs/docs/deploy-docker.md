@@ -9,7 +9,7 @@ Health checks: `GET /health` (also `/healthz`) for liveness, and `GET /ready` fo
 
 ## Run locally
 
-From the scaffolded folder (it must include `.bakorin/` when generated from a checkout):
+From the scaffolded folder (if you used `--sdk local`, the folder must include `.bakorin/`):
 
 ```bash
 docker build -t bakorin-app .

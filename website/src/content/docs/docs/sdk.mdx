@@ -3,13 +3,10 @@ title: SDK
 description: The typed @bakorin/sdk client for auth and entity CRUD, plus Astro and Next.js cookie helpers.
 ---
 
-import { Aside } from "@astrojs/starlight/components";
-
 `@bakorin/sdk` is a small fetch based client. It handles auth calls, token refresh, and typed CRUD for your entities.
 
-<Aside type="note" title="Private beta">
-`@bakorin/sdk` is not on npm yet. Projects scaffolded from a checkout link it locally (`--sdk local`).
-</Aside>
+Install it from the npm `beta` tag with `bun add @bakorin/sdk@beta` (or `npm install @bakorin/sdk@beta`). Projects scaffolded by `create-bakorin` already include it. `--sdk local` still links the checkout copy when you run the CLI from a source clone.
+
 
 ## Create a client
 

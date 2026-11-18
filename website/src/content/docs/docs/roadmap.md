@@ -3,7 +3,7 @@ title: Status and roadmap
 description: What works in v0.1 and what is planned.
 ---
 
-Bakorin is a v0.1 private beta.
+Bakorin is a v0.1 public beta.
 
 ## Works today
 
@@ -13,8 +13,7 @@ Schema compiler, tiered schema diffs, SQLite and Postgres migrators (including `
 
 These are not in v0.1:
 
-- **npm packages.** `create-bakorin`, `@bakorin/sdk`, and `@bakorin/server` will be published as `beta`. Until then, run from a checkout.
 - **One click Railway template.** Today you create the service by hand.
-- **Hosted docs.** This site is a private preview.
+- **Hosted docs.** This site is a noindex preview on the current preview domain.
 
 There is no plugin system. `hooks.ts` is the escape hatch.

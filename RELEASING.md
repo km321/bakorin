@@ -46,7 +46,7 @@ Publishing uses npm trusted publishing (OIDC). The release workflow (`.github/wo
 
 `0.1.0-beta.0` was published by hand with a short lived granular token, because a trusted publisher can only be added to a package that already exists on npm. Every release after that goes through the workflow.
 
-Provenance: npm adds provenance automatically for trusted publishing, but only when the GitHub repository is public. While `km321/bakorin` is private, releases have no provenance. Do not add `--provenance`, because npm fails the publish for a private repository. Once the repo is public, provenance turns on with no workflow change.
+Provenance: the repository is public, so npm adds provenance automatically for trusted publishing. The workflow does not need `--provenance`.
 
 ### Add the trusted publishers (once per package)
 

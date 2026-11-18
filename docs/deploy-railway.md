@@ -49,7 +49,7 @@ Resend walkthrough: [Email with Resend](resend.md).
 
 ## Docker locally
 
-From the scaffolded folder (must include `.bakorin/` when generated from a checkout):
+From the scaffolded folder (if you used `--sdk local`, the folder must include `.bakorin/`):
 
 ```bash
 docker build -t bakorin-app .

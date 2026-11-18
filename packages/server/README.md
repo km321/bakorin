@@ -3,12 +3,14 @@
 The Bakorin API and `bakorin` CLI. Requires [Bun](https://bun.sh) 1.1 or newer.
 
 ```bash
-bunx --bun bakorin init ./my-app
-cd my-app
+mkdir my-app && cd my-app
+bun add @bakorin/server@beta
+bunx --bun bakorin init .
+# set JWT_SECRET in .env
 bunx --bun bakorin dev
 ```
 
-Or from a checkout: `bun packages/server/src/cli.ts dev`.
+From a source checkout of [km321/bakorin](https://github.com/km321/bakorin): `bun packages/server/src/cli.ts dev`.
 
 Programmatic:
 

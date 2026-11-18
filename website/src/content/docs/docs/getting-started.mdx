@@ -22,30 +22,68 @@ This takes about five minutes. You will scaffold a project with a starter front 
   </TabItem>
 </Tabs>
 
-Bakorin needs Bun 1.1 or newer.
+Bakorin needs Bun 1.1 or newer. The API and the `bakorin` CLI run on Bun. You can scaffold a project with npm or pnpm, then use Bun to start the API.
 
-## Create a project from a checkout
+## Create a project
 
-<Aside type="note" title="Private beta">
-Packages are not on npm yet, so the supported path today is a checkout of the repository.
-</Aside>
+Packages are on npm under the `beta` tag.
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bun create bakorin@beta my-app
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npm create bakorin@beta my-app
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm create bakorin@beta my-app
+    ```
+  </TabItem>
+</Tabs>
+
+`npx create-bakorin@beta my-app` also works. To skip prompts and pick a frontend and template in one go:
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bun create bakorin@beta my-app --frontend astro --template todo --yes
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npm create bakorin@beta -- my-app --frontend astro --template todo --yes
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm create bakorin@beta my-app --frontend astro --template todo --yes
+    ```
+  </TabItem>
+</Tabs>
+
+npm needs `--` before the project name when you pass flags.
 
 <Steps>
 
-1. Install dependencies and scaffold a project with the Astro starter and the `todo` template. To start from a blog, marketing site, internal tool, store, or membership site instead, see [Templates](/docs/templates/).
+1. Go into the project, copy the env file, and install the API package. To start from a blog, marketing site, internal tool, store, or membership site instead, see [Templates](/docs/templates/).
 
    ```bash
+   cd my-app
+   cp .env.example .env
    bun install
-   bun run create my-app --frontend astro --template todo --yes
-   cp my-app/.env.example my-app/.env
    ```
 
-2. Open `my-app/.env` and set `JWT_SECRET` to the output of `openssl rand -base64 48`. `bakorin dev` runs without it and prints a warning. `bakorin start` refuses to boot without it.
+2. Open `.env` and set `JWT_SECRET` to the output of `openssl rand -base64 48`. `bakorin dev` runs without it and prints a warning. `bakorin start` refuses to boot without it.
 
-3. Start the API from the repository root so it loads `my-app/.env`:
+3. Start the API from the project folder:
 
    ```bash
-   bun run dev -- --dir my-app
+   bun run dev
    ```
 
    The API listens on `http://127.0.0.1:4371`. Health is `GET /health`. The admin UI is at `/admin/` and the interactive API docs are at `/docs`.
@@ -68,6 +106,42 @@ Packages are not on npm yet, so the supported path today is a checkout of the re
 
 `bun run dev` watches `app.yaml` and `hooks.ts`. Save a change and the schema swaps in without restarting the process. If the new file is invalid, Bakorin logs the error and keeps the previous schema.
 
+## Add Bakorin to an existing project
+
+Install the packages from the npm `beta` tag. `@bakorin/server` is a regular dependency and provides the `bakorin` CLI. Add `@bakorin/sdk` in the front end, or in the same project if you keep both together.
+
+<Tabs>
+  <TabItem label="bun">
+    ```bash
+    bun add @bakorin/sdk@beta
+    bun add @bakorin/server@beta
+    ```
+  </TabItem>
+  <TabItem label="npm">
+    ```bash
+    npm install @bakorin/sdk@beta
+    npm install @bakorin/server@beta
+    ```
+  </TabItem>
+  <TabItem label="pnpm">
+    ```bash
+    pnpm add @bakorin/sdk@beta
+    pnpm add @bakorin/server@beta
+    ```
+  </TabItem>
+</Tabs>
+
+If the folder does not already have an `app.yaml`, write a starter one and start the API:
+
+```bash
+bunx --bun bakorin init .
+cp .env.example .env
+# set JWT_SECRET in .env
+bunx --bun bakorin dev
+```
+
+`bakorin init` refuses to overwrite an existing `app.yaml`.
+
 ## create-bakorin options
 
 | Flag | Values | Default |
@@ -75,7 +149,7 @@ Packages are not on npm yet, so the supported path today is a checkout of the re
 | `--frontend`, `--fw` | `astro`, `next`, `none` | `astro` |
 | `--template`, `--schema`, `--starter` | `blog`, `marketing`, `saas`, `store`, `membership`, `todo`, `auth-only`, `blank` | `todo` |
 | `--mail`, `--email` | `log`, `resend`, `smtp` | `log` |
-| `--sdk` | `local`, `npm` | |
+| `--sdk` | `local`, `npm` | `npm` from the published CLI, `local` from a Bakorin checkout |
 | `--name` | project name | first argument |
 | `--dir` | output folder | project name |
 | `--force` | write into a non empty folder | |
@@ -86,26 +160,23 @@ Templates: `blank` and `auth-only` give you users and account pages only. `todo`
 
 `--mail resend` writes `MAIL_DRIVER=resend` and an empty `RESEND_API_KEY=` placeholder. Never commit a real key. See [Email](/docs/email/).
 
-## Try the example app
+## From source
 
-The repository ships a lead and task tracker you can run directly:
+If you are contributing, or you want to run the examples in the repository, clone it and work from the checkout:
+
+```bash
+git clone https://github.com/km321/bakorin.git
+cd bakorin
+bun install
+bun run create my-app --frontend astro --template todo --yes
+cp my-app/.env.example my-app/.env
+# set JWT_SECRET in my-app/.env
+bun run dev -- --dir my-app
+```
+
+The repository also ships a lead and task tracker you can run directly:
 
 ```bash
 cd examples/studio-leads
 bun ../../packages/server/src/cli.ts dev
 ```
-
-## After publish
-
-Once the npm packages are published, the same flow will look like this:
-
-```bash
-npx create-bakorin my-app --frontend astro --template todo --yes
-cd my-app
-cp .env.example .env
-bunx bakorin dev
-```
-
-<Aside type="caution">
-`npx create-bakorin` is not live yet. Use the checkout path above.
-</Aside>
