@@ -40,34 +40,44 @@ bun scripts/publish-packages.ts --dry-run   # npm publish --dry-run for all four
 
 `scripts/publish-packages.ts` packs each package with `bun pm pack`, which replaces `workspace:` ranges with real versions, then uploads the tarball with `npm publish`. Versions that are already on the registry are skipped, so a failed release can be rerun. It publishes to whatever registry npm is configured for, which is how it was tested against a local verdaccio.
 
-## Install the workflow (once)
+## npm trusted publishing
 
-The release workflow is in `ci/release.yml` for now. Move it into place and push from an account whose token has the `workflow` scope:
+Publishing uses npm trusted publishing (OIDC). The release workflow (`.github/workflows/release.yml`) has `id-token: write`, installs npm 11.5.1 or later, and passes no npm token. npm trades the job's GitHub id-token for a one time publish token.
+
+`0.1.0-beta.0` was published by hand with a short lived granular token, because a trusted publisher can only be added to a package that already exists on npm. Every release after that goes through the workflow.
+
+Provenance: npm adds provenance automatically for trusted publishing, but only when the GitHub repository is public. While `km321/bakorin` is private, releases have no provenance. Do not add `--provenance`, because npm fails the publish for a private repository. Once the repo is public, provenance turns on with no workflow change.
+
+### Add the trusted publishers (once per package)
+
+Each of the four packages needs the same GitHub Actions publisher:
+
+- Organization or user: `km321`
+- Repository: `bakorin`
+- Workflow filename: `release.yml`
+- Environment: leave empty
+- Allowed actions: allow `npm publish` (new configurations only allow `npm stage publish` by default)
+
+On npmjs.com: Packages, the package, Settings, Trusted publishing, GitHub Actions, fill in the fields above, save.
+
+Or from a terminal with npm 11.10 or later, logged in as a maintainer with 2FA (npm asks for a one time password, or use "skip 2FA for 5 minutes" on npmjs.com first):
 
 ```bash
-git mv ci/release.yml .github/workflows/release.yml
-# delete the three "Waiting to be moved" comment lines at the top
-git commit -m "Add release workflow" && git push
+for pkg in @bakorin/core @bakorin/server @bakorin/sdk create-bakorin; do
+  npm trust github "$pkg" --repo km321/bakorin --file release.yml --allow-publish --yes
+  sleep 2
+done
+npm trust list @bakorin/core   # check one
 ```
 
-## npm setup (once)
-
-Publishing uses npm trusted publishing (OIDC), so the workflow stores no npm token. Provenance is added automatically when the GitHub repository is public; npm does not generate provenance for private repositories.
-
-A trusted publisher can only be added to a package that already exists on npm. So the first release goes like this:
-
-1. On npmjs.com, create a granular access token with read and write access to the `bakorin` org packages and to `create-bakorin`, with a short expiry (for example 7 days). Granular tokens can publish without an OTP when "bypass 2FA" is allowed for the token.
-2. Add it to the GitHub repo as the Actions secret `NPM_TOKEN`.
-3. Merge the "Version Packages" PR. The workflow publishes `0.1.0-beta.0` using the token.
-4. For each of the four packages, open npmjs.com, Packages, the package, Settings, Trusted publishing, and add a GitHub Actions publisher:
-   - Organization or user: `km321`
-   - Repository: `bakorin`
-   - Workflow filename: `release.yml`
-   - Environment: leave empty
-   - Allowed actions: allow `npm publish` (new configurations only allow `npm stage publish` by default)
-5. Delete the `NPM_TOKEN` secret and revoke the token. Optionally set each package to "Require two factor authentication and disallow tokens".
-
 A new trusted publisher configuration must be used for a successful publish within 2 days or it expires. Add them shortly before the next release, or delete and recreate one that expired.
+
+### After the first OIDC release
+
+Once a release from the workflow succeeds:
+
+1. Revoke the granular tokens used for `0.1.0-beta.0` on npmjs.com (Access Tokens). Do not add an `NPM_TOKEN` Actions secret.
+2. Optionally set each package to "Require two factor authentication and disallow tokens" (Settings, Publishing access). Trusted publishing keeps working with that setting.
 
 ## Go to 1.0
 

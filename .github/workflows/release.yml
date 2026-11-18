@@ -1,7 +1,3 @@
-# Waiting to be moved to .github/workflows/release.yml. The box push token has no
-# `workflow` scope, so GitHub refused this file under .github/workflows. Move it
-# with: git mv ci/release.yml .github/workflows/release.yml
-
 name: release
 
 # Two ways in:
@@ -11,11 +7,18 @@ name: release
 # - Run it by hand (workflow_dispatch). dry_run defaults to true, which builds,
 #   packs and runs npm publish --dry-run without touching the registry.
 #
-# Publishing uses npm trusted publishing (OIDC): no npm token is stored. Each
-# package needs this workflow (release.yml) added as a trusted publisher on
-# npmjs.com. See RELEASING.md. For the very first publish, before the packages
-# exist on npm, add a short lived NPM_TOKEN secret; npm uses OIDC first and
-# only falls back to the token when OIDC is not set up.
+# Publishing uses npm trusted publishing (OIDC). No npm token is stored in
+# the repo or passed to this workflow: npm trades the job's short lived GitHub
+# id-token for a one time publish token. Each of the four packages has this
+# file (release.yml, repo km321/bakorin) set as its trusted publisher on
+# npmjs.com. See RELEASING.md.
+#
+# Provenance: npm adds provenance on its own for trusted publishing, but only
+# when the GitHub repository is public. While km321/bakorin is private, npm
+# skips it, so do not pass --provenance (npm would fail the publish).
+#
+# Prereleases go to the dist tag in the version (0.1.0-beta.1 -> beta). See
+# distTag() in scripts/publish-packages.ts.
 
 on:
   push:
@@ -47,10 +50,11 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.4.4"
+      # No registry-url: that would write an .npmrc with a placeholder token.
+      # npm defaults to registry.npmjs.org and uses OIDC on its own.
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-          registry-url: "https://registry.npmjs.org"
       - name: npm 11.5.1 or later (needed for trusted publishing)
         run: npm install -g npm@^11.5.1 && npm --version
       - run: bun install --frozen-lockfile
@@ -65,7 +69,9 @@ jobs:
 
       - name: Version PR or publish
         if: github.event_name == 'push' || !inputs.dry_run
-        uses: changesets/action@v1
+        # v1.7.0 or later only writes an npm auth line when NPM_TOKEN is set.
+        # Older versions wrote "undefined", which broke the OIDC exchange.
+        uses: changesets/action@v1.9.0
         with:
           version: bun run version-packages
           publish: bun run release:publish
@@ -74,6 +80,5 @@ jobs:
           createGithubReleases: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Only used if trusted publishing is not configured yet. Leave the
-          # secret unset once every package has its trusted publisher.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Do not add NPM_TOKEN or NODE_AUTH_TOKEN here. Publishing is OIDC
+          # only. A token here would hide a broken trusted publisher setup.
