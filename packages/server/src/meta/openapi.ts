@@ -64,6 +64,9 @@ export function metaPayload(ast: SchemaAST): Record<string, unknown> {
       ...ast.auth,
       roles: ast.entityMap[ast.auth.entity]?.fieldMap[ast.auth.roleField]?.enumValues ?? [],
     },
+    admin: {
+      idleTimeoutMinutes: ast.runtime.adminIdleTimeoutMinutes,
+    },
     order: graph.order,
     layers: graph.layers,
     webhooks: graph.webhooks,

@@ -158,7 +158,20 @@ export function compileRuntime(yaml: AppYaml, production: boolean, env: Record<s
     trustProxy: parseTrustProxy(runtime.trustProxy, env),
     realtime: parseRealtime(runtime.realtime, env, dialect),
     mcp: parseMcp(runtime.mcp, env),
+    adminIdleTimeoutMinutes: parseAdminIdleTimeoutMinutes(runtime.admin?.idleTimeoutMinutes),
   };
+}
+
+
+/** runtime.admin.idleTimeoutMinutes. Off when omitted. 1 minute to 7 days. */
+function parseAdminIdleTimeoutMinutes(raw: number | undefined): number | null {
+  if (raw === undefined) {
+    return null;
+  }
+  if (!Number.isInteger(raw) || raw < 1 || raw > 10_080) {
+    throw new SchemaError("runtime.admin.idleTimeoutMinutes must be an integer from 1 to 10080");
+  }
+  return raw;
 }
 
 type RawRealtimeRuntime = NonNullable<NonNullable<AppYaml["runtime"]>["realtime"]>;

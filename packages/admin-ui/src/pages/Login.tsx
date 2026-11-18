@@ -1,16 +1,25 @@
 import { useState } from "preact/hooks";
 import { login } from "../lib/api.ts";
+import { consumeSessionNotice, sessionNoticeMessage } from "../lib/session.ts";
 import { AuthLayout } from "../components/AuthLayout.tsx";
 import { Brand } from "../components/Brand.tsx";
 
 interface Props {
   onLoggedIn: () => void;
+  notice?: string | null;
 }
 
-export function Login({ onLoggedIn }: Props) {
+export function Login({ onLoggedIn, notice }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [sessionNotice] = useState<string | null>(() => {
+    if (notice) {
+      return notice;
+    }
+    const reason = consumeSessionNotice();
+    return reason ? sessionNoticeMessage(reason) : null;
+  });
 
   async function submit(event: Event) {
     event.preventDefault();
@@ -33,6 +42,7 @@ export function Login({ onLoggedIn }: Props) {
         <Brand sub="Admin" />
         <h1>Sign in</h1>
         <p class="muted">Use an admin account from this project's auth entity.</p>
+        {sessionNotice && !error ? <div class="banner" data-session-notice>{sessionNotice}</div> : null}
         {error ? <div class="banner">{error}</div> : null}
         <div class="field">
           <label>
