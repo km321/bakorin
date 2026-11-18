@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { bootPostgres, client, MINI_YAML, signupAndLogin } from "./helpers.ts";
+import { bootPostgres, client, MINI_YAML, POSTGRES_URL, signupAndLogin } from "./helpers.ts";
 import { deliverMailById, exportPortable, importPortable, type MailMessage } from "@bakorin/server";
 import { AUDIT_TABLE, MAIL_OUTBOX_TABLE, WEBHOOK_OUTBOX_TABLE } from "../packages/server/src/db/system.ts";
 
-const url = process.env.DATABASE_URL;
+const url = POSTGRES_URL;
 
 describe.skipIf(!url)("postgres", () => {
   test("migrator applies and auth works", async () => {

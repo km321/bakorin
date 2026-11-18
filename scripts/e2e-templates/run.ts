@@ -29,7 +29,7 @@ const TEMPLATES = ["blank", "auth-only", "blog", "marketing", "saas", "store", "
 type Template = (typeof TEMPLATES)[number];
 const template = flag("--template", "blog") as Template;
 const frontend = flag("--frontend", "astro") as "astro" | "next";
-const dialect = flag("--dialect", "sqlite") as "sqlite" | "postgres";
+const dialect = flag("--dialect", "sqlite") as "sqlite" | "postgres" | "mysql" | "mariadb";
 const shots = flag("--screenshots");
 const keep = args.includes("--keep");
 if (!TEMPLATES.includes(template)) throw new Error(`--template must be one of ${TEMPLATES.join(", ")}`);
@@ -427,7 +427,18 @@ async function main() {
     cleanups.push(() => dropPostgresDatabase(adminUrl, database).catch(() => undefined));
     const yaml = await readFile(join(project, "app.yaml"), "utf8");
     await writeFile(join(project, "app.yaml"), yaml.replace("dialect: sqlite", "dialect: postgres").replace("  sqlite:\n    path: ./data/app.db\n", `  postgres:\n    url: "${url}"\n`));
+  }  if (dialect === "mysql" || dialect === "mariadb") {
+    // DATABASE_URL is a mysql:// or mariadb:// admin URL; the runner makes its own database.
+    const adminUrl = process.env.DATABASE_URL;
+    check(adminUrl && /^m(ysql|ariadb):/.test(adminUrl), "DATABASE_URL (mysql:// or mariadb://) is needed for mysql and mariadb");
+    const { createMysqlDatabase, dropMysqlDatabase } = await import("@bakorin/server");
+    const database = `tpl${crypto.randomUUID().replaceAll("-", "").slice(0, 10)}`;
+    const url = await createMysqlDatabase(adminUrl!, database);
+    cleanups.push(() => dropMysqlDatabase(adminUrl!, database).catch(() => undefined));
+    const yaml = await readFile(join(project, "app.yaml"), "utf8");
+    await writeFile(join(project, "app.yaml"), yaml.replace("dialect: sqlite", `dialect: ${dialect}`).replace("  sqlite:\n    path: ./data/app.db\n", `  mysql:\n    url: "${url}"\n`));
   }
+
   const apiPort = await freePort();
   const sitePort = await freePort();
   const site = `http://127.0.0.1:${sitePort}`;

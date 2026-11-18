@@ -92,6 +92,7 @@ export default defineConfig({
             { label: "Schema changes", slug: "docs/migrations" },
             { label: "Monitoring", slug: "docs/monitoring" },
             { label: "Configuration", slug: "docs/configuration" },
+            { label: "MySQL and MariaDB", slug: "docs/mysql" },
             { label: "CLI", slug: "docs/cli" },
             { label: "Security", slug: "docs/security" },
             { label: "Scaling", slug: "docs/scaling" },

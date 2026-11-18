@@ -1,6 +1,7 @@
 import { sql } from "kysely";
-import { quoteChecked, type EntityAST, type SchemaAST } from "@bakorin/core";
+import { quoteChecked, type DialectName, type EntityAST, type SchemaAST } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
+import { textCast } from "../db/ddl.ts";
 import { DEPRECATED_TABLE, FILES_TABLE } from "../db/system.ts";
 import type { Actor } from "../context.ts";
 import { signFileUrl } from "./sign.ts";
@@ -90,21 +91,21 @@ export async function fileSources(db: BakorinDb, ast: SchemaAST): Promise<FileSo
   return sources;
 }
 
-function textColumn(source: FileSource) {
+function textColumn(source: FileSource, dialect: DialectName) {
   // Removed fields can be any type: compare as text so Postgres accepts it.
   return source.removed
-    ? sql`cast(${sql.raw(quoteChecked(source.entity))}.${sql.raw(quoteChecked(source.field))} as text)`
+    ? sql`cast(${sql.raw(quoteChecked(source.entity))}.${sql.raw(quoteChecked(source.field))} as ${textCast(dialect)})`
     : sql`${sql.raw(quoteChecked(source.entity))}.${sql.raw(quoteChecked(source.field))}`;
 }
 
 /** SQL that is true when the _bakorin_files row is not referenced by any source. */
-export function orphanCondition(sources: FileSource[]) {
+export function orphanCondition(sources: FileSource[], dialect: DialectName) {
   if (sources.length === 0) {
     return sql<boolean>`1 = 1`;
   }
   const parts = sources.map(
     (source) =>
-      sql`not exists (select 1 from ${sql.raw(quoteChecked(source.entity))} where ${textColumn(source)} = ${sql.raw(FILES_TABLE)}.id)`,
+      sql`not exists (select 1 from ${sql.raw(quoteChecked(source.entity))} where ${textColumn(source, dialect)} = ${sql.raw(FILES_TABLE)}.id)`,
   );
   return sql<boolean>`(${sql.join(parts, sql` and `)})`;
 }
@@ -123,7 +124,7 @@ export async function fileUsage(
   for (const source of sources) {
     const display = source.display && source.display !== "id" ? source.display : undefined;
     const label = display ? sql`, ${sql.raw(quoteChecked(source.entity))}.${sql.raw(quoteChecked(display))} as label` : sql``;
-    const result = await sql<{ id: string; ref: string; label?: unknown }>`select ${sql.raw(quoteChecked(source.entity))}.id as id, ${textColumn(source)} as ref${label} from ${sql.raw(quoteChecked(source.entity))} where ${textColumn(source)} in (${sql.join(ids)}) limit 1000`.execute(db);
+    const result = await sql<{ id: string; ref: string; label?: unknown }>`select ${sql.raw(quoteChecked(source.entity))}.id as id, ${textColumn(source, ast.runtime.dialect)} as ref${label} from ${sql.raw(quoteChecked(source.entity))} where ${textColumn(source, ast.runtime.dialect)} in (${sql.join(ids)}) limit 1000`.execute(db);
     for (const row of result.rows) {
       const list = out.get(String(row.ref)) ?? [];
       list.push({

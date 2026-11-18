@@ -20,7 +20,7 @@ Commands:
   migrate [--plan] [--allow-destructive <code>]
                       Show or apply schema changes. Removals need the code
                       printed by --plan; a backup is taken first
-  export [dir]        Portable NDJSON archive for moving SQLite <-> Postgres
+  export [dir]        Portable NDJSON archive across all supported databases
   import <dir>        Import a portable archive into the current dialect
   mail list           List templates in mail/
   mail preview <template|rule> [--record <id>] [--entity name] [--format html|text|json]

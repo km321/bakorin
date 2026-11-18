@@ -4,7 +4,7 @@ import { cors } from "hono/cors";
 import { sql } from "kysely";
 import { compileAppYaml, isDevMode, SchemaError, type SchemaAST } from "@bakorin/core";
 import { createChangeBus } from "./bus.ts";
-import { openPostgres, openSqlite, type BakorinDb } from "./db/dialects.ts";
+import { openMysql, openPostgres, openSqlite, type BakorinDb } from "./db/dialects.ts";
 import { migrateToSchema, type MigrateOptions } from "./db/migrator.ts";
 import { createAuthRoutes, verifyAccessToken } from "./auth/routes.ts";
 import type { AccessClaims } from "./auth/jwt.ts";
@@ -73,6 +73,15 @@ export function createFiles(ast: SchemaAST, projectDir: string): FileStore {
 export function openDb(ast: SchemaAST, projectDir: string): { db: BakorinDb; close: () => Promise<void> } {
   if (ast.runtime.dialect === "postgres") {
     const { db } = openPostgres(ast.runtime.postgresUrl ?? "");
+    return {
+      db,
+      close: async () => {
+        await db.destroy();
+      },
+    };
+  }
+  if (ast.runtime.dialect === "mysql") {
+    const { db } = openMysql(ast.runtime.mysqlUrl ?? "");
     return {
       db,
       close: async () => {

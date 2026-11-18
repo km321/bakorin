@@ -19,9 +19,10 @@ import {
   joinTableName,
 } from "@bakorin/core";
 import { ensureLinkTables, renameLinkTable } from "../crud/links.ts";
-import type { BakorinDb } from "./dialects.ts";
+import { isMysqlDb, type BakorinDb } from "./dialects.ts";
+import { createIndex, tableColumnNames, tableExists as ddlTableExists, tableOptions } from "./ddl.ts";
 import { DEPRECATED_TABLE, ensureSystemTables, metaGet, metaSet } from "./system.ts";
-import { sqlType } from "./types.ts";
+import { mysqlNeedsExpressionDefault, sqlType } from "./types.ts";
 
 export interface MigrateResult {
   plan: DiffPlan;
@@ -92,9 +93,18 @@ function columnSql(dialect: DialectName, field: FieldAST): string {
     parts.push("not null");
   }
   if (field.defaultValue !== undefined && field.type !== "relation") {
-    parts.push(`default ${literal(dialect, defaultLiteral(field))}`);
+    parts.push(defaultClause(dialect, field));
   }
   return parts.join(" ");
+}
+
+/**
+ * MySQL only takes a default on TEXT and JSON columns as an expression, so the
+ * literal is wrapped in parentheses there (MySQL 8.0.13+, MariaDB 10.2+).
+ */
+function defaultClause(dialect: DialectName, field: FieldAST): string {
+  const value = literal(dialect, defaultLiteral(field));
+  return dialect === "mysql" && mysqlNeedsExpressionDefault(sqlType(dialect, field)) ? `default (${value})` : `default ${value}`;
 }
 
 /** JSON defaults are stored as their JSON text (jsonb on Postgres reads the quoted literal). */
@@ -130,7 +140,7 @@ function createTableSql(dialect: DialectName, entity: EntityAST): string {
       );
     }
   }
-  return `create table if not exists ${quoteChecked(entity.name)} (\n  ${cols.join(",\n  ")}\n)`;
+  return `create table if not exists ${quoteChecked(entity.name)} (\n  ${cols.join(",\n  ")}\n)${tableOptions(dialect)}`;
 }
 
 function indexName(entity: string, fields: string[], unique: boolean): string {
@@ -138,64 +148,34 @@ function indexName(entity: string, fields: string[], unique: boolean): string {
 }
 
 async function tableExists(db: BakorinDb, dialect: DialectName, name: string): Promise<boolean> {
-  if (dialect === "sqlite") {
-    const row = await sql<{ name: string }>`select name from sqlite_master where type = 'table' and name = ${name}`.execute(
-      db,
-    );
-    return row.rows.length > 0;
-  }
-  const row = await sql<{ present: boolean }>`
-    select exists (
-      select 1 from information_schema.tables
-      where table_schema = 'public' and table_name = ${name}
-    ) as present
-  `.execute(db);
-  return Boolean(row.rows[0]?.present);
+  return ddlTableExists(db, dialect, name);
 }
 
 async function columnExists(db: BakorinDb, dialect: DialectName, table: string, column: string): Promise<boolean> {
-  if (dialect === "sqlite") {
-    const result = await sql.raw(`pragma table_info(${quoteChecked(table)})`).execute(db);
-    return (result.rows as Array<{ name: string }>).some((row) => row.name === column);
-  }
-  const row = await sql<{ present: boolean }>`
-    select exists (
-      select 1 from information_schema.columns
-      where table_schema = 'public' and table_name = ${table} and column_name = ${column}
-    ) as present
-  `.execute(db);
-  return Boolean(row.rows[0]?.present);
+  return (await tableColumnNames(db, dialect, table)).has(column);
 }
 
-async function addIndexes(db: BakorinDb, entity: EntityAST): Promise<void> {
+async function addIndexes(db: BakorinDb, dialect: DialectName, entity: EntityAST): Promise<void> {
   for (const field of entity.fields) {
     if (field.name === "id" || field.relation?.many) {
       continue;
     }
     if (field.unique) {
-      await sql
-        .raw(
-          `create unique index if not exists ${quoteChecked(indexName(entity.name, [field.name], true))} on ${quoteChecked(entity.name)} (${quoteChecked(field.name)})`,
-        )
-        .execute(db);
+      await createIndex(db, dialect, {
+        name: indexName(entity.name, [field.name], true),
+        table: entity.name,
+        columns: [field.name],
+        unique: true,
+      });
     } else if (field.indexed) {
-      await sql
-        .raw(
-          `create index if not exists ${quoteChecked(indexName(entity.name, [field.name], false))} on ${quoteChecked(entity.name)} (${quoteChecked(field.name)})`,
-        )
-        .execute(db);
+      await createIndex(db, dialect, { name: indexName(entity.name, [field.name], false), table: entity.name, columns: [field.name] });
     }
   }
   for (const fields of entity.indexes ?? []) {
     if (fields.length === 0) {
       continue;
     }
-    const cols = fields.map((field) => quoteChecked(field)).join(", ");
-    await sql
-      .raw(
-        `create index if not exists ${quoteChecked(indexName(entity.name, fields, false))} on ${quoteChecked(entity.name)} (${cols})`,
-      )
-      .execute(db);
+    await createIndex(db, dialect, { name: indexName(entity.name, fields, false), table: entity.name, columns: fields });
   }
 }
 
@@ -208,7 +188,7 @@ async function applyAuto(db: BakorinDb, dialect: DialectName, plan: DiffPlan): P
         } else {
           await db.deleteFrom(DEPRECATED_TABLE).where("entity", "=", change.entity.name).where("kind", "=", "entity").execute();
         }
-        await addIndexes(db, change.entity);
+        await addIndexes(db, dialect, change.entity);
         break;
       }
       case "add_field": {
@@ -227,16 +207,14 @@ async function applyAuto(db: BakorinDb, dialect: DialectName, plan: DiffPlan): P
           break;
         }
         const extra =
-          change.field.required && change.field.defaultValue !== undefined
-            ? ` not null default ${literal(dialect, defaultLiteral(change.field))}`
-            : "";
+          change.field.required && change.field.defaultValue !== undefined ? ` not null ${defaultClause(dialect, change.field)}` : "";
         await sql
           .raw(
             `alter table ${quoteChecked(change.entity)} add column ${quoteChecked(change.field.name)} ${sqlType(dialect, change.field)}${extra}`,
           )
           .execute(db);
         if (change.field.unique || change.field.indexed) {
-          await addIndexes(db, {
+          await addIndexes(db, dialect, {
             name: change.entity,
             fields: [change.field],
           } as EntityAST);
@@ -244,12 +222,11 @@ async function applyAuto(db: BakorinDb, dialect: DialectName, plan: DiffPlan): P
         break;
       }
       case "add_index": {
-        const cols = change.fields.map((field) => quoteChecked(field)).join(", ");
-        await sql
-          .raw(
-            `create index if not exists ${quoteChecked(indexName(change.entity, change.fields, false))} on ${quoteChecked(change.entity)} (${cols})`,
-          )
-          .execute(db);
+        await createIndex(db, dialect, {
+          name: indexName(change.entity, change.fields, false),
+          table: change.entity,
+          columns: change.fields,
+        });
         break;
       }
       default:
@@ -266,19 +243,10 @@ async function applySafe(db: BakorinDb, dialect: DialectName, plan: DiffPlan, as
           await renameLinkTable(db, dialect, joinTableName(change.entity, change.from), joinTableName(change.entity, change.to));
           break;
         }
-        if (dialect === "sqlite") {
-          await sql
-            .raw(
-              `alter table ${quoteChecked(change.entity)} rename column ${quoteChecked(change.from)} to ${quoteChecked(change.to)}`,
-            )
-            .execute(db);
-        } else {
-          await sql
-            .raw(
-              `alter table ${quoteChecked(change.entity)} rename column ${quoteChecked(change.from)} to ${quoteChecked(change.to)}`,
-            )
-            .execute(db);
-        }
+        // The same statement on SQLite 3.25+, Postgres, MySQL 8.0+ and MariaDB 10.5+.
+        await sql
+          .raw(`alter table ${quoteChecked(change.entity)} rename column ${quoteChecked(change.from)} to ${quoteChecked(change.to)}`)
+          .execute(db);
         break;
       }
       case "rename_entity": {
@@ -320,8 +288,27 @@ async function applyDeprecate(db: BakorinDb, plan: DiffPlan): Promise<void> {
  * stored schema together. The transaction scoped advisory lock keeps two
  * instances from migrating at once and is released on commit or rollback.
  * SQLite takes `begin immediate` through the driver.
+ *
+ * MySQL and MariaDB commit implicitly on every DDL statement, so a migration
+ * there is not atomic: each statement is idempotent (if not exists, catalog
+ * checks) and the stored schema is written last, so a rerun after a failure
+ * picks up where it stopped. A session level GET_LOCK on one connection keeps
+ * two instances from migrating at once.
  */
 async function withLock<T>(db: BakorinDb, dialect: DialectName, fn: (trx: BakorinDb) => Promise<T>): Promise<T> {
+  if (dialect === "mysql" || isMysqlDb(db)) {
+    return db.connection().execute(async (conn) => {
+      const got = await sql<{ got: number | null }>`select get_lock('bakorin.migrate', 60) as got`.execute(conn);
+      if (Number(got.rows[0]?.got ?? 0) !== 1) {
+        throw new Error("another Bakorin instance is migrating this database (waited 60 seconds for the lock)");
+      }
+      try {
+        return await fn(conn);
+      } finally {
+        await sql`select release_lock('bakorin.migrate')`.execute(conn);
+      }
+    });
+  }
   return db.transaction().execute(async (trx) => {
     if (dialect === "postgres") {
       await sql`select pg_advisory_xact_lock(hashtext('bakorin.migrate'))`.execute(trx);

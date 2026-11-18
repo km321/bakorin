@@ -1,3 +1,4 @@
+import { isMysqlDb } from "../db/dialects.ts";
 import { MAIL_DEFAULT_MAX_ATTEMPTS, type ChangeEvent, type MailRuleAST, type SchemaAST } from "@bakorin/core";
 import type { BakorinDb } from "../db/dialects.ts";
 import { MAIL_OUTBOX_TABLE } from "../db/system.ts";
@@ -144,7 +145,7 @@ export async function enqueueMail(db: BakorinDb, input: EnqueueMailInput): Promi
   // transaction (Postgres aborts a transaction on any failed statement).
   let inserted = 0;
   try {
-    const result = await db
+    const insert = db
       .insertInto(MAIL_OUTBOX_TABLE)
       .values({
         id,
@@ -172,10 +173,17 @@ export async function enqueueMail(db: BakorinDb, input: EnqueueMailInput): Promi
         created_at: now,
         purpose: input.purpose ?? null,
         sealed: error ? null : (input.sealed ?? null),
-      })
-      .onConflict((oc) => oc.column("idempotency_key").doNothing())
-      .executeTakeFirst();
-    inserted = Number(result?.numInsertedOrUpdatedRows ?? 0);
+      });
+    // ON DUPLICATE KEY UPDATE leaves the existing row untouched. MySQL's
+    // affectedRows varies with CLIENT_FOUND_ROWS, so compare ids afterwards.
+    if (isMysqlDb(db)) {
+      await insert.onDuplicateKeyUpdate({ idempotency_key: key }).executeTakeFirst();
+      const stored = await findByKey(db, key);
+      inserted = stored && String(stored.id) === id ? 1 : 0;
+    } else {
+      const result = await insert.onConflict((oc) => oc.column("idempotency_key").doNothing()).executeTakeFirst();
+      inserted = Number(result?.numInsertedOrUpdatedRows ?? 0);
+    }
   } catch (cause) {
     const raced = await findByKey(db, key);
     if (raced) {

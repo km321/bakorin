@@ -1,3 +1,4 @@
+import { isMysqlDb } from "../db/dialects.ts";
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
 import type { BakorinDb } from "../db/dialects.ts";
 import { REFRESH_TABLE, TOKEN_CUTOFF_TABLE } from "../db/system.ts";
@@ -195,11 +196,12 @@ export function notifySessionsChanged(change: SessionChange): void {
 export async function revokeAllForUser(db: BakorinDb, userId: string): Promise<void> {
   await db.updateTable(REFRESH_TABLE).set({ revoked_at: new Date().toISOString() }).where("user_id", "=", userId).execute();
   const notBefore = Date.now();
-  await db
-    .insertInto(TOKEN_CUTOFF_TABLE)
-    .values({ user_id: userId, not_before: notBefore })
-    .onConflict((oc) => oc.column("user_id").doUpdateSet({ not_before: notBefore }))
-    .execute();
+  const insert = db.insertInto(TOKEN_CUTOFF_TABLE).values({ user_id: userId, not_before: notBefore });
+  if (isMysqlDb(db)) {
+    await insert.onDuplicateKeyUpdate({ not_before: notBefore }).execute();
+  } else {
+    await insert.onConflict((oc) => oc.column("user_id").doUpdateSet({ not_before: notBefore })).execute();
+  }
   notifySessionsChanged({ userId });
 }
 

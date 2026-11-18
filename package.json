@@ -27,7 +27,9 @@
     "load:realtime": "bun scripts/realtime-load/run.ts",
     "changeset": "changeset",
     "version-packages": "changeset version && bun install",
-    "release:publish": "bun scripts/publish-packages.ts"
+    "release:publish": "bun scripts/publish-packages.ts",
+    "test:mysql": "BAKORIN_TEST_DIALECT=mysql bun test",
+    "test:mariadb": "BAKORIN_TEST_DIALECT=mariadb bun test"
   },
   "repository": {
     "type": "git",

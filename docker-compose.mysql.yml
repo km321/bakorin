@@ -1,0 +1,29 @@
+# docker compose -f docker-compose.yml -f docker-compose.mysql.yml up --build
+# Change app.yaml to runtime.dialect: mysql and runtime.mysql.url: ${DATABASE_URL}.
+# Copy the repo's app.yaml/hooks.ts project into the image as usual.
+services:
+  bakorin:
+    environment:
+      DATABASE_URL: mysql://bakorin:${MYSQL_PASSWORD:?set MYSQL_PASSWORD}@mysql:3306/bakorin
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: ${MYSQL_IMAGE:-mysql:8.0}
+    environment:
+      MYSQL_DATABASE: bakorin
+      MYSQL_USER: bakorin
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?set MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?set MYSQL_ROOT_PASSWORD}
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_bin
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  mysql-data:

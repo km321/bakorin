@@ -56,3 +56,14 @@ app = "client-bakorin"
 ```
 
 Mount a volume at `/data` for SQLite, or attach Postgres and set `DATABASE_URL`.
+
+## MySQL and MariaDB
+
+The repo includes `docker-compose.mysql.yml` as a local override:
+
+```bash
+# Set MYSQL_PASSWORD, MYSQL_ROOT_PASSWORD, JWT_SECRET in your shell or secret env file.
+docker compose -f docker-compose.yml -f docker-compose.mysql.yml up --build
+```
+
+Set `runtime.dialect: mysql` and `runtime.mysql.url: ${DATABASE_URL}` in your app. The override injects a private network URL and waits for the database health check. To use MariaDB, set `MYSQL_IMAGE=mariadb:10.11` and use a MariaDB health check such as `healthcheck.sh --connect --innodb_initialized` instead of `mysqladmin`. MariaDB accepts the `MYSQL_*` container variables. Never publish the database port to the internet. Use a fresh named volume when switching server brands; MySQL and MariaDB data directories are not interchangeable. See [MySQL and MariaDB](/docs/mysql/).

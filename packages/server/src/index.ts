@@ -28,7 +28,17 @@ export { writeAudit, listAudit } from "./audit/log.ts";
 export { countPendingDeliveries, discardPendingDeliveries } from "./backup/pending.ts";
 export { drainWebhookOutbox, signWebhookPayload, cleanupDelivered, deliverById } from "./webhooks/dispatcher.ts";
 export { redactChangeEvent, redactRecord } from "./webhooks/redact.ts";
-export { openSqlite, openPostgres, createPostgresDatabase, dropPostgresDatabase, postgresUrlWithDatabase } from "./db/dialects.ts";
+export {
+  openSqlite,
+  openPostgres,
+  openMysql,
+  createPostgresDatabase,
+  dropPostgresDatabase,
+  postgresUrlWithDatabase,
+  createMysqlDatabase,
+  dropMysqlDatabase,
+  mysqlUrlWithDatabase,
+} from "./db/dialects.ts";
 export { createLocalFileStore, createS3FileStore, parseS3Url, pruneS3Backups } from "./files/store.ts";
 export type { FileStore } from "./files/store.ts";
 export type { Actor, AppContext } from "./context.ts";

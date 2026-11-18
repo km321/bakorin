@@ -22,3 +22,8 @@ With more than one instance:
 - Realtime works across instances: each change is written to a log table, and the Postgres broker (`LISTEN/NOTIFY`) tells every instance to read it. See [Realtime scaling](/docs/realtime/#scaling) for measured numbers.
 
 Scheduled jobs are claimed with a `job-run:{name}` lease, so only one instance runs a given job at a time. Each cron slot is recorded once in `_bakorin_job_runs`.
+
+
+## MySQL and MariaDB
+
+Use an existing MySQL 8.0.13+ or MariaDB 10.11+/11.x server with `runtime.dialect: mysql` and `runtime.mysql.url`. Both have full API, auth, files, job and backup support. Realtime uses the memory broker, so keep subscriptions on one API instance. See [MySQL and MariaDB](/docs/mysql/).

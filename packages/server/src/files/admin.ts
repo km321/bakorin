@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import { requireAdmin } from "../auth/guard.ts";
 import { writeAudit } from "../audit/log.ts";
 import { FILES_TABLE } from "../db/system.ts";
+import { likeEscape } from "../db/ddl.ts";
 import { clientIp } from "../http/client-ip.ts";
 import type { AppContext } from "../context.ts";
 import { fileInfo, fileSources, fileUsage, orphanCondition, signedFile, type FileSource } from "./refs.ts";
@@ -78,7 +79,7 @@ export function createFileAdminRoutes(): Hono {
     const ctx = c.get("app");
     const search = new URL(c.req.url).searchParams;
     const sources = await fileSources(ctx.db, ctx.ast);
-    const orphan = orphanCondition(sources);
+    const orphan = orphanCondition(sources, ctx.ast.runtime.dialect);
     const limit = intParam(search.get("limit"), 50, 1, 100);
     const offset = intParam(search.get("offset"), 0, 0, Number.MAX_SAFE_INTEGER);
     const type = search.get("type");
@@ -99,7 +100,7 @@ export function createFileAdminRoutes(): Hono {
       qb = qb.where("id", "in", ids);
     }
     if (q) {
-      qb = qb.where(sql<boolean>`lower(filename) like ${`%${escapeLike(q.toLowerCase())}%`} escape '\\'`);
+      qb = qb.where(sql<boolean>`lower(filename) like ${`%${escapeLike(q.toLowerCase())}%`} ${likeEscape(ctx.ast.runtime.dialect)}`);
     }
     if (type === "image" || type === "pdf" || type === "text" || type === "other") {
       qb = qb.where(typeCondition(type));
@@ -208,7 +209,7 @@ export function createFileAdminRoutes(): Hono {
     const rows = await ctx.db
       .selectFrom(FILES_TABLE)
       .selectAll()
-      .where(orphanCondition(sources))
+      .where(orphanCondition(sources, ctx.ast.runtime.dialect))
       .where("created_at", "<=", recentCutoff())
       .orderBy("created_at", "asc")
       .limit(MAX_BULK_DELETE)
@@ -243,12 +244,12 @@ async function summarize(ctx: AppContext, sources: FileSource[]) {
     .executeTakeFirst();
   const orphans = await ctx.db
     .selectFrom(FILES_TABLE)
-    .where(orphanCondition(sources))
+    .where(orphanCondition(sources, ctx.ast.runtime.dialect))
     .select((eb) => [eb.fn.countAll().as("count"), eb.fn.sum("size").as("bytes")])
     .executeTakeFirst();
   const removable = await ctx.db
     .selectFrom(FILES_TABLE)
-    .where(orphanCondition(sources))
+    .where(orphanCondition(sources, ctx.ast.runtime.dialect))
     .where("created_at", "<=", recentCutoff())
     .select((eb) => eb.fn.countAll().as("count"))
     .executeTakeFirst();

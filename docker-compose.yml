@@ -31,3 +31,5 @@ services:
 
 volumes:
   bakorin-data:
+
+# For MySQL or MariaDB, use docker-compose.mysql.yml as the override. See docs/mysql.md.

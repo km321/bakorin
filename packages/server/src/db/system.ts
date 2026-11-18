@@ -1,6 +1,7 @@
 import { sql } from "kysely";
 import type { DialectName } from "@bakorin/core";
 import type { BakorinDb } from "./dialects.ts";
+import { bigIntType, createIndex, keyTextType, longTextType, tableColumnNames, tableOptions } from "./ddl.ts";
 
 export const META_TABLE = "_bakorin_meta";
 export const REFRESH_TABLE = "_bakorin_refresh_tokens";
@@ -19,187 +20,188 @@ export const TOKEN_CUTOFF_TABLE = "_bakorin_token_cutoffs";
 export const REALTIME_TABLE = "_bakorin_realtime";
 
 export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): Promise<void> {
-  const text = "text";
-  const int = dialect === "postgres" ? "bigint" : "integer";
+  // key: primary keys, unique and indexed columns (varchar(255) on MySQL).
+  // text: everything else (longtext on MySQL). Both are plain text elsewhere.
+  const key = keyTextType(dialect);
+  const text = longTextType(dialect);
+  const int = bigIntType(dialect);
+  const opts = tableOptions(dialect);
   await sql
     .raw(
       `create table if not exists ${META_TABLE} (
-        key ${text} primary key,
+        "key" ${key} primary key,
         value ${text} not null
-      )`,
+      )${opts}`,
     )
     .execute(db);
   await sql
     .raw(
       `create table if not exists ${REFRESH_TABLE} (
-        id ${text} primary key,
-        user_id ${text} not null,
-        token_hash ${text} not null unique,
-        family_id ${text} not null,
-        revoked_at ${text},
-        expires_at ${text} not null,
-        created_at ${text} not null
-      )`,
+        id ${key} primary key,
+        user_id ${key} not null,
+        token_hash ${key} not null unique,
+        family_id ${key} not null,
+        revoked_at ${key},
+        expires_at ${key} not null,
+        created_at ${key} not null
+      )${opts}`,
     )
     .execute(db);
-  await sql
-    .raw(`create index if not exists _bakorin_refresh_user_idx on ${REFRESH_TABLE} (user_id)`)
-    .execute(db);
+  await createIndex(db, dialect, { name: "_bakorin_refresh_user_idx", table: REFRESH_TABLE, columns: ["user_id"] });
   await sql
     .raw(
       `create table if not exists ${TOKEN_CUTOFF_TABLE} (
-        user_id ${text} primary key,
+        user_id ${key} primary key,
         not_before ${int} not null
-      )`,
+      )${opts}`,
     )
     .execute(db);
   const refreshColumns = await tableColumns(db, dialect, REFRESH_TABLE);
   for (const column of ["rotated_at", "successor"]) {
     if (!refreshColumns.has(column)) {
-      await sql.raw(`alter table ${REFRESH_TABLE} add column ${column} ${text}`).execute(db);
+      await sql.raw(`alter table ${REFRESH_TABLE} add column ${column} ${key}`).execute(db);
     }
   }
   await sql
     .raw(
       `create table if not exists ${AUTH_TOKENS_TABLE} (
-        id ${text} primary key,
-        user_id ${text},
-        email ${text} not null,
-        purpose ${text} not null,
-        token_hash ${text} not null unique,
+        id ${key} primary key,
+        user_id ${key},
+        email ${key} not null,
+        purpose ${key} not null,
+        token_hash ${key} not null unique,
         payload ${text},
-        expires_at ${text} not null,
-        used_at ${text},
-        created_at ${text} not null
-      )`,
+        expires_at ${key} not null,
+        used_at ${key},
+        created_at ${key} not null
+      )${opts}`,
     )
     .execute(db);
-  await sql
-    .raw(`create index if not exists _bakorin_auth_tokens_email_idx on ${AUTH_TOKENS_TABLE} (email)`)
-    .execute(db);
+  await createIndex(db, dialect, { name: "_bakorin_auth_tokens_email_idx", table: AUTH_TOKENS_TABLE, columns: ["email"] });
   await sql
     .raw(
       `create table if not exists ${FILES_TABLE} (
-        id ${text} primary key,
-        key ${text} not null,
+        id ${key} primary key,
+        "key" ${key} not null,
         filename ${text} not null,
-        content_type ${text} not null,
+        content_type ${key} not null,
         size ${int} not null,
-        created_by ${text},
-        created_at ${text} not null
-      )`,
+        created_by ${key},
+        created_at ${key} not null
+      )${opts}`,
     )
     .execute(db);
   await sql
     .raw(
       `create table if not exists ${DEPRECATED_TABLE} (
-        kind ${text} not null,
-        entity ${text} not null,
-        field ${text},
-        dropped_at ${text} not null
-      )`,
+        kind ${key} not null,
+        entity ${key} not null,
+        field ${key},
+        dropped_at ${key} not null
+      )${opts}`,
     )
     .execute(db);
   await sql
     .raw(
       `create table if not exists ${RATE_TABLE} (
-        key ${text} primary key,
+        "key" ${key} primary key,
         count ${int} not null,
-        window_start ${text} not null
-      )`,
+        window_start ${key} not null
+      )${opts}`,
     )
     .execute(db);
   await sql
     .raw(
       `create table if not exists ${LOCKOUT_TABLE} (
-        identity ${text} primary key,
+        identity ${key} primary key,
         failures ${int} not null,
-        locked_until ${text},
-        updated_at ${text} not null
-      )`,
+        locked_until ${key},
+        updated_at ${key} not null
+      )${opts}`,
     )
     .execute(db);
   await sql
     .raw(
       `create table if not exists ${LEASE_TABLE} (
-        name ${text} primary key,
-        holder ${text} not null,
-        expires_at ${text} not null
-      )`,
+        name ${key} primary key,
+        holder ${key} not null,
+        expires_at ${key} not null
+      )${opts}`,
     )
     .execute(db);
   await sql
     .raw(
       `create table if not exists ${AUDIT_TABLE} (
-        id ${text} primary key,
-        at ${text} not null,
-        action ${text} not null,
-        actor_id ${text},
-        actor_role ${text},
-        entity ${text},
-        record_id ${text},
-        ip ${text},
+        id ${key} primary key,
+        at ${key} not null,
+        action ${key} not null,
+        actor_id ${key},
+        actor_role ${key},
+        entity ${key},
+        record_id ${key},
+        ip ${key},
         meta ${text}
-      )`,
+      )${opts}`,
     )
     .execute(db);
-  await sql
-    .raw(`create index if not exists _bakorin_audit_at_idx on ${AUDIT_TABLE} (at)`)
-    .execute(db);
-  const seq = dialect === "postgres" ? "bigserial primary key" : "integer primary key autoincrement";
+  await createIndex(db, dialect, { name: "_bakorin_audit_at_idx", table: AUDIT_TABLE, columns: ["at"] });
+  const seq =
+    dialect === "postgres"
+      ? "bigserial primary key"
+      : dialect === "mysql"
+        ? "bigint not null auto_increment primary key"
+        : "integer primary key autoincrement";
   await sql
     .raw(
       `create table if not exists ${REALTIME_TABLE} (
         seq ${seq},
-        entity ${text} not null,
-        op ${text} not null,
-        record_id ${text} not null,
+        entity ${key} not null,
+        op ${key} not null,
+        record_id ${key} not null,
         data ${text} not null,
         at ${int} not null
-      )`,
+      )${opts}`,
     )
     .execute(db);
-  await sql.raw(`create index if not exists _bakorin_realtime_at_idx on ${REALTIME_TABLE} (at)`).execute(db);
+  await createIndex(db, dialect, { name: "_bakorin_realtime_at_idx", table: REALTIME_TABLE, columns: ["at"] });
   await sql
     .raw(
       `create table if not exists ${WEBHOOK_OUTBOX_TABLE} (
-        id ${text} primary key,
-        webhook_id ${text},
-        event ${text},
+        id ${key} primary key,
+        webhook_id ${key},
+        event ${key},
         url ${text} not null,
         payload ${text} not null,
         headers ${text} not null,
         attempts ${int} not null,
-        status ${text} not null default 'pending',
+        status ${key} not null default 'pending',
         last_status_code ${int},
         last_error ${text},
-        locked_until ${text},
-        next_attempt_at ${text} not null,
-        delivered_at ${text},
-        created_at ${text} not null
-      )`,
+        locked_until ${key},
+        next_attempt_at ${key} not null,
+        delivered_at ${key},
+        created_at ${key} not null
+      )${opts}`,
     )
     .execute(db);
-  await ensureOutboxColumns(db, dialect, int, text);
+  await ensureOutboxColumns(db, dialect, int, key, text);
   await sql
     .raw(
       `update ${WEBHOOK_OUTBOX_TABLE} set status = 'delivered' where delivered_at is not null and (status is null or status = 'pending')`,
     )
     .execute(db);
-  await sql
-    .raw(`create index if not exists _bakorin_webhook_outbox_due_idx on ${WEBHOOK_OUTBOX_TABLE} (status, next_attempt_at)`)
-    .execute(db);
+  await createIndex(db, dialect, { name: "_bakorin_webhook_outbox_due_idx", table: WEBHOOK_OUTBOX_TABLE, columns: ["status", "next_attempt_at"] });
   await sql
     .raw(
       `create table if not exists ${MAIL_OUTBOX_TABLE} (
-        id ${text} primary key,
-        idempotency_key ${text} not null,
-        source ${text} not null,
-        rule_id ${text},
-        template ${text},
-        entity ${text},
-        record_id ${text},
-        event ${text},
+        id ${key} primary key,
+        idempotency_key ${key} not null,
+        source ${key} not null,
+        rule_id ${key},
+        template ${key},
+        entity ${key},
+        record_id ${key},
+        event ${key},
         to_addrs ${text} not null,
         cc_addrs ${text} not null,
         bcc_addrs ${text} not null,
@@ -209,58 +211,48 @@ export async function ensureSystemTables(db: BakorinDb, dialect: DialectName): P
         body_text ${text} not null,
         attempts ${int} not null,
         max_attempts ${int} not null,
-        status ${text} not null default 'pending',
+        status ${key} not null default 'pending',
         last_error ${text},
-        locked_until ${text},
-        next_attempt_at ${text} not null,
-        sent_at ${text},
-        created_at ${text} not null,
-        purpose ${text},
+        locked_until ${key},
+        next_attempt_at ${key} not null,
+        sent_at ${key},
+        created_at ${key} not null,
+        purpose ${key},
         sealed ${text}
-      )`,
+      )${opts}`,
     )
     .execute(db);
   const mailColumns = await tableColumns(db, dialect, MAIL_OUTBOX_TABLE);
   for (const column of ["purpose", "sealed"]) {
     if (!mailColumns.has(column)) {
-      await sql.raw(`alter table ${MAIL_OUTBOX_TABLE} add column ${column} ${text}`).execute(db);
+      await sql.raw(`alter table ${MAIL_OUTBOX_TABLE} add column ${column} ${column === "sealed" ? text : key}`).execute(db);
     }
   }
-  await sql
-    .raw(`create unique index if not exists _bakorin_mail_outbox_key_idx on ${MAIL_OUTBOX_TABLE} (idempotency_key)`)
-    .execute(db);
-  await sql
-    .raw(`create index if not exists _bakorin_mail_outbox_due_idx on ${MAIL_OUTBOX_TABLE} (status, next_attempt_at)`)
-    .execute(db);
+  await createIndex(db, dialect, { name: "_bakorin_mail_outbox_key_idx", table: MAIL_OUTBOX_TABLE, columns: ["idempotency_key"], unique: true });
+  await createIndex(db, dialect, { name: "_bakorin_mail_outbox_due_idx", table: MAIL_OUTBOX_TABLE, columns: ["status", "next_attempt_at"] });
   await sql
     .raw(
       `create table if not exists ${JOB_RUNS_TABLE} (
-        id ${text} primary key,
-        job_name ${text} not null,
-        handler ${text} not null,
-        trigger ${text} not null,
-        status ${text} not null,
+        id ${key} primary key,
+        job_name ${key} not null,
+        handler ${key} not null,
+        "trigger" ${key} not null,
+        status ${key} not null,
         dry_run ${int} not null default 0,
-        scheduled_for ${text},
-        started_at ${text} not null,
-        finished_at ${text},
+        scheduled_for ${key},
+        started_at ${key} not null,
+        finished_at ${key},
         duration_ms ${int},
         message ${text},
         log ${text},
         data ${text},
-        actor_id ${text}
-      )`,
+        actor_id ${key}
+      )${opts}`,
     )
     .execute(db);
-  await sql
-    .raw(`create unique index if not exists _bakorin_job_runs_slot_idx on ${JOB_RUNS_TABLE} (job_name, scheduled_for)`)
-    .execute(db);
-  await sql
-    .raw(`create index if not exists _bakorin_job_runs_started_idx on ${JOB_RUNS_TABLE} (started_at)`)
-    .execute(db);
-  await sql
-    .raw(`create index if not exists _bakorin_job_runs_job_idx on ${JOB_RUNS_TABLE} (job_name, started_at)`)
-    .execute(db);
+  await createIndex(db, dialect, { name: "_bakorin_job_runs_slot_idx", table: JOB_RUNS_TABLE, columns: ["job_name", "scheduled_for"], unique: true });
+  await createIndex(db, dialect, { name: "_bakorin_job_runs_started_idx", table: JOB_RUNS_TABLE, columns: ["started_at"] });
+  await createIndex(db, dialect, { name: "_bakorin_job_runs_job_idx", table: JOB_RUNS_TABLE, columns: ["job_name", "started_at"] });
 }
 
 async function tableColumns(db: BakorinDb, dialect: DialectName, table: string): Promise<Set<string>> {
@@ -270,17 +262,15 @@ async function tableColumns(db: BakorinDb, dialect: DialectName, table: string):
     `.execute(db);
     return new Set(result.rows.map((row) => row.name));
   }
-  const result = await sql.raw(`pragma table_info(${table})`).execute(db);
-  const rows = result.rows as Array<{ name: string }>;
-  return new Set(rows.map((row) => row.name));
+  return tableColumnNames(db, dialect, table);
 }
 
-async function ensureOutboxColumns(db: BakorinDb, dialect: DialectName, int: string, text: string): Promise<void> {
+async function ensureOutboxColumns(db: BakorinDb, dialect: DialectName, int: string, key: string, text: string): Promise<void> {
   const existing = await tableColumns(db, dialect, WEBHOOK_OUTBOX_TABLE);
   const additions: Array<{ name: string; sql: string }> = [
-    { name: "webhook_id", sql: `${text}` },
-    { name: "event", sql: `${text}` },
-    { name: "status", sql: `${text} not null default 'pending'` },
+    { name: "webhook_id", sql: `${key}` },
+    { name: "event", sql: `${key}` },
+    { name: "status", sql: `${key} not null default 'pending'` },
     { name: "last_status_code", sql: int },
     { name: "last_error", sql: text },
   ];

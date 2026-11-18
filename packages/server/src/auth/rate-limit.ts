@@ -18,7 +18,7 @@ export async function rateLimit(db: BakorinDb, key: string, limit: number, windo
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      if (!/unique|primary key|constraint/i.test(message)) {
+      if (!/unique|primary key|constraint|duplicate entry/i.test(message)) {
         throw error;
       }
     }
@@ -28,7 +28,7 @@ export async function rateLimit(db: BakorinDb, key: string, limit: number, windo
   if (count >= limit) {
     return false;
   }
-  await sql`update ${sql.table(RATE_TABLE)} set count = count + 1 where key = ${key}`.execute(db);
+  await sql`update ${sql.table(RATE_TABLE)} set count = count + 1 where ${sql.ref("key")} = ${key}`.execute(db);
   return true;
 }
 

@@ -21,22 +21,26 @@ export function constraintFailure(error: unknown, method: string): ConstraintFai
   const code = errorCode(error);
   const message = error instanceof Error ? error.message : "";
   const sqlite = code.startsWith("SQLITE_CONSTRAINT") || /constraint failed/i.test(message) ? `${code} ${message}` : "";
-  const unique = code === "23505" || /UNIQUE|PRIMARYKEY/.test(sqlite);
+  const unique = code === "23505" || code === "ER_DUP_ENTRY" || /UNIQUE|PRIMARYKEY/.test(sqlite);
   if (unique) {
     return { status: 409, code: "conflict", message: "a record with that value already exists" };
   }
-  const foreignKey = code === "23503" || code === "23001" || /FOREIGN ?KEY/i.test(sqlite);
+  const foreignKey =
+    code === "23503" || code === "23001" || code === "ER_ROW_IS_REFERENCED_2" || code === "ER_NO_REFERENCED_ROW_2" || /FOREIGN ?KEY/i.test(sqlite);
   if (foreignKey) {
     return method === "DELETE"
       ? { status: 409, code: "conflict", message: "other records still reference this record" }
       : { status: 400, code: "invalid_input", message: "a relation points at a record that does not exist" };
   }
-  const notNull = code === "23502" || /NOTNULL/i.test(sqlite);
+  const notNull = code === "23502" || code === "ER_BAD_NULL_ERROR" || code === "ER_NO_DEFAULT_FOR_FIELD" || /NOTNULL/i.test(sqlite);
   if (notNull) {
     return { status: 400, code: "invalid_input", message: "a required field is missing" };
   }
-  if (code === "23514" || /CHECK/.test(sqlite)) {
+  if (code === "23514" || code === "ER_CHECK_CONSTRAINT_VIOLATED" || code === "ER_CONSTRAINT_FAILED" || /CHECK/.test(sqlite)) {
     return { status: 400, code: "invalid_input", message: "a value is not allowed" };
+  }
+  if (["ER_DATA_TOO_LONG", "ER_TRUNCATED_WRONG_VALUE", "ER_WARN_DATA_OUT_OF_RANGE", "ER_INVALID_JSON_TEXT"].includes(code)) {
+    return { status: 400, code: "invalid_input", message: "a value is too long or not allowed" };
   }
   return null;
 }

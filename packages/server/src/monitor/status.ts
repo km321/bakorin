@@ -148,6 +148,12 @@ export async function databaseSize(ast: SchemaAST, db: BakorinDb, projectDir: st
       const result = await sql<{ size: string | number }>`select pg_database_size(current_database()) as size`.execute(db);
       return Number(result.rows[0]?.size ?? 0);
     }
+    if (ast.runtime.dialect === "mysql") {
+      const result = await sql<{ size: string | number | null }>`
+        select sum(data_length + index_length) as size from information_schema.tables where table_schema = database()
+      `.execute(db);
+      return Number(result.rows[0]?.size ?? 0);
+    }
     const path = resolveRuntimePath(projectDir, ast.runtime.sqlitePath);
     let total = 0;
     for (const file of [path, `${path}-wal`]) {

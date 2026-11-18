@@ -8,7 +8,7 @@ import {
   MAIL_OUTBOX_TABLE,
   WEBHOOK_OUTBOX_TABLE,
 } from "../packages/server/src/db/system.ts";
-import { client, MINI_YAML, postgresYaml, tempProject } from "./helpers.ts";
+import { client, MINI_YAML, MYSQL_URL, mysqlYaml, POSTGRES_URL, postgresYaml, tempProject } from "./helpers.ts";
 
 const CLI = join(import.meta.dir, "../packages/server/src/cli.ts");
 const LOGO = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10" fill="#0f766e"/></svg>';
@@ -223,7 +223,7 @@ describe("restore: sqlite", () => {
   }, 60_000);
 });
 
-const url = process.env.DATABASE_URL;
+const url = POSTGRES_URL;
 
 describe.skipIf(!url)("restore: postgres", () => {
   test("backup, wipe, restore brings everything back", async () => {
@@ -234,6 +234,19 @@ describe.skipIf(!url)("restore: postgres", () => {
       await roundTrip(postgresYaml(dbUrl), { viaDownload: true });
     } finally {
       await dropPostgresDatabase(url!, database);
+    }
+  }, 90_000);
+});
+
+describe.skipIf(!MYSQL_URL)("restore: mysql and mariadb", () => {
+  test("backup, wipe, restore brings everything back", async () => {
+    const { createMysqlDatabase, dropMysqlDatabase } = await import("@bakorin/server");
+    const database = `r${crypto.randomUUID().replaceAll("-", "").slice(0, 12)}`;
+    const dbUrl = await createMysqlDatabase(MYSQL_URL!, database);
+    try {
+      await roundTrip(mysqlYaml(dbUrl), { viaDownload: true });
+    } finally {
+      await dropMysqlDatabase(MYSQL_URL!, database);
     }
   }, 90_000);
 });

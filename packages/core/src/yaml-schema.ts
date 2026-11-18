@@ -219,7 +219,7 @@ export const appYamlSchema = z
     branding: brandingObject.optional(),
     runtime: z
       .object({
-        dialect: z.enum(["sqlite", "postgres"]).optional(),
+        dialect: z.enum(["sqlite", "postgres", "mysql", "mariadb"]).optional(),
         host: z.string().optional(),
         port: z.number().int().positive().optional(),
         sqlite: z
@@ -229,6 +229,18 @@ export const appYamlSchema = z
           .strict()
           .optional(),
         postgres: z
+          .object({
+            url: z.string().min(1),
+          })
+          .strict()
+          .optional(),
+        mysql: z
+          .object({
+            url: z.string().min(1),
+          })
+          .strict()
+          .optional(),
+        mariadb: z
           .object({
             url: z.string().min(1),
           })
