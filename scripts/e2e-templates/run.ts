@@ -10,6 +10,7 @@
  * Set E2E_CHROME to use an installed Chrome instead of Playwright's Chromium.
  */
 import { spawn, type ChildProcess } from "node:child_process";
+import { createHmac } from "node:crypto";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -24,7 +25,7 @@ const flag = (name: string, fallback?: string) => {
   const index = args.indexOf(name);
   return index >= 0 ? args[index + 1] : fallback;
 };
-const TEMPLATES = ["blank", "auth-only", "blog", "marketing", "saas", "store"] as const;
+const TEMPLATES = ["blank", "auth-only", "blog", "marketing", "saas", "store", "membership"] as const;
 type Template = (typeof TEMPLATES)[number];
 const template = flag("--template", "blog") as Template;
 const frontend = flag("--frontend", "astro") as "astro" | "next";
@@ -36,6 +37,8 @@ const children: ChildProcess[] = [];
 const cleanups: (() => Promise<unknown> | unknown)[] = [];
 const ADMIN_EMAIL = "admin@example.test";
 let SITE = "";
+let API = "";
+let bakorinLines: () => string[] = () => [];
 const ADMIN_PASSWORD = `e2e-${crypto.randomUUID()}`;
 
 function log(message: string) {
@@ -271,6 +274,145 @@ async function apiStatus(context: BrowserContext, method: "GET" | "POST", path: 
   return { status: response.status(), json: (await response.json().catch(() => null)) as { data?: Record<string, unknown> } | null };
 }
 
+/**
+ * A stand in for the Stripe API, so the e2e never calls Stripe. Bakorin talks to it through
+ * STRIPE_API_BASE. Its checkout and portal pages live on its own origin, like Stripe's.
+ * Paying sends signed webhooks to Bakorin, then returns to success_url.
+ * Test keys are made up per run.
+ */
+type Form = Record<string, unknown>;
+interface MockSession {
+  id: string;
+  form: Form;
+  amount: number;
+}
+const WEBHOOK_SECRET = `whsec_${crypto.randomUUID().replaceAll("-", "")}`;
+const stripe = {
+  base: "",
+  sessions: new Map<string, MockSession>(),
+  byKey: new Map<string, unknown>(),
+  events: [] as { id: string; payload: string }[],
+  async send(type: string, object: Record<string, unknown>, options: { secret?: string; id?: string } = {}) {
+    const id = options.id ?? `evt_${crypto.randomUUID().replaceAll("-", "")}`;
+    const payload = JSON.stringify({ id, object: "event", type, created: Math.floor(Date.now() / 1000), data: { object } });
+    this.events.push({ id, payload });
+    return this.deliver(payload, options.secret);
+  },
+  async deliver(payload: string, secret = WEBHOOK_SECRET) {
+    const t = Math.floor(Date.now() / 1000);
+    const v1 = createHmac("sha256", secret).update(`${t}.${payload}`).digest("hex");
+    const response = await fetch(`${API}/stripe/webhook`, { method: "POST", body: payload, headers: { "content-type": "application/json", "stripe-signature": `t=${t},v1=${v1}` } });
+    return { status: response.status, json: (await response.json().catch(() => null)) as Record<string, unknown> | null };
+  },
+};
+
+/** a[b][0][c]=1 form fields as nested objects (arrays stay objects keyed by index). */
+function parseForm(text: string): Form {
+  const out: Form = {};
+  for (const [key, value] of new URLSearchParams(text)) {
+    const parts = key.replace(/]/g, "").split("[");
+    let node = out;
+    for (const [i, part] of parts.entries()) {
+      if (i === parts.length - 1) node[part] = value;
+      else node = (node[part] ??= {}) as Form;
+    }
+  }
+  return out;
+}
+
+function subscriptionFor(session: MockSession, status = "active", priceId?: string) {
+  const form = session.form as { customer?: string; subscription_data?: { metadata?: Record<string, string> }; line_items?: Record<string, { price?: string }> };
+  return {
+    id: `sub_${session.id.slice(3)}`,
+    object: "subscription",
+    customer: form.customer,
+    status,
+    current_period_end: Math.floor(Date.now() / 1000) + 30 * 86_400,
+    metadata: form.subscription_data?.metadata ?? {},
+    items: { data: [{ price: { id: priceId ?? form.line_items?.["0"]?.price } }] },
+  };
+}
+
+async function startMockStripe() {
+  const port = await freePort();
+  stripe.base = `http://127.0.0.1:${port}`;
+  const page = (title: string, body: string) =>
+    new Response(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${title}</title></head><body><main><h1>${title}</h1>${body}</main></body></html>`, {
+      headers: { "content-type": "text/html; charset=utf-8" },
+    });
+  const server = Bun.serve({
+    port,
+    async fetch(request) {
+      const url = new URL(request.url);
+      if (request.method === "POST" && url.pathname.startsWith("/v1/")) {
+        if (!(request.headers.get("authorization") ?? "").startsWith("Bearer sk_")) return Response.json({ error: { message: "no key" } }, { status: 401 });
+        const key = `${url.pathname}:${request.headers.get("idempotency-key") ?? crypto.randomUUID()}`;
+        const seen = stripe.byKey.get(key);
+        if (seen) return Response.json(seen);
+        const form = parseForm(await request.text());
+        let result: Record<string, unknown>;
+        if (url.pathname === "/v1/customers") {
+          result = { id: `cus_${crypto.randomUUID().slice(0, 12)}`, object: "customer" };
+        } else if (url.pathname === "/v1/checkout/sessions") {
+          const id = `cs_test_${crypto.randomUUID().replaceAll("-", "")}`;
+          const lines = Object.values((form.line_items ?? {}) as Record<string, { quantity?: string; price_data?: { unit_amount?: string } }>);
+          const amount = lines.reduce((sum, line) => sum + Number(line.price_data?.unit_amount ?? 0) * Number(line.quantity ?? 1), 0);
+          stripe.sessions.set(id, { id, form, amount });
+          result = { id, object: "checkout.session", url: `${stripe.base}/pay/${id}` };
+        } else if (url.pathname === "/v1/billing_portal/sessions") {
+          result = { id: `bps_${crypto.randomUUID().slice(0, 12)}`, url: `${stripe.base}/portal?return=${encodeURIComponent(String(form.return_url ?? ""))}` };
+        } else {
+          return Response.json({ error: { message: "unknown" } }, { status: 404 });
+        }
+        stripe.byKey.set(key, result);
+        return Response.json(result);
+      }
+      const pay = url.pathname.match(/^\/pay\/(cs_test_\w+)$/);
+      if (pay) {
+        const session = stripe.sessions.get(pay[1]!);
+        if (!session) return new Response("no session", { status: 404 });
+        if (request.method === "GET") return page("Test checkout", `<p>Amount ${session.amount}</p><form method="post"><button type="submit">Pay</button></form>`);
+        const form = session.form as { mode?: string; metadata?: Record<string, string>; client_reference_id?: string; customer?: string; success_url?: string; line_items?: Record<string, { price_data?: { currency?: string } }> };
+        const completed = await stripe.send("checkout.session.completed", {
+          id: session.id,
+          object: "checkout.session",
+          mode: form.mode,
+          status: "complete",
+          payment_status: "paid",
+          amount_total: session.amount,
+          currency: String(Object.values(form.line_items ?? {})[0]?.price_data?.currency ?? "usd"),
+          customer: form.customer ?? null,
+          metadata: form.metadata ?? {},
+          client_reference_id: form.client_reference_id ?? null,
+        });
+        if (completed.status !== 200) return new Response(`webhook failed ${completed.status}`, { status: 500 });
+        if (form.mode === "subscription") await stripe.send("customer.subscription.created", subscriptionFor(session));
+        return Response.redirect(String(form.success_url), 303);
+      }
+      if (url.pathname === "/portal") return page("Test billing portal", `<p><a href="${url.searchParams.get("return") ?? "/"}">Return</a></p>`);
+      return new Response("not found", { status: 404 });
+    },
+  });
+  cleanups.push(() => server.stop(true));
+}
+
+/** Signs in to the API directly as the seeded admin, for setup the flow does not test. */
+let adminToken = "";
+async function adminApi(method: string, path: string, body?: unknown) {
+  if (!adminToken) {
+    const login = await fetch(`${API}/api/v1/auth/login`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }) });
+    check(login.ok, `admin API sign in returned ${login.status}`);
+    adminToken = ((await login.json()) as { data: { accessToken: string } }).data.accessToken;
+  }
+  const response = await fetch(`${API}/api/v1/${path}`, {
+    method,
+    headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  check(response.ok, `${method} ${path} as admin returned ${response.status}`);
+  return ((await response.json()) as { data: Record<string, unknown> & { id: string } }).data;
+}
+
 async function main() {
   // 1. Scaffold with the CLI, like a user would.
   const project = await mkdtemp(join(tmpdir(), `bakorin-tpl-${template}-${frontend}-`));
@@ -291,13 +433,20 @@ async function main() {
   const site = `http://127.0.0.1:${sitePort}`;
   SITE = site;
   const api = `http://127.0.0.1:${apiPort}`;
+  API = api;
+  const payments = template === "store" || template === "membership";
+  if (payments) await startMockStripe();
+  const stripeEnv = payments
+    ? { STRIPE_SECRET_KEY: `sk_${"test"}_${crypto.randomUUID().replaceAll("-", "")}`, STRIPE_WEBHOOK_SECRET: WEBHOOK_SECRET, STRIPE_API_BASE: stripe.base, SITE_URL: site }
+    : {};
   const adminEnv = { BAKORIN_ADMIN_EMAIL: ADMIN_EMAIL, BAKORIN_ADMIN_PASSWORD: ADMIN_PASSWORD, BAKORIN_ADMIN_NAME: "Site Admin" };
   const bakorin = start("bakorin", ["bun", join(ROOT, "packages/server/src/cli.ts"), "dev", "--dir", project], {
     cwd: ROOT,
-    env: { PORT: String(apiPort), MAIL_DRIVER: "log", CORS_ORIGINS: site, JWT_SECRET: crypto.randomUUID() + crypto.randomUUID(), ...adminEnv },
+    env: { PORT: String(apiPort), MAIL_DRIVER: "log", CORS_ORIGINS: site, JWT_SECRET: crypto.randomUUID() + crypto.randomUUID(), ...adminEnv, ...stripeEnv },
   });
   await waitFor(`${api}/api/v1/status/health`, "Bakorin", bakorin.lines);
   log(`Bakorin on ${api}`);
+  bakorinLines = () => bakorin.lines;
 
   // 2. The template's example data.
   if (await Bun.file(join(project, "seed.ts")).exists()) {
@@ -556,11 +705,11 @@ async function storeFlow(newContext: NewContext) {
     await Bun.sleep(300);
     await page.reload();
   }
-  await page.getByText("Payments are not connected yet.", { exact: true }).waitFor();
+  await page.getByText(/Some items have no price yet, so this order cannot be paid/).waitFor();
+  check((await page.getByRole("link", { name: /with Stripe/ }).count()) === 0, "an unpriced order gets no Stripe link");
   await page.getByRole("cell", { name: "Example product: Canvas tote" }).waitFor();
   await axe(page, "checkout");
-  await shot(page, "checkout");
-  log("added to the cart, placed an order, and saw the payment placeholder");
+  log("added to the cart, placed an order, and an unpriced order cannot be paid");
 
   // An admin sets a price; the next order uses it. Shoppers cannot set totals or status.
   const adminContext = await newContext();
@@ -576,7 +725,9 @@ async function storeFlow(newContext: NewContext) {
   await admin.getByLabel("Price in cents").fill("1000");
   await admin.getByRole("button", { name: "Save changes" }).click();
   await admin.waitForURL("**/manage");
-  log("admin set a test price");
+  const mug = (await adminApi("GET", "products?filter[slug]=example-mug")) as unknown as { id: string }[];
+  await adminApi("PATCH", `products/${mug[0]!.id}`, { stock: 5 });
+  log("admin set a test price and stock 5");
 
   failurePage = page;
   await page.goto("/products/example-mug");
@@ -596,6 +747,42 @@ async function storeFlow(newContext: NewContext) {
   const orders = await shopperContext.request.get("/api/bakorin/orders?sort=-createdAt&limit=1");
   const latest = ((await orders.json()) as { data: { totalCents?: number; id: string }[] }).data[0]!;
   check(latest.totalCents === 3000, `the server sets the total from the cart, got ${latest.totalCents}`);
+
+  // Pay on the (mock) Stripe page. Only the signed webhook marks the order paid.
+  check((await adminApi("GET", `orders/${latest.id}`)).status === "pending_payment", "the order waits for payment");
+  await page.goto(`/checkout/${latest.id}?paid=1`);
+  await page.getByText("We are confirming your payment with Stripe").waitFor();
+  check((await adminApi("GET", `orders/${latest.id}`)).status === "pending_payment", "the success page never marks an order paid");
+  await page.goto(`/checkout/${latest.id}`);
+  await axe(page, "checkout");
+  await shot(page, "checkout");
+  await page.getByRole("link", { name: "Pay $30.00 with Stripe" }).click();
+  await page.waitForURL((url) => url.href.startsWith(`${stripe.base}/pay/`));
+  await page.getByRole("button", { name: "Pay" }).click();
+  await page.waitForURL(/\/checkout\/[^/]+\?paid=1$/);
+  await page.getByText("Paid.").waitFor();
+  await shot(page, "checkout-paid");
+  const paid = await adminApi("GET", `orders/${latest.id}`);
+  check(paid.status === "paid" && paid.paidAt, "the verified webhook marked the order paid");
+  const stockAfter = async () => Number((await adminApi("GET", `products/${mug[0]!.id}`)).stock);
+  check((await stockAfter()) === 2, "paying took 3 from stock");
+  log("paid on the Stripe page; the signed webhook marked the order paid and took the stock");
+
+  // Replays and forgeries change nothing.
+  const completed = stripe.events.find((event) => event.payload.includes(String(latest.id)))!;
+  const replay = await stripe.deliver(completed.payload);
+  check(replay.status === 200 && replay.json?.duplicate === true, `a replayed event is applied once, got ${JSON.stringify(replay.json)}`);
+  const resend = await stripe.send("checkout.session.completed", JSON.parse(completed.payload).data.object);
+  check(resend.status === 200, "a second event for the same session is accepted");
+  check((await stockAfter()) === 2, "replays do not take stock twice");
+  const forged = await stripe.send("checkout.session.completed", { ...JSON.parse(completed.payload).data.object }, { secret: "whsec_wrong" });
+  check(forged.status === 400, `a bad signature is refused, got ${forged.status}`);
+  const unsigned = await fetch(`${API}/stripe/webhook`, { method: "POST", body: completed.payload, headers: { "content-type": "application/json" } });
+  check(unsigned.status === 400, `an unsigned webhook is refused, got ${unsigned.status}`);
+  for (let i = 0; i < 20 && !bakorinLines().some((line) => line.includes("Receipt for order")); i++) await Bun.sleep(300);
+  check(bakorinLines().filter((line) => line.includes("Receipt for order")).length === 1, "one receipt email was sent");
+  log("replays, a bad signature, and an unsigned call change nothing; one receipt went out");
+
   await visit(page, "/orders", "orders");
   await page.getByRole("cell", { name: "$30.00" }).waitFor();
   await page.goto("/cart");
@@ -610,6 +797,75 @@ async function storeFlow(newContext: NewContext) {
   check((await strangerContext.request.get(`/api/bakorin/orders/${latest.id}`)).status() >= 403, "orders are private to their shopper");
 }
 
+async function membershipFlow(newContext: NewContext) {
+  // The example plans get test Price ids, as an admin would paste from Stripe.
+  const plans = (await adminApi("GET", "plans?sort=sort")) as unknown as { id: string; tier: string }[];
+  const basic = plans.find((plan) => plan.tier === "basic")!;
+  const pro = plans.find((plan) => plan.tier === "pro")!;
+  await adminApi("PATCH", `plans/${basic.id}`, { stripePriceId: "price_basic_test" });
+  await adminApi("PATCH", `plans/${pro.id}`, { stripePriceId: "price_pro_test" });
+
+  const context = await newContext();
+  const page = await context.newPage();
+  failurePage = page;
+  await visit(page, "/", "plans");
+  await page.getByRole("heading", { name: "Example plan: Pro" }).waitFor();
+  await shot(page, "plans");
+  await page.goto("/members");
+  check(new URL(page.url()).pathname === "/login", "signed out /members goes to /login");
+
+  const email = `member-${Date.now()}@example.test`;
+  await signUp(page, email, "Morgan Member");
+  await signIn(page, email, "password123", "/members");
+  await page.getByText("Lessons are for members.").waitFor();
+  check((await apiStatus(context, "GET", "lessons")).status === 403, "lessons are closed to people without a plan");
+  const me = (await apiStatus(context, "GET", "auth/me")).json?.data as { id: string };
+  const cheat = await context.request.fetch(`/api/bakorin/users/${me.id}`, { method: "PATCH", data: JSON.stringify({ role: "pro" }), headers: { "content-type": "application/json", origin: SITE } });
+  check(cheat.status() === 403, `members cannot set their own role, got ${cheat.status()}`);
+
+  await page.goto(`/join/${basic.id}`);
+  await ready(page);
+  await axe(page, "join");
+  await page.getByRole("button", { name: "Continue to Stripe" }).click();
+  await page.waitForURL((url) => url.href.startsWith(`${stripe.base}/pay/`));
+  await page.getByRole("button", { name: "Pay" }).click();
+  await page.waitForURL(/\/account\?joined=2$/);
+  await page.getByText("Your membership is active.").waitFor();
+  await page.getByText("Plan: Basic").waitFor();
+  await axe(page, "account");
+  await shot(page, "account");
+  await visit(page, "/members", "members");
+  await page.getByRole("heading", { name: "Example lesson: Getting started" }).waitFor();
+  await page.getByText("Masterclasses are for Pro members.").waitFor();
+  check((await apiStatus(context, "GET", "masterclasses")).status === 403, "masterclasses are closed to Basic members");
+  await shot(page, "members");
+  log("joined Basic through Stripe Checkout; the webhook set the role and lessons opened");
+
+  await page.goto("/account");
+  await page.getByRole("button", { name: "Manage billing" }).click();
+  await page.waitForURL((url) => url.href.startsWith(`${stripe.base}/portal`));
+  log("Manage billing opened the customer portal");
+
+  // Plan changes and cancellations arrive as signed subscription events.
+  const session = [...stripe.sessions.values()].find((item) => (item.form as { mode?: string }).mode === "subscription")!;
+  const forged = await stripe.send("customer.subscription.updated", subscriptionFor(session, "active", "price_pro_test"), { secret: "whsec_wrong" });
+  check(forged.status === 400, "a forged upgrade is refused");
+  const upgrade = await stripe.send("customer.subscription.updated", subscriptionFor(session, "active", "price_pro_test"));
+  check(upgrade.status === 200, "the upgrade is accepted");
+  await page.goto(`/api/bakorin/-/refresh?next=${encodeURIComponent("/members")}&fail=/login`);
+  await page.getByRole("heading", { name: "Example masterclass: Going deeper" }).waitFor();
+  log("an upgrade to Pro opened the masterclasses");
+
+  const cancel = await stripe.send("customer.subscription.deleted", subscriptionFor(session, "canceled"));
+  check(cancel.status === 200, "the cancellation is accepted");
+  const again = await stripe.deliver(stripe.events.at(-1)!.payload);
+  check(again.json?.duplicate === true, "a replayed cancellation is applied once");
+  await page.goto(`/api/bakorin/-/refresh?next=${encodeURIComponent("/members")}&fail=/login`);
+  await page.getByText("Lessons are for members.").waitFor();
+  check((await apiStatus(context, "GET", "lessons")).status === 403, "lessons close again after the subscription ends");
+  log("a cancellation took the member back to no plan");
+}
+
 const FLOWS: Record<Template, (newContext: NewContext, site: string) => Promise<void>> = {
   blank: accountsFlow,
   "auth-only": accountsFlow,
@@ -617,6 +873,7 @@ const FLOWS: Record<Template, (newContext: NewContext, site: string) => Promise<
   marketing: marketingFlow,
   saas: saasFlow,
   store: storeFlow,
+  membership: membershipFlow,
 };
 
 let failurePage: Page | undefined;

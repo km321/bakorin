@@ -51,9 +51,13 @@ const PAGES: Record<string, { astro: string[]; next: string[] }> = {
     astro: ["src/pages/index.astro", "src/pages/products/[slug].astro", "src/pages/cart.astro", "src/pages/checkout/[id].astro", "src/pages/orders.astro", "src/pages/manage/index.astro"],
     next: ["app/page.tsx", "app/products/[slug]/page.tsx", "app/cart/page.tsx", "app/checkout/[id]/page.tsx", "app/orders/page.tsx", "app/manage/page.tsx"],
   },
+  membership: {
+    astro: ["src/pages/index.astro", "src/pages/join/[id].astro", "src/pages/members.astro", "src/pages/account.astro"],
+    next: ["app/page.tsx", "app/join/[id]/page.tsx", "app/members/page.tsx", "app/account/page.tsx"],
+  },
 };
 
-const SCHEMA_OF: Record<string, string> = { blank: "blank", "auth-only": "auth", blog: "blog", marketing: "marketing", saas: "saas", store: "store" };
+const SCHEMA_OF: Record<string, string> = { blank: "blank", "auth-only": "auth", blog: "blog", marketing: "marketing", saas: "saas", store: "store", membership: "membership" };
 
 describe("create-bakorin templates", () => {
   test("the generated types in templates/gen match each schema (bun scripts/template-types.ts)", async () => {
@@ -68,7 +72,7 @@ describe("create-bakorin templates", () => {
   });
 
   test("the Astro and Next overlays share the same lib files", async () => {
-    for (const template of ["auth", "todo", "blog", "marketing", "saas", "store"]) {
+    for (const template of ["auth", "todo", "blog", "marketing", "saas", "store", "membership"]) {
       const astroLib = join(TEMPLATES, "overlays/astro", template, "src/lib");
       for (const name of await readdir(astroLib)) {
         expect(await readFile(join(TEMPLATES, "overlays/next", template, "lib", name), "utf8")).toBe(await readFile(join(astroLib, name), "utf8"));
@@ -113,6 +117,21 @@ describe("create-bakorin templates", () => {
     expect(await readFile(join(store, "hooks.ts"), "utf8")).toContain("afterCreate");
     const blog = await scaffold("blog", "astro");
     expect(await readFile(join(blog, "hooks.ts"), "utf8")).not.toContain("afterCreate");
+  });
+
+  test("payment templates document Stripe test keys without values", async () => {
+    for (const template of ["store", "membership"]) {
+      const dir = await scaffold(template, "astro");
+      const env = await readFile(join(dir, ".env.example"), "utf8");
+      for (const key of ["STRIPE_SECRET_KEY", "STRIPE_WEBHOOK_SECRET", "STRIPE_PUBLISHABLE_KEY"]) expect(env).toMatch(new RegExp(`^${key}=$`, "m"));
+      expect(env).not.toMatch(/(sk|pk|rk)_(test|live)_[A-Za-z0-9]/);
+      const hooks = await readFile(join(dir, "hooks.ts"), "utf8");
+      expect(hooks).toContain("verifyStripeSignature");
+      expect(hooks).toContain("timingSafeEqual");
+      expect(hooks).toContain("stripeEvents");
+    }
+    const blog = await scaffold("blog", "astro");
+    expect(await readFile(join(blog, ".env.example"), "utf8")).not.toContain("STRIPE_");
   });
 
   test("template copy has no em or en dashes", async () => {

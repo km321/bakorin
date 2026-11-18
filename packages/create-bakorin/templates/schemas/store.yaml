@@ -60,8 +60,9 @@ entities:
     fields:
       name: { type: text, required: true }
       slug: { type: text, required: true, unique: true, description: "Used in the address, for example canvas-tote." }
-      description: { type: text }
+      description: { type: richtext, description: "Formatted product description. The server removes anything unsafe." }
       priceCents: { type: integer, description: "Price in cents, for example 1250 for 12.50. Leave empty until you set a price." }
+      stock: { type: integer, description: "How many are left. Leave empty for no limit. Paid orders take from it." }
       image: { type: file, description: "Product photo." }
       imageAlt: { type: text, description: "Describe the photo for people who cannot see it." }
       active: { type: boolean, default: true, description: "Shown in the store." }
@@ -88,19 +89,40 @@ entities:
       update: owner(ownerId)
       delete: owner(ownerId)
 
-  # Orders. hooks.ts fills in the lines and total from the cart; shoppers cannot set them.
-  # status stays pending_payment until a payment provider marks it paid (not built yet).
+  # Orders. hooks.ts fills in the lines and total from the cart and opens a Stripe
+  # Checkout Session; shoppers cannot set any of that. Only the verified Stripe webhook
+  # (POST /stripe/webhook in hooks.ts) marks an order paid.
   orders:
     label: Order
     plural: Orders
     display: id
     fields:
       status: { type: enum, values: [pending_payment, paid, cancelled], default: pending_payment, writable: admin }
-      lines: { type: text, writable: none, description: "The cart at checkout, as JSON. Set by hooks.ts." }
+      lines: { type: json, writable: none, description: "The cart at checkout. Set by hooks.ts." }
       totalCents: { type: integer, writable: none, description: "Set by hooks.ts from product prices." }
+      email: { type: email, writable: none, description: "Where the receipt goes." }
+      checkoutUrl: { type: text, writable: none, description: "The Stripe Checkout page for this order." }
+      stripeSessionId: { type: text, writable: none, index: true }
+      paidAt: { type: datetime, writable: none }
+      note: { type: text, writable: none, description: "Why the order cannot be paid yet, if it cannot." }
       ownerId: { type: relation, to: users, required: true }
     policies:
       read: [owner(ownerId), admin]
       create: authenticated
+      update: admin
+      delete: admin
+
+  # Stripe events already handled, so a retried webhook never applies twice.
+  stripeEvents:
+    label: Stripe event
+    plural: Stripe events
+    display: eventId
+    admin: { group: Payments }
+    fields:
+      eventId: { type: text, required: true, unique: true }
+      type: { type: text, required: true }
+    policies:
+      read: admin
+      create: admin
       update: admin
       delete: admin

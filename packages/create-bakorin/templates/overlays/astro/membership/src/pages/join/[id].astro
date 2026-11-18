@@ -1,0 +1,35 @@
+---
+import Layout from "../../layouts/Base.astro";
+import { api } from "../../lib/bakorin.ts";
+import { planPrice, settle } from "../../lib/membership.ts";
+
+// requireAuth (src/middleware.ts) protects /join. hooks.ts opens Stripe Checkout for the plan.
+const client = api(Astro);
+const plan = await client.entity("plans").get(String(Astro.params.id)).catch(() => null);
+if (!plan) {
+  return new Response("Not found", { status: 404 });
+}
+let note = "";
+if (Astro.request.method === "POST") {
+  try {
+    const created = await client.entity("membershipCheckouts").create({ planId: plan.id });
+    const checkout = await settle(() => client.entity("membershipCheckouts").get(created.id), (row) => Boolean(row.checkoutUrl || row.note));
+    if (checkout.checkoutUrl) return Astro.redirect(checkout.checkoutUrl, 303);
+    note = checkout.note || "Checkout could not be opened. Please try again in a moment.";
+  } catch (err) {
+    note = err instanceof Error ? err.message : "Could not start checkout";
+  }
+}
+---
+<Layout title={`Join ${plan.name}`}>
+  <section class="card">
+    <h1>Join {plan.name}</h1>
+    <p class="meta">{planPrice(plan)}</p>
+    {note ? <p class="notice" role="alert">{note}</p> : null}
+    <p>You will pay on Stripe's secure checkout page, then come back to your account.</p>
+    <form method="post">
+      <button type="submit">Continue to Stripe</button>
+    </form>
+    <p><a href="/">Back to plans</a></p>
+  </section>
+</Layout>

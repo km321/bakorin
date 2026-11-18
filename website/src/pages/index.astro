@@ -82,7 +82,7 @@ const { data: tasks } = await client.entity("tasks").list({ sort: "-createdAt" }
 const features = [
   {
     title: "Data and relations",
-    body: "Eleven field types, one to many and many to many relations, indexes, filters, sorting, and expand. Every entity gets a REST resource.",
+    body: "Thirteen field types including JSON and rich text, one to many and many to many relations, indexes, filters, sorting, and expand. Every entity gets a REST resource.",
     tag: "GET /api/v1/tasks?expand=leadId",
   },
   {
@@ -114,6 +114,16 @@ const features = [
     title: "Realtime, when you want it",
     body: "Turn on live updates per entity. Server sent events filtered by each reader's permissions, with resume, backpressure, and a Postgres broker for more than one instance.",
     tag: "realtime: true",
+  },
+  {
+    title: "Rich text and JSON fields",
+    body: "A rich text editor and a JSON editor with line numbered errors in the admin. HTML is cleaned on the server against an allowlist, and JSON is stored as jsonb on Postgres.",
+    tag: "body: { type: richtext }",
+  },
+  {
+    title: "Stripe starters",
+    body: "Store and membership templates for Astro and Next.js. Stripe Checkout and subscriptions, orders and roles set only by verified, idempotent webhooks, and plan tiers gated in app.yaml.",
+    tag: "--template membership",
   },
   {
     title: "Many to many",

@@ -1,0 +1,160 @@
+app:
+  name: {{APP_NAME}}
+  version: "0.1.0"
+
+runtime:
+  dialect: sqlite
+  host: 0.0.0.0
+  port: 4371
+  sqlite:
+    path: ./data/app.db
+  files:
+    driver: local
+    path: ./data/uploads
+    maxBytes: 10485760
+    allowedMimeTypes: [image/png, image/jpeg, image/webp, image/gif, application/pdf, text/plain]
+    signedUrlTtlSeconds: 900
+  jwt:
+    accessTtlSeconds: 900
+    refreshTtlSeconds: 2592000
+  backups:
+    interval: 24h
+    retain: 14
+    destination: ./data/backups
+  hooks: ./hooks.ts
+  cors:
+    origins: ["http://localhost:4321", "http://localhost:3000"]
+
+auth:
+  entity: users
+  identity: email
+  password: password
+  role: role
+  adminRole: admin
+  requireVerifiedEmail: false
+  # open: anyone can sign up. invite: admins invite people. closed: no new accounts.
+  signup: open
+
+entities:
+  users:
+    auth: true
+    label: User
+    plural: Users
+    display: name
+    fields:
+      email: { type: email, unique: true, required: true }
+      password: { type: password, required: true }
+      name: { type: text, required: true }
+      # The plan tier is the role, so app.yaml policies can gate content with role(basic) and role(pro).
+      # Verified Stripe webhooks in hooks.ts set it; members cannot.
+      role: { type: enum, values: [user, basic, pro, admin], default: user, writable: admin }
+      subscriptionStatus: { type: text, writable: none, description: "Stripe subscription status, for example active or past_due." }
+      currentPeriodEnd: { type: datetime, writable: none, description: "When the current paid period ends." }
+      stripeCustomerId: { type: text, writable: none, private: true, index: true }
+      stripeSubscriptionId: { type: text, writable: none, private: true }
+    policies:
+      read: [owner(id), admin]
+      create: admin
+      update: owner(id)
+      delete: admin
+
+  # Plan tiers. Put each plan's Stripe Price id (test mode) in stripePriceId.
+  plans:
+    label: Plan
+    plural: Plans
+    display: name
+    fields:
+      name: { type: text, required: true }
+      tier: { type: enum, values: [basic, pro], required: true, description: "The role members on this plan get." }
+      priceCents: { type: integer, description: "Shown on the plans page. Stripe charges the Price below." }
+      interval: { type: enum, values: [month, year], default: month }
+      stripePriceId: { type: text, description: "Stripe Price id, for example price_123. Test mode while you build." }
+      description: { type: richtext }
+      sort: { type: integer, default: 0 }
+      active: { type: boolean, default: true }
+    policies:
+      read: public
+      create: admin
+      update: admin
+      delete: admin
+
+  # Members only content. Basic and Pro members read lessons.
+  lessons:
+    label: Lesson
+    plural: Lessons
+    display: title
+    fields:
+      title: { type: text, required: true }
+      summary: { type: text }
+      body: { type: richtext }
+      sort: { type: integer, default: 0 }
+    policies:
+      read: [role(basic), role(pro), admin]
+      create: admin
+      update: admin
+      delete: admin
+
+  # Pro only content.
+  masterclasses:
+    label: Masterclass
+    plural: Masterclasses
+    display: title
+    fields:
+      title: { type: text, required: true }
+      summary: { type: text }
+      body: { type: richtext }
+      sort: { type: integer, default: 0 }
+    policies:
+      read: [role(pro), admin]
+      create: admin
+      update: admin
+      delete: admin
+
+  # A request to join a plan. hooks.ts opens a Stripe Checkout Session (subscription mode)
+  # and saves its address in checkoutUrl.
+  membershipCheckouts:
+    label: Checkout
+    plural: Checkouts
+    display: id
+    admin: { group: Payments }
+    fields:
+      planId: { type: relation, to: plans, required: true }
+      checkoutUrl: { type: text, writable: none }
+      note: { type: text, writable: none }
+      ownerId: { type: relation, to: users, required: true }
+    policies:
+      read: [owner(ownerId), admin]
+      create: authenticated
+      update: admin
+      delete: admin
+
+  # A request for the Stripe customer portal (change plan, card, or cancel).
+  portalSessions:
+    label: Portal session
+    plural: Portal sessions
+    display: id
+    admin: { group: Payments }
+    fields:
+      url: { type: text, writable: none }
+      note: { type: text, writable: none }
+      ownerId: { type: relation, to: users, required: true }
+    policies:
+      read: [owner(ownerId), admin]
+      create: authenticated
+      update: admin
+      delete: admin
+
+  # Stripe events already handled, so a retried webhook never applies twice.
+  stripeEvents:
+    label: Stripe event
+    plural: Stripe events
+    display: eventId
+    admin: { group: Payments }
+    fields:
+      eventId: { type: text, required: true, unique: true }
+      type: { type: text, required: true }
+    policies:
+      read: admin
+      create: admin
+      update: admin
+      delete: admin

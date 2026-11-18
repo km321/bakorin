@@ -7,7 +7,7 @@ export type Order = Orders;
 /** Set this to your store's currency. */
 export const CURRENCY = "USD";
 
-export const PRODUCT_FIELDS = ["name", "slug", "description", "priceCents", "image", "imageAlt", "active"];
+export const PRODUCT_FIELDS = ["name", "slug", "description", "priceCents", "stock", "image", "imageAlt", "active"];
 
 /** Cents as money, or a clear note when no price is set yet. */
 export function money(cents: number | null | undefined): string {
@@ -23,12 +23,9 @@ export interface OrderLine {
   unitCents: number | null;
 }
 
+/** lines is a json field: hooks.ts stores the cart there as a list. */
 export function orderLines(order: Pick<Order, "lines">): OrderLine[] {
-  try {
-    return order.lines ? (JSON.parse(order.lines) as OrderLine[]) : [];
-  } catch {
-    return [];
-  }
+  return Array.isArray(order.lines) ? (order.lines as unknown as OrderLine[]) : [];
 }
 
 export const STATUS_LABELS: Record<string, string> = {

@@ -29,12 +29,13 @@ Options:
   --name <name>           Project name (defaults to the first argument)
   --dir <path>            Output directory (defaults to the project name)
   --frontend, --fw        astro | next | none (default: astro)
-  --template, --schema    blog | marketing | saas | store | todo | auth-only | blank
+  --template, --schema    blog | marketing | saas | store | membership | todo | auth-only | blank
                           (default: todo)
                           blog: posts, categories, drafts, cover images
                           marketing: page sections and a contact form
                           saas: team projects, live updates, roles
-                          store: products, cart, orders, checkout placeholder
+                          store: products, cart, orders, Stripe Checkout
+                          membership: Stripe subscriptions, plan tiers, members-only content
   --mail, --email         log | resend | smtp (default: log)
   --sdk                   local | npm
                           local: file: path to this checkout's packages/sdk
@@ -79,6 +80,9 @@ function parseSchema(value) {
   }
   if (value === "store" || value === "shop" || value === "ecommerce" || value === "ecom") {
     return "store";
+  }
+  if (value === "membership" || value === "members" || value === "subscriptions") {
+    return "membership";
   }
   return;
 }
@@ -133,7 +137,7 @@ function mailFromHeader(appName, mail) {
     }
   }
 }
-function envExample(appName, mail) {
+function envExample(appName, mail, schema) {
   return `# Required for bakorin start: 32+ random characters. Generate one with: openssl rand -base64 48
 # bakorin dev works without it and prints a warning.
 JWT_SECRET=
@@ -176,6 +180,23 @@ AWS_ENDPOINT_URL=
 AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 AWS_DEFAULT_REGION=auto
+${schema && STRIPE_TEMPLATES.has(schema) ? stripeEnv() : ""}`;
+}
+var STRIPE_TEMPLATES = new Set(["store", "membership"]);
+function stripeEnv() {
+  return `
+# --- Stripe (test mode) ---
+# Use test keys from https://dashboard.stripe.com/test/apikeys. Never commit a real key.
+# Without STRIPE_SECRET_KEY the app runs and checkout says payments are not set up.
+STRIPE_SECRET_KEY=
+# Signing secret of the webhook endpoint for <API URL>/stripe/webhook.
+# Local testing: stripe listen --forward-to localhost:4371/stripe/webhook prints one.
+STRIPE_WEBHOOK_SECRET=
+# Publishable key. Hosted Checkout does not need it; it is here for Stripe.js if you add it.
+STRIPE_PUBLISHABLE_KEY=
+# Where Stripe sends shoppers back to: the web app URL.
+SITE_URL=http://localhost:4321
+STORE_CURRENCY=usd
 `;
 }
 function dockerfileFor(mode) {
@@ -400,9 +421,15 @@ var TEMPLATE_PAGES = {
     ["/", "Products"],
     ["/products/:slug", "One product, add to cart"],
     ["/cart", "Cart and Place order"],
-    ["/checkout/:id", "Order summary and the payment placeholder"],
+    ["/checkout/:id", "Order summary and Pay with Stripe"],
     ["/orders", "Your orders"],
     ["/manage", "Admins: add and edit products"]
+  ],
+  membership: [
+    ["/", "Plans and Join"],
+    ["/join/:id", "Opens Stripe Checkout for a plan"],
+    ["/members", "Lessons for members and masterclasses for Pro"],
+    ["/account", "Your plan, status, and Manage billing (Stripe customer portal)"]
   ]
 };
 function webReadme(appName, options) {
@@ -430,7 +457,7 @@ Sign in, sign up, password reset, and invite pages are included. Site name and l
 Types and \`bakorinSchema\` in \`${typesFile}\` come from \`app.yaml\`. After you change the schema, run \`bunx bakorin typegen -o web/${typesFile}\` from the project folder.
 `;
 }
-var SEEDED = new Set(["blog", "marketing", "saas", "store"]);
+var SEEDED = new Set(["blog", "marketing", "saas", "store", "membership"]);
 function projectReadme(appName, options, sdk) {
   const apiStart = sdk === "local" ? `From the Bakorin checkout that generated this project:
 
@@ -471,11 +498,30 @@ ${SEEDED.has(options.schema) ? `
    \`BAKORIN_URL\` defaults to http://127.0.0.1:4371.
 `}
 
-## Branding (optional)
+${STRIPE_TEMPLATES.has(options.schema) ? stripeReadme(options.schema) : ""}## Branding (optional)
 
 Add a \`branding:\` section to \`app.yaml\` with your client's name, colors, logo, and favicon. The files go in \`branding/\`. See \`branding/README.md\`.
 
 Railway: mount a volume at \`/data\`, set \`BAKORIN_DATA_DIR=/data\` and \`JWT_SECRET\`. See the Bakorin checkout file \`docs/deploy-railway.md\`.
+`;
+}
+function stripeReadme(schema) {
+  const events = schema === "store" ? "`checkout.session.completed` and `checkout.session.expired`" : "`checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`";
+  return `## Stripe (test mode)
+
+1. Put your **test** keys in \`.env\`: \`STRIPE_SECRET_KEY\` and \`STRIPE_PUBLISHABLE_KEY\`. Never commit a real key.
+2. Forward webhooks while you develop:
+
+   \`\`\`bash
+   stripe listen --forward-to localhost:4371/stripe/webhook
+   \`\`\`
+
+   Copy the printed signing secret into \`STRIPE_WEBHOOK_SECRET\` and restart the API.
+3. In production, add an endpoint for \`<API URL>/stripe/webhook\` with ${events}, and use its signing secret.
+
+${schema === "store" ? "Orders are marked paid only by a verified `checkout.session.completed` webhook whose session and amount match the order. Each Stripe event is applied once, stock goes down, and a receipt email is sent. The success page never marks an order paid." : "Plan tiers live in the `plans` entity: put the Stripe Price id of each plan in `stripePriceId`. Verified subscription webhooks set the member's `role` to the plan tier (`basic` or `pro`) and back to `user` when the subscription ends. app.yaml gates `lessons` to members and `masterclasses` to Pro."}
+Test cards: https://docs.stripe.com/testing
+
 `;
 }
 async function run(options) {
@@ -497,7 +543,7 @@ async function run(options) {
   if (await pathExists(seed)) {
     await cp(seed, join(dest, "seed.ts"));
   }
-  await writeFile(join(dest, ".env.example"), envExample(appName, options.mail));
+  await writeFile(join(dest, ".env.example"), envExample(appName, options.mail, options.schema));
   await cp(join(TEMPLATES, "gitignore"), join(dest, ".gitignore"));
   const gitignore = await readFile(join(dest, ".gitignore"), "utf8");
   if (!gitignore.includes(".bakorin/node_modules")) {
@@ -557,7 +603,7 @@ async function main() {
       frontend = parseFrontend(raw) ?? "astro";
     }
     if (!schema) {
-      const raw = await prompt("Template (blog | marketing | saas | store | todo | auth-only | blank)", "todo");
+      const raw = await prompt("Template (blog | marketing | saas | store | membership | todo | auth-only | blank)", "todo");
       schema = parseSchema(raw) ?? "todo";
     }
     if (!mail) {
